@@ -48,6 +48,17 @@ AGILE_FACTORS = {
     },
 }
 
+BOTTLECAP_DAVE = {
+    "domain": "event",
+    "tariff_code": "tariff_code",
+    "rates": "current_day_rates",
+}
+
+
+# Tariff Class
+# Calls "get octopus" to load the pricing information
+# outputs self.unit.
+
 
 class Tariff:
     def __init__(
@@ -68,12 +79,21 @@ class Tariff:
     ) -> None:
         self.name = name
         self.host = host
+
         if host is None:
             self.log = print
+            self.rlog = print
             self.tz = "GB"
         else:
             self.log = host.log
+            self.rlog = host.rlog
             self.tz = host.tz
+
+        # SVB logging
+        # self.log("")
+        # self.log("Entered pv.Tariff")
+        # self.log("name = ")
+        # self.log(name)
 
         self.export = export
         self.eco7 = eco7
@@ -83,9 +103,12 @@ class Tariff:
         self.eco7_start = pd.Timestamp(eco7_start, tz="UTC")
         self.manual = manual
 
-        if octopus:
-            self.get_octopus(**kwargs)
+        self.io_prices = {}
 
+        if octopus:
+            self.get_octopus_from_website(**kwargs)
+            # self.log("")
+            # self.log("Returned from get_octopus_from_website")
         else:
 
             if self.manual:
@@ -98,6 +121,31 @@ class Tariff:
                     self.day = [{"value_inc_vat": day, "valid_from": valid_from}]
                     self.night = [{"value_inc_vat": night, "valid_from": valid_from}]
 
+        if "INTELLI" in name and not self.export:
+            if self.host.get_config("octopus_auto"):
+                try:
+                    self.log(f"    Trying to find Octopus Intelligent Entities from Octopus Energy Integration:")
+                    octopus_import_entity = [
+                        name
+                        for name in self.host.get_state_retry(BOTTLECAP_DAVE["domain"]).keys()
+                        if (
+                            "octopus_energy_electricity" in name
+                            and BOTTLECAP_DAVE["rates"] in name
+                            and not "export" in name
+                        )
+                    ]
+                    self.rlog(f"      Octopus Intelligent Import Entity found: {octopus_import_entity}")
+
+                    self.io_prices = self.get_io_tariffs(octopus_import_entity[0])
+                    # self.io_prices = self._get_io_tariffs(octopus_import_entity)        # Error forcing: failure to load prices
+
+                except Exception as e:
+                    self.log(f"{e.__traceback__.tb_lineno}: {e}", level="ERROR")
+                    self.log(
+                        "Failed to find Octopus Intellgient tariffs from Octopus Energy Integration, extra IO slots will not be loaded",
+                        level="WARNING",
+                    )
+
     def _oct_time(self, d):
         # print(d)
         return datetime(
@@ -106,7 +154,7 @@ class Tariff:
             day=pd.Timestamp(d).day,
         )
 
-    def get_octopus(self, **kwargs):
+    def get_octopus_from_website(self, **kwargs):
         code = self.name
         product = code[5:-2]
         self.eco7 = code[:4] == "E-2R"
@@ -144,6 +192,74 @@ class Tariff:
         else:
             url = f"{OCTOPUS_PRODUCT_URL}{product}/electricity-tariffs/{code}/standard-unit-rates/"
             self.unit = requests.get(url, params=params).json()["results"]
+            # SVB logging
+            # self.log("")
+            # self.log("Printing self.unit")
+            # self.log(self.unit)
+            # self.log("")
+
+    def get_io_tariffs(self, entity_id1):
+
+        x = {}
+        y = {}
+
+        # Load tariffs from bottlecapdave .event sensors
+        self.log("")
+        self.log("    Downloading IOG pricing information from Octopus Energy Integration")
+
+        x = pd.DataFrame(self.host.get_state_retry(entity_id1, attribute=("rates")))
+        # self.log("")
+        # self.log("Read of Bottlecap current day rate entity simplfied is.....")
+        # self.log(x.to_string())
+
+        if not x.empty:
+            x = x.set_index("start")["value_inc_vat"]
+            x.index = pd.to_datetime(x.index)
+            x.index = x.index.tz_convert("UTC")
+            x *= 100
+            # SVB logging
+            self.rlog(f"      Reading current day IOG prices from  {entity_id1}")
+
+            if (self.host.debug and "T" in self.host.debug_cat):
+                self.log(f"\n{x.to_string()}")
+        else:
+            self.log("      No data found in current day rate")
+
+        # current_day_rates loaded, change the entity name to next_day_rates
+        entity_id1 = entity_id1.replace("_current_day_rates", "_next_day_rates")
+
+        y = pd.DataFrame(self.host.get_state_retry(entity_id1, attribute=("rates")))
+
+        if (self.host.debug and "T" in self.host.debug_cat):
+            self.log("")
+            self.log("Read of Bottlecap next day rate entity simplfied is.....")
+            self.log(f"\n{y.to_string()}")
+
+
+        if not y.empty:
+            y = y.set_index("start")["value_inc_vat"]
+            y.index = pd.to_datetime(y.index)
+            y.index = y.index.tz_convert("UTC")
+            y *= 100
+            self.rlog(f"      Reading next day IOG prices from  {entity_id1}")
+
+            if (self.host.debug and "T" in self.host.debug_cat):
+                self.log(f"\n{y.to_string()}")
+
+        else:
+            self.log("      No data found in next day rate")
+
+        # Concatenate todays and tomorrows tariffs into one DataSeries
+        if not x.empty:
+            z = x.combine_first(y)
+            if (self.host.debug and "T" in self.host.debug_cat):
+                self.log("")
+                self.log("IOG prices are")
+                self.log(f"\n{z.to_string()}")
+        else:
+            z = y
+
+        return z
 
     def __str__(self):
         if self.export:
@@ -169,7 +285,8 @@ class Tariff:
             return max([pd.Timestamp(x["valid_to"]) for x in self.unit])
 
     def to_df(self, start=None, end=None, **kwargs):
-        if self.host.debug:
+
+        if (self.host.debug and "V" in self.host.debug_cat):
             self.log(f">>> {self.name}")
             self.log(f">>> Start: {start.strftime(TIME_FORMAT)} End: {end.strftime(TIME_FORMAT)}")
 
@@ -232,6 +349,15 @@ class Tariff:
             df = pd.DataFrame(self.unit).set_index("valid_from")["value_inc_vat"]
             df.index = pd.to_datetime(df.index)
             df = df.sort_index()
+
+            # df at this point is a series of start and end times and not a series of 1/2 hour slots
+
+            # SVB logging
+            # self.log("Df loaded from self.unit")
+            # self.log(df)
+            # self.log("")
+            # self.log("Printing Df")
+            # self.log(df.to_string())
 
             if "AGILE" in self.name and use_day_ahead:
                 # if self.day_ahead is not None and df.index[-1].day == end.day:
@@ -302,6 +428,41 @@ class Tariff:
                 df = df.loc[start:end]
             df.name = "unit"
 
+            ### SVB logging
+            # self.log("")
+            # self.log("Printin df just before concat.....")
+            # self.log(df.to_string())
+
+            ##### SVB #####
+            # It is at this point that df now looks like the Dataframe that compare_tariffs loads. This is the point
+            # to overwrite the Df with IOG data from the BottlecapDave integration.
+            # We need to load both current_day and next_day events.
+            #
+            # To avoid reading HA every time, this should not be called every optimiser run. Therefore
+            # the bottlecap dave entity should be stored in an IOG dataframe when _load_contract is run, as this is already called at
+            # certain times and when the car is plugged in. This will save HA data delays. Only import needs to be loaded.
+            # DONE, (in _load_contract)
+
+            # We then need to overwrite the df data with the IOG dataframe here.
+
+            if len(self.io_prices) > 0:
+                # Add IO slot prices as a column to dataframe.
+                df = pd.concat([df, self.io_prices], axis=1).set_axis(["unit", "io_unit"], axis=1)
+
+                # self.log("To_df, Printing concat")
+                # self.log(t.to_string())
+
+                df = df.dropna(subset=["unit"])  # Drop Nans
+                mask = df["io_unit"] < df["unit"]  # Mask is true if an IOslot
+                df["unit"][mask] = df[
+                    "io_unit"
+                ]  # Overwrite unit (prices from website) with io_unit (prices from OE integration) if in an IOslot.
+                df = df.drop(["io_unit"], axis=1)  # remove IO prices column
+
+            # self.log("To_df, Printing result")
+            # self.log(t.to_string())
+
+        # Add a column "fixed" for the standing charge.
         if not self.export:
             if not self.manual:
                 x = pd.DataFrame(self.fixed).set_index("valid_from")["value_inc_vat"].sort_index()
@@ -317,6 +478,11 @@ class Tariff:
             df.loc[mask, "fixed"] = 0
 
         df = pd.DataFrame(df)
+        ### SVB logging
+        # self.log("")
+        # self.log("Printing final result of to_df.....")
+        # self.log(df.to_string())
+
         # Update for Octopus Savings Events if they exists
         if (self.host is not None) and ("unit" in df.columns):
             events = self.host.saving_events
@@ -395,13 +561,23 @@ class Tariff:
 
 
 class InverterModel:
+    """Describes the inverter
+
+    Attributes:
+        inverter_efficiency: A float describing the DC-AC efficiency of the inverter.
+        charger_efficiency: A float describing the AC-DC efficiency of the inverter.
+        inverter_loss: An int describing the internal power consumption of the inverter at zero load.
+        inverter_power: An int describing the DC-AC power of the inverter.
+        charger_power: An int describing the AC-CC power of the inverter.
+    """
+
     def __init__(
         self,
-        inverter_efficiency=0.97,
-        charger_efficiency=0.91,
-        inverter_loss=100,
-        inverter_power=3000,
-        charger_power=3500,
+        inverter_efficiency: float = 0.97,
+        charger_efficiency: float = 0.91,
+        inverter_loss: int = 100,
+        inverter_power: int = 3000,
+        charger_power: int = 3500,
     ) -> None:
         self.inverter_efficiency = inverter_efficiency
         self.charger_efficiency = charger_efficiency
@@ -409,8 +585,8 @@ class InverterModel:
         self.charger_power = charger_power
         self.inverter_loss = inverter_loss
 
-    # def __str__(self):
-    #     pass
+    def __str__(self):
+        pass
 
     # def calibrate(self, data, **kwargs):
     #     cols = {k: kwargs.get(k, k) for k in ["solar", "consumption", "grid", "battery", "soc"]}
@@ -470,6 +646,10 @@ class OctopusAccount:
         str += f"API Key: {self.api_key}"
 
 
+# Contract Class.
+# Has the tariff code passed in, or gets it from your Octopus Account using your Octopus Account details
+# Also contains the function net_cost, which calculates cost based on predicted power flows.
+# No other functions.
 class Contract:
     def __init__(
         self,
@@ -479,6 +659,7 @@ class Contract:
         octopus_account: OctopusAccount = None,
         host=None,
     ) -> None:
+
         self.name = name
         self.host = host
         if self.host:
@@ -542,6 +723,7 @@ class Contract:
         return str
 
     def net_cost(self, grid_flow, **kwargs):
+        
         if len(grid_flow) == 0:
             return pd.Series()
 
@@ -566,13 +748,18 @@ class Contract:
 
         imp_df = self.tariffs["import"].to_df(start, end, **kwargs)
         nc = imp_df["fixed"]
-        if kwargs.get("log"):
+        if kwargs.get("log") and (self.host.debug and "F" in self.host.debug_cat):
             self.rlog(f">>> Import{self.tariffs['import'].to_df(start,end).to_string()}")
         nc += imp_df["unit"] * grid_imp / 2000
-        if kwargs.get("log"):
+        if kwargs.get("log") and (self.host.debug and "F" in self.host.debug_cat):
             self.rlog(f">>> Export{self.tariffs['export'].to_df(start,end).to_string()}")
         if self.tariffs["export"] is not None:
             nc += self.tariffs["export"].to_df(start, end, **kwargs)["unit"] * grid_exp / 2000
+
+        if (self.host.debug and "V" in self.host.debug_cat):   
+            self.log("")
+            self.log(">>> Return from net_cost routine")
+            self.log(f">>> net_cost returned is {nc}")
 
         return nc
 
@@ -662,9 +849,15 @@ class PVsystemModel:
         df["soc"] = (df["chg"] / self.battery.capacity) * 100
         df["soc_end"] = (df["chg_end"] / self.battery.capacity) * 100
 
+        # self.log("Self.flows completed.")
+        # self.log("df = ")
+        # self.log(df.to_string())
+
         return df
 
     def optimised_force(self, initial_soc, static_flows, contract: Contract, **kwargs):
+        # SVB logging
+        # self.log("Called optimised_force")
         log = kwargs.pop("log", True)
 
         cols = {k: kwargs.get(k, k) for k in ["consumption", "solar"]}
@@ -687,6 +880,14 @@ class PVsystemModel:
                     ],
                     axis=1,
                 )
+        ### SVB logging
+
+        if log and (self.host.debug and "B" in self.host.debug_cat):
+
+            self.log("")
+            self.log("Prices is")
+            self.log(f"\n{prices.to_string()}")
+            self.log("")
 
         if log:
             self.log(
@@ -694,6 +895,7 @@ class PVsystemModel:
             )
 
         prices = prices.set_axis([t for t in contract.tariffs.keys() if contract.tariffs[t] is not None], axis=1)
+        
         if not use_export:
             self.log(f"Ignoring export pricing because Use Export is turned off")
             discharge = False
@@ -744,11 +946,18 @@ class PVsystemModel:
             self.log("---------------------")
             self.log("")
 
-        self.log(slots)
+
+            if log and (self.host.debug and "C" in self.host.debug_cat):
+                self.log ("SPR = Slot Power Required, SCPA = Slot Charger Power Available, SAC = Slot Available Capacity")
+                self.log ("")
+
+
+        # self.log(slots)
         net_cost = []
         net_cost_opt = base_cost
 
         done = False
+        # self.log("Resetting i to 0")
         i = 0
         df = pd.concat(
             [
@@ -758,7 +967,47 @@ class PVsystemModel:
             ],
             axis=1,
         )
+
+        #if log:
+        #    self.log("Printing Df")
+        #    self.log(f"\n{df.to_string()}")
+
+        
+        slot_amount_left = 1
+        slot_left_multiplier_charge = 1
+        slot_left_multiplier_discharge = 1
+        
+
+        z = df
+        z.index = pd.to_datetime(z.index)
+        z["start"] = z.index.tz_convert(self.tz)
+        charge_start_datetime = z["start"].iloc[0]
+
+        # Load Timenow into variables (makes sure all charge processing on slots already started (partial slots) uses a consistent value)
+        Timenow = pd.Timestamp.now(tz=self.tz)
+        Timenow_utc = pd.Timestamp.now(tz="UTC")
+        Timenow_utc_naive = pd.Timestamp.utcnow().tz_localize(None)
+
+        #if log:
+        #    self.log(f"Timenow is {Timenow}, charge_start_datetime is {charge_start_datetime}")
+
+        # Are we already partway through a slot?
+
+        if Timenow > charge_start_datetime:
+            slot_amount_left = ((charge_start_datetime + pd.Timedelta(30, "minutes") - Timenow).total_seconds()) / 1800
+       
+        # Create a multiplier that is the inverse of slot_amount_left
+        slot_left_multiplier_charge = 1 / slot_amount_left   
+        #if log:
+        #    self.log("")
+        #    self.log(f"Slot left = {slot_amount_left}, Time now = {pd.Timestamp.now(self.tz)}, Charge_start_datetime = {charge_start_datetime}")
+
+
         available = pd.Series(index=df.index, data=(df["forced"] == 0))
+
+        #if log:
+        #    self.log(f"available = {available.to_string()}")
+
         net_cost = [base_cost]
         plunge_slots = slots
         slot_count = [0]
@@ -767,16 +1016,17 @@ class PVsystemModel:
             old_cost = contract.net_cost(df)
             old_soc = df["soc_end"]
             i += 1
+
             if (i > 96) or (available.sum() == 0):
                 done = True
 
             import_cost = ((df["import"] * df["grid"]).clip(0) / 2000)[available]
 
+
             if len(import_cost[df["forced"] == 0]) > 0:
                 max_import_cost = import_cost[df["forced"] == 0].max()
                 if len(import_cost[import_cost == max_import_cost]) > 0:
                     max_slot = import_cost[import_cost == max_import_cost].index[0]
-
                     max_slot_energy = round(df["grid"].loc[max_slot] / 2000, 2)  # kWh
 
                     if max_slot_energy > 0:
@@ -784,8 +1034,13 @@ class PVsystemModel:
                             max_slot_energy / self.inverter.charger_efficiency / self.inverter.inverter_efficiency
                         )
 
+
                         # potential windows end at the max_slot
                         x = df.loc[:max_slot].copy()
+
+                        #if log:
+                        #    self.log("Starting value of x is.....")
+                        #    self.log(f"\n{x.to_string()}")
 
                         # count back to find the slots where soc_end < 100
                         x["countback"] = (x["soc_end"] >= 97).sum() - (x["soc_end"] >= 97).cumsum()
@@ -793,16 +1048,50 @@ class PVsystemModel:
                         x = x[x["countback"] == 0]
 
                         # ignore slots which are already fully charging
-                        x = x[x["forced"] < self.inverter.charger_power]
-
+                        
+                        x = x[x["forced"] < (self.inverter.charger_power)]
+                        
                         x = x[x["soc_end"] <= 97]
+
+                        # ignore slot already started where forced is bigger than (inverter_charger_power * slot_amoumt_left)
+                        # no longer needed (as initial SOC is consistent for partial slots)
+
+                        #if log:
+                        #    self.log(f"Timestamp = {pd.Timestamp.now(tz=self.tz)}")
+                        #    self.log(f"Timestamp (UTC) = {pd.Timestamp.now(tz='UTC')}")
+                        #    self.log(f"Start Time in first entry = {x.index[0]}")
+                        #    self.log(f"Forced in first entry = {x['forced'][0]}")
+                        #    self.log(f"Partial slot limit = {self.inverter.charger_power * slot_amount_left}")
+
+                        #if Timenow_utc > x.index[0] and x["forced"][0] >= (self.inverter.charger_power * slot_amount_left):
+                        #    self.log("Slot dropped")
+                        #    x = x.drop(x.index[0])
+
+                        # If slot_amount_left != 1 then we are partway through a slot
+                            # If time in index 0 is less then current time then we are partway through slot, and that will be at index = 0. 
+                                  # x = x[x["forced"] < (self.inverter.charger_power * slot_amount_left)]
+                                            
+                        
+                        #start_window = x[x["import"] == min_price].index[0]
+                        #if (pd.Timestamp.utcnow().tz_localize(None) > start_window.tz_localize(None))
+
+
+                        ### SVB debug logging
+                        #if log:
+                        #    self.log("")
+                        #    self.log(f"Slot_amount_left = {slot_amount_left}")
+                        #    self.log("End value of x is")
+                        #    self.log(f"\n{x.to_string()}")
+
 
                         search_window = x.index
                         str_log = f"{max_slot.tz_convert(self.tz).strftime(TIME_FORMAT)}: {round_trip_energy_required:5.2f} kWh at {max_import_cost:6.2f}p. "
                         if len(search_window) > 0:
+                            # SVB logging
                             # str_log += f"Window: [{search_window[0].strftime(TIME_FORMAT)}-{search_window[-1].strftime(TIME_FORMAT)}] "
                             pass
                         else:
+                            # SVB logging
                             # str_log = "No available window."
                             done = True
                         if len(x) > 0:
@@ -816,39 +1105,102 @@ class PVsystemModel:
                             str_log += f"<==> {start_window.tz_convert(self.tz).strftime(TIME_FORMAT)}: {min_price:5.2f}p/kWh {cost_at_min_price:5.2f}p "
                             str_log += f" SOC: {x.loc[window[0]]['soc']:5.1f}%->{x.loc[window[-1]]['soc_end']:5.1f}% "
                             factors = []
+
+                            # Times recorded in 'slot' are naive UTC, pd.timestamp.now is in local time.
+                            # As tz.localize(None) does no actual conversion to local time, when BST is active the factors are applied one hour ahead of where they should be.
+                            # Therefore, timenow needs to also be naive UTC. For this, use pd.Timestamp.utcnow().tz_localize(None)
+
+                            # Each slot is assigned a value of 1, if already in a slot then factor for time already gone.
+
+
+                            #self.log("Time logging")
+                            #self.log(f"Timenow = {pd.Timestamp.utcnow().tz_localize(None)}")
+
+                            #Test: Code for not doing factoring if in a partial slot
                             for slot in window:
-                                if pd.Timestamp.now() > slot.tz_localize(None):
-                                    factors.append(
-                                        (
-                                            (slot.tz_localize(None) + pd.Timedelta(30, "minutes")) - pd.Timestamp.now()
-                                        ).total_seconds()
-                                        / 1800
-                                    )
-                                else:
-                                    factors.append(1)
+                                factors.append(1)
+
+                            # Code for doing factoring if in a partial slot
+                            #for slot in window:
+                            #    if log:
+                            #        self.log(f"Slot time = {slot.tz_localize(None)}")
+                            #    if Timenow_utc_naive > slot.tz_localize(None):
+                            #        #if log:
+                            #        #    self.log("Partial slot detected")
+                            #        #    self.log("Factor to be written is....")
+                            #        #    self.log(((slot.tz_localize(None) + pd.Timedelta(30, 'minutes')) - pd.Timestamp.utcnow().tz_localize(None)).total_seconds() / 1800)
+                            #
+                            #        factors.append(
+                            #            (
+                            #                (slot.tz_localize(None) + pd.Timedelta(30, "minutes"))
+                            #                - Timenow_utc_naive 
+                            #            ).total_seconds()
+                            #            / 1800
+                            #        )
+                            #    else:
+                            #        factors.append(1)
+
+                            # Assign a factor to each slot so all slots sum to 1.
 
                             factors = [f / sum(factors) for f in factors]
 
+                            #if log:
+                            #    self.log("Factors =")
+                            #    self.log(factors)
+
                             if round(cost_at_min_price, 1) < round(max_import_cost, 1):
+
                                 for slot, factor in zip(window, factors):
-                                    slot_power_required = max(round_trip_energy_required * 2000 * factor, 0)
-                                    slot_charger_power_available = max(
-                                        self.inverter.charger_power
-                                        - x["forced"].loc[slot]
-                                        - x[cols["solar"]].loc[slot],
-                                        0,
-                                    )
-                                    slot_available_capacity = max(
-                                        ((100 - x["soc_end"].loc[slot]) / 100 * self.battery.capacity) * 2 * factor, 0
-                                    )
+
+                                    # Applying factoring to SPR ensures that each slot gets filled at the same rate, including if the current slot is part way through
+                                    # However, this filling is being done by power.
+                                    
+                                    # However, once the future slots reach maximum power, the current slot will only be at 1/3 or 2/3s power. 
+                                    # This what we need to ensure that the energy flow to battery is correct (because 10 or 20 minutes in flows updates "chg" to be equal to battery SOC)
+                                    # THere is however nothing in place to then stop that slot filling up (to max charger power) with more high cost swaps? 
+                                    # Once partway through a slot, the starting battery charge (chg) take accounts of the slot already gone, so it shouldnt be allowed to fill. 
+                                    # So, we then need a limit on the partial slot power based on how far through the slot we are, and declare the slot "full" at that point. 
+
+                                    # Once we have the limit on partial slot power (via SCPA), we still need to factor SPR for the partial slot as this is the number that decides
+                                    # how much charge gets added to the battery in "flows" via "slots". So we still need to factor the final number back up to its original so the inveter 
+                                    # is programmed with the right charge value, this is done right at the end of this def. 
+
+                                    # Note: the factored SCPA is applied in two places - as we allocate power to each slot and also when we decide which slots are full. 
+
+                                    ### Update, starting battery charge is based on self.inital_soc which appears to not be changed (much) during a partial slot. 
+                                    # So it may be possible just to remove partial slot factoring from SPR after all. 
+
+                                    slot_power_required = max(round_trip_energy_required * 2000 * factor, 0) 
+                                    
+                                    #if log:
+                                    #    self.log(f"Time now is {Timenow_utc}, X.index[0] is {x.index[0]}, slot = {slot}")
+
+                                    # Code for factoring SPCA in partial slots
+                                    #if Timenow_utc > x.index[0] and slot == 0:
+                                    #    slot_charger_power_available = max((self.inverter.charger_power * slot_amount_left) - x["forced"].loc[slot]- x[cols["solar"]].loc[slot], 0)
+                                    #else:
+                                    #    slot_charger_power_available = max(self.inverter.charger_power - x["forced"].loc[slot]- x[cols["solar"]].loc[slot], 0)
+
+                                    slot_charger_power_available = max(self.inverter.charger_power - x["forced"].loc[slot]- x[cols["solar"]].loc[slot], 0)
+
+
+                                    # slot_available_capactity is a measure of what capacity the battary has for being charged in a slot. Its calculated from "endSOC" and compared from
+                                    # 100% charged. I'm therefore not sure why its factored. Leave it as is for now but see if it implies a false limit. 
+
+                                    slot_available_capacity = max(((100 - x["soc_end"].loc[slot]) / 100 * self.battery.capacity) * 2 * factor, 0)
+                                                                     
                                     min_power = min(
                                         slot_power_required, slot_charger_power_available, slot_available_capacity
                                     )
-                                    if log:
+                                    if log and (self.host.debug and "C" in self.host.debug_cat):
+                                        
+                                        #self.log(f"Slot = {slot}, Factor = {factor:0.3f}, Forced = {x['forced'].loc[slot]:6.0f}, Solar = {x[cols['solar']].loc[slot]}")
+
                                         str_log_x = (
-                                            f">>> Slot: {slot.strftime(TIME_FORMAT)} Factor: {factor:0.3f} Forced: {x['forced'].loc[slot]:6.0f}W  "
+                                            f"   >>> Slot: {slot.strftime(TIME_FORMAT)} Factor: {factor:0.3f} Forced: {x['forced'].loc[slot]:6.0f}W  "
                                             + f"End SOC: {x['soc_end'].loc[slot]:4.1f}%  SPR: {slot_power_required:6.0f}W  "
-                                            + f"SCPA: {slot_charger_power_available:6.0f}W  SAC: {slot_available_capacity:6.0f}W  Min Power: {min_power:6.0f}W"
+                                            + f"SCPA: {slot_charger_power_available:6.0f}W  SAC: {slot_available_capacity:6.0f}W  Min Power: {min_power:6.0f}W  "
+                                            + f"Solar = {x[cols['solar']].loc[slot]}"
                                         )
                                         self.log(str_log_x)
                                     slots.append(
@@ -873,14 +1225,14 @@ class PVsystemModel:
                                 str_log += f"Net: {net_cost_opt:6.1f}"
                                 if log:
                                     self.log(str_log)
-                                    if self.host.debug:
+                                    self.log("")
+                                    if (self.host.debug and "F" in self.host.debug_cat):
                                         xx = pd.concat(
                                             [old_cost, old_soc, contract.net_cost(df), df["soc_end"], df["import"]],
                                             axis=1,
                                         ).set_axis(["Old", "Old_SOC", "New", "New_SOC", "import"], axis=1)
                                         xx["Diff"] = xx["New"] - xx["Old"]
                                         self.log(f"\n{xx.loc[window[0] : max_slot].to_string()}")
-                                        # yy = False
                             else:
                                 available[max_slot] = False
                 else:
@@ -888,6 +1240,7 @@ class PVsystemModel:
             else:
                 self.log("No slots available")
                 done = True
+
 
         df = pd.concat(
             [
@@ -914,9 +1267,12 @@ class PVsystemModel:
                 axis=1,
             )
 
+        
         slots_added = 999
+
         # Only do the rest if there is an export tariff:
-        # self.log(f">>>{prices['export'].sum()}")
+        # self.log(f"Sum of Export Prices = {prices['export'].sum()}")
+        
         if prices["export"].sum() > 0:
             j = 0
         else:
@@ -947,11 +1303,15 @@ class PVsystemModel:
             available = (
                 (df["import"] < max_export_price) & (df["forced"] < self.inverter.charger_power) & (df["forced"] >= 0)
             )
-            # self.log((df["import"]<max_export_price)
+            
+            self.log(df["import"]<max_export_price)
             a0 = available.sum()
             if log:
                 self.log(f"{available.sum()} slots have an import price less than the max export price")
             done = available.sum() == 0
+
+            self.log(f"\n{df.to_string()}")
+
 
             while not done:
                 x = (
@@ -965,32 +1325,56 @@ class PVsystemModel:
                 done = i > a0
 
                 min_price = x["import"].min()
-
+ 
+                # Add rounding to ensure matching (may not be needed)
+                x["import"] = x["import"].round(2)
+                min_price = min_price.round(2)
+ 
                 if len(x[x["import"] == min_price]) > 0:
                     start_window = x[x["import"] == min_price].index[0]
                     available.loc[start_window] = False
-                    str_log = f"{available.sum():>2d} Min import price {min_price:5.2f}p/kWh at {start_window.strftime(TIME_FORMAT)} {x.loc[start_window]['forced']:4.0f}W "
+                    str_log = ""
+                    #str_log = f"{available.sum():>2d} Min import price {min_price:5.2f}p/kWh at {start_window.strftime(TIME_FORMAT)} {x.loc[start_window]['forced']:4.0f}W "
+                    self.log(f"{available.sum():>2d} Min import price {min_price:5.2f}p/kWh at {start_window.strftime(TIME_FORMAT)} {x.loc[start_window]['forced']:4.0f}W ")
 
-                    if (pd.Timestamp.now() > start_window.tz_localize(None)) and (
-                        pd.Timestamp.now() < start_window.tz_localize(None) + pd.Timedelta(30, "minutes")
+
+                    ## SVB changed so all times are in naive UTC
+                    ### I don't think factoring is necessary here, as self.initial_soc doesnt change partway through a slot. 
+                    if Timenow_utc_naive > start_window.tz_localize(None) and (
+                        Timenow_utc_naive < start_window.tz_localize(None) + pd.Timedelta(30, "minutes")
                     ):
                         str_log += "* "
                         factor = (
-                            (start_window.tz_localize(None) + pd.Timedelta(30, "minutes")) - pd.Timestamp.now()
+                            (start_window.tz_localize(None) + pd.Timedelta(30, "minutes"))
+                            - Timenow_utc_naive
                         ).total_seconds() / 1800
                     else:
                         str_log += "  "
                         factor = 1
 
-                    str_log += f"SOC: {x.loc[start_window]['soc']:5.1f}%->{x.loc[start_window]['soc_end']:5.1f}% "
+                    #str_log += f"SOC: {x.loc[start_window]['soc']:5.1f}%->{x.loc[start_window]['soc_end']:5.1f}% "
+                    if (self.host.debug and "C" in self.host.debug_cat):
+                        self.log(f"SOC (before modelling Forced Charge): {x.loc[start_window]['soc']:5.1f}%->{x.loc[start_window]['soc_end']:5.1f}% ")
+
+                    ###
+                    # If the partial slot is already set to charge via high cost swaps, the value of "forced" will be appropriate 
+                    # for energy transfer, not actual inverter power. However all this next bit does is max out the inverter power, which is not
+                    # then going to give an accurate reflection of energy transferred to battery when flows is called. We need to set a slot limit 
+                    # that is factored for partial slots, and max it out to that. 
+
+                    # If partway through slot, apply a factor to "slot_charger_power_available"
+                    #slot_charger_power_available = max(
+                    #    (min(self.inverter.charger_power, self.battery.max_charge_power)  * factor)
+                    #    , 0)
+
 
                     forced_charge = min(
-                        min(self.battery.max_charge_power, self.inverter.charger_power)
-                        - x["forced"].loc[start_window]
-                        - x[cols["solar"]].loc[start_window],
+                        min(self.battery.max_charge_power, self.inverter.charger_power) - x["forced"].loc[start_window]- x[cols["solar"]].loc[start_window],
+                    #    slot_charger_power_available,
                         ((100 - x["soc_end"].loc[start_window]) / 100 * self.battery.capacity) * 2 * factor,
                     )
-
+                    if (self.host.debug and "C" in self.host.debug_cat):
+                        self.log(f"Forced Charge = {forced_charge}")
                     slot = (
                         start_window,
                         forced_charge,
@@ -1006,7 +1390,15 @@ class PVsystemModel:
                         axis=1,
                     )
 
+                    if (self.host.debug and "F" in self.host.debug_cat):
+                        self.log("Df after flows called = ")
+                        self.log(f"\n{df.to_string()}")
+
                     net_cost = contract.net_cost(df).sum()
+
+                    self.log(f"Net Cost: {net_cost:5.1f} ")
+                    self.log(f"Net Cost Opt: {net_cost_opt:5.1f} ")
+
                     str_log += f"Net: {net_cost:5.1f} "
                     if net_cost < net_cost_opt - self.host.get_config("slot_threshold_p"):
                         str_log += (
@@ -1015,8 +1407,8 @@ class PVsystemModel:
                         str_log += f"Max export: {-df['grid'].min():0.0f}W "
                         net_cost_opt = net_cost
                         slots_added += 1
-                        if log:
-                            self.log(str_log)
+                        #if log:
+                        self.log(str_log)
                     else:
                         # done = True
                         slots = slots[:-1]
@@ -1070,23 +1462,48 @@ class PVsystemModel:
                     self.log(f"{available.sum()} slots have an export price greater than the min import price")
                 done = available.sum() == 0
 
+
+                # Reload Timenow into variables (makes sure all discharge processing on slots already started (partial slots) uses a consistent value)
+
+                Timenow = pd.Timestamp.now(tz=self.tz)
+                Timenow_utc = pd.Timestamp.now(tz="UTC")
+                Timenow_utc_naive = pd.Timestamp.utcnow().tz_localize(None)
+
+                z = df
+                z.index = pd.to_datetime(z.index)
+                z["start"] = z.index.tz_convert(self.tz)
+                discharge_start_datetime = z["start"].iloc[0]
+
+                if log:
+                    self.log(f"Timenow is {Timenow}, discharge_start_datetime is {discharge_start_datetime}")
+
+                if Timenow > discharge_start_datetime:
+                    slot_amount_left = ((discharge_start_datetime + pd.Timedelta(30, "minutes") - Timenow).total_seconds()) / 1800
+       
+                # Create a multiplier that is the inverse of slot_amount_left
+                slot_left_multiplier_discharge = 1 / slot_amount_left   
+
+                if log:
+                    self.log("")
+                    self.log(f"Slot left = {slot_amount_left}, Time now = {pd.Timestamp.now(self.tz)}, Charge_start_datetime = {discharge_start_datetime}")
+
                 while not done:
                     x = df[available].copy()
                     i += 1
                     done = i > a0
                     max_price = x["export"].max()
-
+                   
                     if len(x[x["export"] == max_price]) > 0:
+                        #self.log("Entered routine successfully")
                         start_window = x[x["export"] == max_price].index[0]
                         available.loc[start_window] = False
                         str_log = f"{available.sum():>2d} Max export price {max_price:5.2f}p/kWh at {start_window.strftime(TIME_FORMAT)} "
 
-                        if (pd.Timestamp.now() > start_window.tz_localize(None)) and (
-                            pd.Timestamp.now() < start_window.tz_localize(None) + pd.Timedelta(30, "minutes")
-                        ):
+                        if (Timenow_utc_naive > start_window.tz_localize(None)) and (Timenow_utc_naive < start_window.tz_localize(None) + pd.Timedelta(30, "minutes")
+                           ):
                             str_log += "* "
                             factor = (
-                                (start_window.tz_localize(None) + pd.Timedelta(30, "minutes")) - pd.Timestamp.now()
+                                (start_window.tz_localize(None) + pd.Timedelta(30, "minutes")) - Timenow_utc_naive
                             ).total_seconds() / 1800
                         else:
                             str_log += "  "
@@ -1094,17 +1511,29 @@ class PVsystemModel:
 
                         str_log += f"SOC: {x.loc[start_window]['soc']:5.1f}%->{x.loc[start_window]['soc_end']:5.1f}% "
 
+                        ###
+                        # All this next bit does is max out the inverter power to discharge, which means that "flows" is not
+                        # then going to give an accurate reflection of energy transferred to battery if already part way through a slot. 
+                        # We need to factor "slot" for partial slots in just the same way as we did in high cost swaps (and low cost charging). 
+                        # Factoring is only being applied to energy in the battery, which will only kick in when almost empty. 
+
+                        # If partway through slot, apply a factor to "slot_discharge_power_available"
+
+                        #Code to factor SDPA in a partial slot
+                        #slot_discharge_power_available = max(
+                        #    (min(self.inverter.charger_power, self.battery.max_discharge_power)  * factor)
+                        #    , 0)
+
+
                         slot = (
                             start_window,
                             -min(
-                                min(self.battery.max_discharge_power, self.inverter.inverter_power),
-                                -x[kwargs.get("solar", "solar")].loc[start_window],
-                                ((x["soc_end"].loc[start_window] - self.battery.max_dod) / 100 * self.battery.capacity)
-                                * 2
-                                * factor,
+                                min(self.battery.max_discharge_power, self.inverter.inverter_power) -x[kwargs.get("solar", "solar")].loc[start_window],
+                                ((x["soc_end"].loc[start_window] - self.battery.max_dod) / 100 * self.battery.capacity) * 2 * factor,
+                                #slot_discharge_power_available
                             ),
                         )
-
+                                  
                         slots.append(slot)
 
                         df = pd.concat(
@@ -1115,14 +1544,25 @@ class PVsystemModel:
                             axis=1,
                         )
 
+                        if (self.host.debug and "F" in self.host.debug_cat):
+                            self.log("Df after flows called = ")
+                            self.log(f"\n{df.to_string()}")
+
+
                         net_cost = contract.net_cost(df).sum()
+
+                        self.log(f"Net Cost: {net_cost:5.1f} ")
+                        self.log(f"Net Cost Opt: {net_cost_opt:5.1f} ")
+
+
                         str_log += f"Net: {net_cost:5.1f} "
                         if net_cost < net_cost_opt - self.host.get_config("slot_threshold_p"):
                             str_log += f"New SOC: {df.loc[start_window]['soc']:5.1f}%->{df.loc[start_window]['soc_end']:5.1f}% "
                             str_log += f"Max export: {-df['grid'].min():0.0f}W "
                             net_cost_opt = net_cost
                             slots_added += 1
-                            if log:
+                            
+                            if (self.host.debug and "D" in self.host.debug_cat):
                                 self.log(str_log)
                         else:
                             # done = True
@@ -1134,8 +1574,8 @@ class PVsystemModel:
                                 ],
                                 axis=1,
                             )
-                            # if log:
-                            #     self.log(str_log)
+                            if (self.host.debug and "D" in self.host.debug_cat):
+                                self.log(str_log)
                     else:
                         done = True
 
@@ -1156,6 +1596,14 @@ class PVsystemModel:
             if log:
                 self.log(f"Iteration {j:2d}: Slots added: {slots_added:3d}")
 
+        #if log:
+        #    self.log(f"df before final concat = ")
+        #    self.log(f"\n{df.to_string()}")
+        #    
+        #    self.log("Slots before final concat = ")
+        #    temp = pd.DataFrame(slots)
+        #    self.log(f"\n{temp.to_string()}")
+
         df = pd.concat(
             [
                 prices,
@@ -1163,6 +1611,46 @@ class PVsystemModel:
             ],
             axis=1,
         )
+
+        #if log:
+        #    self.log(f"df after final concat = ")
+        #    self.log(f"\n{df.to_string()}")
+
+
+        # If in a partial slot, remove the factor applied during SPR assignment so the inverter stays at a constant charge power all the way through the slot. 
+
+        if slot_left_multiplier_charge > 6:
+            slot_left_multiplier_charge = 6
+
+        #if log:
+        #    self.log(f"Slot_left_multiplier_charge = {slot_left_multiplier_charge}")
+        #    self.log(f"Forced in current slot = {df['forced'].iloc[0]}")
+
+        #if df["forced"].iloc[0] > 1:   # only apply to slots that are charging. 
+        #    df["forced"].iloc[0] = df["forced"].iloc[0] * slot_left_multiplier_charge
+
+        #if log:
+        #    self.log(f"Forced after applying charge multiplier = {df['forced'].iloc[0]}")
+        #    self.log(f"\n{df.to_string()}")
+
+
+        # If in a partial slot, remove the factor applied during SPR assignment so the inverter stays at a constant discharge power all the way through the slot. 
+
+        if slot_left_multiplier_discharge > 6:
+            slot_left_multiplier_discharge = 6
+
+        #if log:
+        #    self.log(f"Slot_left_multiplier_discharge = {slot_left_multiplier_discharge}")
+        #    self.log(f"Forced in current slot = {df['forced'].iloc[0]}")
+
+        #if df["forced"].iloc[0] < 0:   # only apply to slots that are discharging. 
+        #    df["forced"].iloc[0] = df["forced"].iloc[0] * slot_left_multiplier_discharge
+
+        #if log:
+        #    self.log(f"Forced after applying discharge multiplier = {df['forced'].iloc[0]}")
+        #    self.log(f"\n{df.to_string()}")
+
+
         df.index = pd.to_datetime(df.index)
 
         if (not self.host.get_config("allow_cyclic")) and (len(slots) > 0) and discharge:

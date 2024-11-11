@@ -1,6 +1,4 @@
-# PV Opt: Home Assistant Solar/Battery Optimiser v3.17.1
-
-<h2>This documentation needs updating!</h2>
+# PV Opt: Home Assistant Solar/Battery Optimiser v3.18.0 Beta-15
 
 Solar / Battery Charging Optimisation for Home Assistant. This appDaemon application attempts to optimise charging and discharging of a home solar/battery system to minimise cost electricity cost on a daily basis using freely available solar forecast data from SolCast. This is particularly beneficial for Octopus Agile but is also benefeficial for other time-of-use tariffs such as Octopus Flux or simple Economy 7.
 
@@ -15,6 +13,11 @@ The application will integrate fully with Solis inverters which are controlled u
 Once installed it should require miminal configuration. Other inverters/integrations can be added if required or can be controlled indirectly using automations.
 
 It has been tested primarily with Octopus tariffs but other tariffs can be manually implemented.
+
+PV Opt supports EV charging:
+ - If on Octopus Intelligent Go, PV Opt will incorporate any extra cheap slots in the house battery charge/discharge plan.
+ - If on the Agile tariff, PV Opt can calculate a car charging plan which can be used to control your EV charger/car via external HA automation scripts.
+ - If necessary Pv_opt automatically prevents house battery discharge during EV Charging.
 
 <h2>Don't Buy Me a Beer or a Coffee...</h2>
 
@@ -38,9 +41,10 @@ This app is not stand-alone it requires the following:
 | Samba Share| Alternative| Alternative to using File Editor to edit config files. Not convered in this guide.
 | Studio Code Server| Alternative|Alternative to using `File Editor` to edit config files. Not convered in this guide.
 | <u><b>Integrations</b></u> | | |
-|Solcast PV Solar Integration | Required | Retrieves solar forecast from Solcast into Home Assistant |
-|Octopus Energy | Optional | Used to retrieve tariff information and Octopus Saving Session details|
+|Solcast PV Solar Integration | Required | Retrieves solar forecast from Solcast into Home Assistant. |
+|Octopus Energy | Optional | Used to retrieve tariff information and Octopus Saving Session details. For users on Intelligent Octopus Go, this is required for any addtional slots outside of the 6 hour period to be taken into account in the charge/discharge plan. |
 |Solax Modbus | Optional | Used to control Solis inverter directly. Support for two other integrations is now available (see below). Support inverter brands is possible using the API described below.
+|MyEnergi | Optional | For Intelligent Octopus Go users using a Zappi charger, used by Pv_opt to detect EV plugin and supply EV consumption history. 
 
 <h2>Step by Step Installation Guide</h2>
 
@@ -53,9 +57,9 @@ This app is not stand-alone it requires the following:
 1. Install HACS: https://hacs.xyz/docs/setup/download
 2. Enable AppDaemon in HACS: https://hacs.xyz/docs/use/repositories/type/appdaemon/#making-appdaemon-apps-visible-in-hacs
 
-<h3>3. Install the Solcast PV Solar Integration (v4.0.x)</h3>
+<h3>3. Install the Solcast PV Solar Integration (v4.1.x)</h3>
 
-1. Install the integation via HACS: https://github.com/oziee/ha-solcast-solar
+1. Install the integation: https://github.com/BJReplay/ha-solcast-solar
 2. Add the Integration via Settings: http://homeassistant.local:8123/config/integrations/dashboard
 3. Once installed configure using your Solcast API Key from (1) . 
 4. Set up an automation to update according to your desired schedule. Once every 3 hours will work.
@@ -64,7 +68,7 @@ This app is not stand-alone it requires the following:
 
 
 
-This excellent integration will pull Octopus Price data in to Home Assistant. Solar Opt pulls data from Octopus independently of this integration but will extract current tariff codes from it if they are avaiable. If not it will either use account details supplied in `secrets.yaml` or explicitly defined Octopus tariff codes set in `config.yaml`.
+This excellent integration will pull Octopus Price data in to Home Assistant. Pv Opt pulls data from Octopus independently of this integration but will extract current tariff codes from it if they are avaiable. If not it will either use account details supplied in `secrets.yaml` or explicitly defined Octopus tariff codes set in `config.yaml`. If on Intelligent Octopus Go, this integration is required, as Pv_opt will use this to identify any slots allocated outside of 23:30 to 05:30 for use in its charge plan and managing the house battery during car charging slots. 
 
 
 <h3>5. Install the Integration to Control Your Inverter</h3>
@@ -497,7 +501,22 @@ These parameters will define how PV Opt estimates daily consumption:
 | Weekday Weighting| fraction | `number.pvopt_day_of_week_weighting` | 0.5 | Defines how much weighting to give to the day of the week when averaging the load. 0.0 will use the simple average of the last `n` days based on `load_history_days` and 1.0 will just used the same day of the week within that window. Values inbetween will weight the estimate accordingly. If every day is the same use a low number. If your usage varies daily use a high number.
 | <b>Daily Consumption Parameters
 | Daily Consumption | kWh | `number.pvopt_daily_consumption_kwh` | 17 | Estimated daily consumption to use when predicting future load |
-| Shape Consumption Profile | `on`/`off` | `switch.pvopt_shape_consumption_profile` | On | Defines whether to shapoe the consumption to a typical daily profile (`on`) or to assume constant usage (`off`) |
+| Shape Consumption Profile | `on`/`off` | `switch.pvopt_shape_consumption_profile` | On | Defines whether to shapoe the consumption to a typical daily profile (`on`) or to assume constant usage (`off`). The shape of the daily profile can be modified within config.yaml. |
+
+<h3>EV parameters</h3>
+
+| Parameter | Units | Entity | Default | Description |
+|:--|:--:| :-- | :--:|:--|
+| EV Charger | None / Zappi / Other | `select.pvopt_ev_charger` | None | Set EV Charger Type. At the current release, only 'Zappi' is supported, 'Other' is unused and is for a future release. Note: Zappi support requires the MyEnergi integration to be installed. |
+| EV Part of House Load | On / Off | `switch.pvopt_ev_part_of_house_load` | On | Prevents house battery discharge when EV is charging. If your EV Charger is wired so it is seen as part of the house load, then it will discharge to the EV when the EV is charging. Setting this to On prevents this, as well as ensuring that any EV consumption is removed from Consumption History. If your Zappi is wired on its own Henley block and thus outside of what the inverter CT clamp will measure, then set this to Off. Note: PV Opt does not support allowing the house battery to be used to charge the car. |
+| Car Charge Plan | kWh | `switch.control_car_charging` | Off | Toggle Car Plan generation On/Off. For users on Agile, setitng to On will generate candidate car charging plan on each optimiser run based on the settings below. The candidate plan is made active upon car plugin, or via Dashbaord command (see "Transfer Car Charge Plan" below). The active car charging plan is output on binary_sensor.pvopt_car_charging_slot for use in HA automations. An example HA automation to control a Zappi charger is included at XXXXXXX. Intelligent Octopus Go users should set this to Off. If Off, the rest of the EV parameters below have no effect. |
+| Transfer Car Charge Plan | On/Off | `switch.transfer_car_charge_plan` | 30 | Make Candidate Car Charging Plan the active plan. Useful if adjusting any of the below paramaters after the car has been plugged in. This will automatically be set back to Off after the plan is transferred. This ensures any external HA automations used to auto-calculate "Car Charge to Add" based on car SOC don't corrupt the car charging plan once the car starts charging. |
+| EV Charger Power | W | `number.pvopt_ev_charger_power_watts` | 7000 | Set EV charger power. |
+| EV Batttery Capacity | kWh | `number.pvopt_ev_battery_capacity_kwh` | 60 | Set EV Battery Capacity.   |
+| Car Ready  By | Time | `select.car_charging_ready_by` | 06:30 | Set Time for when the Car is to be ready by.   |
+| Car Charge to Add | % | `number.ev_charge_target_percent` | 30 | % of 'charge to add' to the car. I.e if your car is at 40% and want it to be charged to 90% then set this to 50%.  |
+| Car Charge Slot max price | p | `number.max_ev_price_p` | 30 | Maximum 1/2 hour slot price per kWh in pence added to the candidate car charging plan. Disable by setting to 0. Note: setting a low value may mean the car will not charge to the required SOC if overnight Agile rates are high. |
+| Car Charge Efficiency | % | `number.ev_charger_efficiency_percent` | 92 | Charging Efficiency for EV Charger/Car. 92% is average for most cars/chargers but adjust if the car is consistently undercharging or overcharging against its target. |
 
 <h3>Pricing Parameters</h3>
 These parameters set the price that PV Opt uses:

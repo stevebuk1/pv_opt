@@ -1,0 +1,22 @@
+views:
+  - title: Home
+    cards:
+      - type: entities
+        entities:
+          - entity: select.pvopt_test_function
+            name: Function
+          - entity: select.pvopt_test_enable
+            name: Enable / Disable
+          - entity: text.pvopt_test_start
+            name: Start Time (Local Time Zone)
+          - entity: text.pvopt_test_end
+            name: End Time (Local Time Zone)
+          - entity: number.pvopt_test_power
+            name: Power
+          - entity: number.pvopt_test_target_soc
+            name: Target SOC
+          - entity: button.pvopt_test_button
+            name: Send to Inverter
+          - entity: switch.pvopt_prevent_discharge
+            name: Prevent Discharge
+        title: PV Opt Test Card

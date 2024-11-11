@@ -173,7 +173,7 @@ pv_opt:
   # If you have a Zappi Charger, uncomment next line to allow Pv_opt to detect car plugin status
   # for use with the Octopus Intelligent Tariff and to allow EV consumption data to be read (if needed). 
   #
-  # ev_charger: Zappi   # Default = None
+  ev_charger: Zappi   # Default = None
   #
   # By default, Zappi is set to seen as part of the house load to prevent house battery discharge during car charging and allow discounting of EV consumption
   # from house charging calculations. 
@@ -195,10 +195,10 @@ pv_opt:
   # update_cycle_seconds: 15
   # maximum_dod_percent: number.{device_name}_battery_minimum_soc 
   
-  id_consumption_today: sensor.{device_name}_consumption_today
-  id_consumption:
-    - sensor.{device_name}_house_load
-    - sensor.{device_name}_bypass_load
+  # id_consumption_today: sensor.{device_name}_consumption_today
+  # id_consumption:
+  #  - sensor.{device_name}_house_load
+  #  - sensor.{device_name}_bypass_load
 
   # id_grid_import_today: sensor.{device_name}_grid_import_today
   # id_grid_export_today: sensor.{device_name}_grid_export_today
