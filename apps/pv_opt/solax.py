@@ -154,6 +154,11 @@ class InverterController:
                 self.host.set_select("charge_end_time_1", end)
                 self.host.set_select("charge_start_time_2", start)
                 self.host.set_select("charge_end_time_2", end)
+                # Added to reset current back to 20A after any charging operations. 
+                current = 20
+                entity_id = self.host.config[f"id_max_charge_current"]
+                changed, written = self.host.write_and_poll_value(
+                        entity_id=entity_id, value=current, tolerance=1, verbose=True)
 
         else:
             self._unknown_inverter()
