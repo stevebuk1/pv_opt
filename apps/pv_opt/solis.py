@@ -703,6 +703,18 @@ class InverterController:
                             entity_id=entity_id, value=z
                         )
 
+                        if changed:
+                            if written:
+                                self.log(f"Wrote {direction} {limit} {unit} of {value} to inverter")
+                                value_changed = True
+                            else:
+                                self.log(
+                                    f"Failed to write {direction} {limit} {unit} to inverter",
+                                    level="ERROR",
+                                )
+                                write_flag = False
+
+
                     elif self.type == "SOLIS_SOLAX_MODBUS":
                         for unit in ["hours", "minutes"]:
                             # entity_id = self.host.config[f"id_timed_{direction}_{limit}_{unit}"] 
@@ -716,6 +728,17 @@ class InverterController:
                                 entity_id=entity_id, value=value, verbose=True
                             )
 
+                            if changed:
+                                if written:
+                                    self.log(f"Wrote {direction} {limit} {unit} of {value} to inverter")
+                                    value_changed = True
+                                else:
+                                    self.log(
+                                        f"Failed to write {direction} {limit} {unit} to inverter",
+                                        level="ERROR",
+                                    )
+                                    write_flag = False
+
                     elif self.type == "SOLIS_CORE_MODBUS" or self.type == "SOLIS_SOLARMAN":
                         for unit in ["hours", "minutes"]:
                             if unit == "hours":
@@ -724,21 +747,21 @@ class InverterController:
                                 value = times[limit].minute
                             changed, written = self._solis_write_time_register(direction, limit, unit, value)
 
+                            if changed:
+                                if written:
+                                    self.log(f"Wrote {direction} {limit} {unit} of {value} to inverter")
+                                    value_changed = True
+                                else:
+                                    self.log(
+                                        f"Failed to write {direction} {limit} {unit} to inverter",
+                                        level="ERROR",
+                                    )
+                                    write_flag = False
+
                     else:
                         e = "Unknown inverter type"
                         self.log(e, level="ERROR")
                         raise Exception(e)
-
-                    if changed:
-                        if written:
-                            self.log(f"Wrote {direction} {limit} {unit} of {value} to inverter")
-                            value_changed = True
-                        else:
-                            self.log(
-                                f"Failed to write {direction} {limit} {unit} to inverter",
-                                level="ERROR",
-                            )
-                            write_flag = False
 
             if value_changed:
                 if self.type == "SOLIS_SOLAX_MODBUS" and write_flag:
@@ -780,8 +803,9 @@ class InverterController:
                 elif self.type == "SOLIS_SOLARMAN_V2":
                     self.log("")
                     self.log(f">>> Solarman V2 current writes: about to write {current} to entity {entity_id}")
-                    ###
-                    changed, written = self.host.write_and_poll_value(entity_id=entity_id, value=current, tolerance=1)      
+
+                    value=round(current, 1)
+                    changed, written = self.host.write_and_poll_value(entity_id=entity_id, value=value, tolerance=1)      
 
                 else:
                     e = "Unknown inverter type"
@@ -911,7 +935,11 @@ class InverterController:
 
         if self.type in ["SOLIS_SOLAX_MODBUS", "SOLIS_SOLARMAN", "SOLIS_CORE_MODBUS", "SOLIS_SOLARMAN_V2"]:        
             for direction in ["charge", "discharge"]:
-                status[direction] = {}
+                status[direction] = {
+                    "current": 0,
+                    "start": pd.Timestamp("00:00", tz=self.tz),
+                    "end": pd.Timestamp("00:00", tz=self.tz),
+                }
                 for limit in limits:
                     states = {}
                     if self.type == "SOLIS_SOLARMAN" or self.type == "SOLIS_SOLAX_MODBUS" or self.type == "SOLIS_CORE_MODBUS":                
@@ -946,9 +974,9 @@ class InverterController:
             status[direction]["active"] = (
                 time_now >= status[direction]["start"]
                 and time_now < status[direction]["end"]
-                and status[direction]["current"] >= 0      # SVB changed to ">=" so IOG slots are seen as charging (as they effectively use timed charge)
-                and status["switches"]["Timed"]
-                and status["switches"]["GridCharge"]
+                and status[direction].get("current", 0) >= 0 # SVB changed to ">=" so IOG slots are seen as charging (as they effectively use timed charge)
+                and status["switches"].get("Timed", False)
+                and status["switches"].get("GridCharge", False)
             )
 
         status["hold_soc"] = {"active": status["switches"]["Backup"]}

@@ -117,7 +117,14 @@ class InverterController:
                     current = abs(round(power / voltage, 1))
                     current = min(current, self.host.get_config("battery_current_limit_amps"))
 
-                    self.log(f"Power {power:0.0f} = {current:0.1f}A at {self.host.get_config('battery_voltage')}V")
+                    # If power is exactly "1" then this is a car hold slot, to prevent sleep, set to 1A
+                    if power == 1:
+                       current = 1
+                       self.log("Power = 1W (hold slot). Setting current to 1A (to prevent sleep SOC being reached)")
+                       self.log("")
+                    else:
+                       self.log(f"Power {power:0.0f} = {current:0.1f}A at {self.host.get_config('battery_voltage')}V")
+                    
                     changed, written = self.host.write_and_poll_value(
                         entity_id=entity_id, value=current, tolerance=1, verbose=True
                     )

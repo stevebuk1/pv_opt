@@ -44,10 +44,13 @@ pv_opt:
   #
   # S = Startup/Initialisation Logging
   # T = Tariff loading Logging
-  # P = Power consumption history Logging
+  # P = Power consumption history logging
+  # Q = Power consumption history logging (verbose)
+  # B = Optimisation Start summary
   # C = Charge algorithm Logging
   # D = Discharge algorithm Logging
   # W = Charge/Discharge Windows Logging
+  # O = Optimsation Summary (1/2 hour slots)
   # F = Power Flows Logging
   # V = Power Flows debugging (extra verbose)
   # I = inverter control/commands Logging
@@ -87,7 +90,7 @@ pv_opt:
   #
   # id_solcast_today: sensor.solcast_pv_forecast_forecast_today
   # id_solcast_tomorrow: sensor.solcast_pv_forecast_forecast_tomorrow
-  # solar_confidence_level: 50
+  # solcast_confidence_level: 50
   
   # ========================================
   # Consumption forecast parameters

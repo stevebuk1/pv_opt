@@ -1,4 +1,4 @@
-# PV Opt: Home Assistant Solar/Battery Optimiser v3.19.0 Beta-16
+# PV Opt: Home Assistant Solar/Battery Optimiser v3.19.0 Beta-20
 
 Solar / Battery Charging Optimisation for Home Assistant. This appDaemon application attempts to optimise charging and discharging of a home solar/battery system to minimise cost electricity cost on a daily basis using freely available solar forecast data from SolCast. This is particularly beneficial for Octopus Agile but is also benefeficial for other time-of-use tariffs such as Octopus Flux or simple Economy 7.
 
@@ -210,14 +210,16 @@ And add the `client_user` and `client_password` keys to `secrets.yaml` like this
           pv_opt_log:
             name: PV_Opt
             filename: /share/logs/pv_opt.log
+            log_generations: 9
+            log_size: 10000000
             date_format: '%H:%M:%S'      
             format: '{asctime} {levelname:>8s}: {message}'
 
-4. Open the AppDaemon Add-On via Settings: http://homeassistant.local:8123/hassio/addon/a0d7b954_appdaemon/info
+5. Open the AppDaemon Add-On via Settings: http://homeassistant.local:8123/hassio/addon/a0d7b954_appdaemon/info
 
-5. Click on <b>Configuration</b> at the top
+6. Click on <b>Configuration</b> at the top
 
-6. Click the 3 dots and <b>Edit in YAML</b> to add `pandas` and `numpy` as Python packages. Note that `numpy` has to be set to version `1.26.4` due to an unresolved compatability issue between Home Assistant and `2.0.0`:
+7. Click the 3 dots and <b>Edit in YAML</b> to add `pandas` and `numpy` as Python packages. Note that `numpy` has to be set to version `1.26.4` due to an unresolved compatability issue between Home Assistant and `2.0.0`:
 
    ```
    init_commands: []
@@ -228,9 +230,9 @@ And add the `client_user` and `client_password` keys to `secrets.yaml` like this
 
    ```
 
-7. Go back to the <b>Info</b> page and click on <b>Start</b>
+8. Go back to the <b>Info</b> page and click on <b>Start</b>
 
-8. Click on <b>Log</b>. Appdaemon will download and install numpy and pandas. Click on <b>Refresh</b> until you see:
+9. Click on <b>Log</b>. Appdaemon will download and install numpy and pandas. Click on <b>Refresh</b> until you see:
 
    ```
     s6-rc: info: service init-appdaemon successfully started
@@ -241,7 +243,7 @@ And add the `client_user` and `client_password` keys to `secrets.yaml` like this
     s6-rc: info: service legacy-services successfully started
    ```
 
-9. Either click on `Info` followed by `OPEN WEB UI` and then `Logs` or open your `main_log` file from the location specified in step (3) above. You should see:
+10. Either click on `Info` followed by `OPEN WEB UI` and then `Logs` or open your `main_log` file from the location specified in step (3) above. You should see:
 
     ```
     13:16:24 INFO AppDaemon: AppDaemon Version 4.4.2 starting
@@ -295,7 +297,7 @@ That's it. AppDaemon is up and running. There is futher documentation for the on
 Once downloaded AppDaemon should see the app and attempt to load it using the default configuration. Go back to the AppDaemon logs and this time open pv_opt_log. You should see:
 
   ```
-  16:53:23     INFO: ******************* PV Opt v3.0.1 *******************
+  16:53:23     INFO: ******************* PV Opt v3.19.0-Beta-17 *******************
   16:53:23     INFO: 
   16:53:23     INFO: Time Zone Offset: 0.0 minutes
   16:53:23     INFO: Reading arguments from YAML:
@@ -411,16 +413,18 @@ These parameters will define how PV Opt estimates daily consumption:
 
 | Parameter | Units | Entity | Default | Description |
 |:--|:--:| :-- | :--:|:--|
-| EV Charger | None / Zappi / Other | `select.pvopt_ev_charger` | None | Set EV Charger Type. At the current release, only 'Zappi' is supported, 'Other' is unused and is for a future release. Note: Zappi support requires the MyEnergi integration to be installed. |
-| EV Part of House Load | On / Off | `switch.pvopt_ev_part_of_house_load` | On | Prevents house battery discharge when EV is charging. If your EV Charger is wired so it is seen as part of the house load, then it will discharge to the EV when the EV is charging. Setting this to On prevents this, as well as ensuring that any EV consumption is removed from Consumption History. If your Zappi is wired on its own Henley block and thus outside of what the inverter CT clamp will measure, then set this to Off. Note: PV Opt does not support allowing the house battery to be used to charge the car. |
-| Car Charge Plan | kWh | `switch.control_car_charging` | Off | Toggle Car Plan generation On/Off. For users on Agile, setitng to On will generate candidate car charging plan on each optimiser run based on the settings below. The candidate plan is made active upon car plugin, or via Dashbaord command (see "Transfer Car Charge Plan" below). The active car charging plan is output on binary_sensor.pvopt_car_charging_slot for use in HA automations. An example HA automation to control a Zappi charger is included at XXXXXXX. Intelligent Octopus Go users should set this to Off. If Off, the rest of the EV parameters below have no effect. |
-| Transfer Car Charge Plan | On/Off | `switch.transfer_car_charge_plan` | 30 | Make Candidate Car Charging Plan the active plan. Useful if adjusting any of the below paramaters after the car has been plugged in. This will automatically be set back to Off after the plan is transferred. This ensures any external HA automations used to auto-calculate "Car Charge to Add" based on car SOC don't corrupt the car charging plan once the car starts charging. |
-| EV Charger Power | W | `number.pvopt_ev_charger_power_watts` | 7000 | Set EV charger power. |
-| EV Batttery Capacity | kWh | `number.pvopt_ev_battery_capacity_kwh` | 60 | Set EV Battery Capacity.   |
-| Car Ready  By | Time | `select.car_charging_ready_by` | 06:30 | Set Time for when the Car is to be ready by.   |
-| Car Charge to Add | % | `number.ev_charge_target_percent` | 30 | % of 'charge to add' to the car. I.e if your car is at 40% and want it to be charged to 90% then set this to 50%.  |
-| Car Charge Slot max price | p | `number.max_ev_price_p` | 30 | Maximum 1/2 hour slot price per kWh in pence added to the candidate car charging plan. Disable by setting to 0. Note: setting a low value may mean the car will not charge to the required SOC if overnight Agile rates are high. |
-| Car Charge Efficiency | % | `number.ev_charger_efficiency_percent` | 92 | Charging Efficiency for EV Charger/Car. 92% is average for most cars/chargers but adjust if the car is consistently undercharging or overcharging against its target. |
+| EV Charger| None / Zappi / Other | `select.pvopt_ev_charger` | None | Set EV Charger Type. At the current release, only 'Zappi' is supported, 'Other' is unused and is for a future release. Note: Zappi support requires the MyEnergi integration to be installed. |
+| EV Part of House Load| On / Off | `switch.pvopt_ev_part_of_house_load` | On | Prevents house battery discharge when EV is charging. If your EV Charger is wired so it is seen as part of the house load, then it will discharge to the EV when the EV is charging. Setting this to On prevents this, as well as ensuring that any EV consumption is removed from Consumption History. If your Zappi is wired on its own Henley block and thus outside of what the inverter CT clamp will measure, then set this to Off. Note: PV Opt does not support allowing the house battery to be used to charge the car. |
+| Car Charge Plan| kWh | `switch.control_car_charging` | Off | Toggle Car Plan generation On/Off. For users on Agile, setitng to On will generate candidate car charging plan on each optimiser run based on the settings below. The candidate plan is made active upon car plugin, or via Dashbaord command (see "Transfer Car Charge Plan" below). The active car charging plan is output live on binary_sensor.pvopt_car_charging_slot for use in HA automations to switch the EV charger on and off. An example HA automation to control a Zappi charger is included at XXXXXXX. Intelligent Octopus Go users should set this to Off. If Off, the rest of the EV parameters below have no effect. |
+| Transfer Car Charge Plan| On/Off | `switch.transfer_car_charge_plan` | 30 | Make Candidate Car Charging Plan the active plan. Useful if adjusting any of the below paramaters after the car has been plugged in. This will automatically be set back to Off after the plan is transferred. This ensures any external HA automations used to auto-calculate "Car Charge to Add" based on car SOC don't corrupt the car charging plan once the car starts charging. |
+| EV Charger Power| W | `number.pvopt_ev_charger_power_watts` | 7000 | Set EV charger power. |
+| EV Batttery Capacity| kWh | `number.pvopt_ev_battery_capacity_kwh` | 60 | Set EV Battery Capacity.   |
+| Car Ready By| Time | `select.car_charging_ready_by` | 06:30 | Set Time for when the Car is to be ready by.   |
+| Car Charge to Add| % | `number.ev_charge_target_percent` | 30 | % of 'charge to add' to the car. I.e if your car is at 40% and want it to be charged to 90% then set this to 50%.  |
+| Car Charge Slot max price| p | `number.max_ev_price_p` | 30 | Maximum 1/2 hour slot price per kWh in pence added to the candidate car charging plan. Disable by setting to 0. Note: setting a low value may mean the car will not charge to the required SOC if overnight Agile rates are high. |
+| Car Charge Efficiency| % | `number.ev_charger_efficiency_percent` | 92 | Charging Efficiency for EV Charger/Car. 92% is average for most cars/chargers but adjust if the car is consistently undercharging or overcharging against its target. |
+| Prevent Discharge| On/off | `switch.pvopt_prevent_discharge` | Off | Set to prevent house battery discharge. Clear to allow normal inverter use. Useful for house battery dicharge prevention when high loads are being used (EVs not otherwise coupled in to Pv_opt, showers etc). When set, does not affect the house battery charge plan. |
+| id_zappi_plug_status| `string` |    | Autodetected | In config.yaml, remap the autodeteted Zappi car plugin status entity to a named entity. If you have a single Zappi then this line should remain commented out. If you have multiple zappis then if required, change the entity name to the Zappi linked to IOG / load the Agile car charging plan. |
 
 <h3>Pricing Parameters</h3>
 These parameters set the price that PV Opt uses:
