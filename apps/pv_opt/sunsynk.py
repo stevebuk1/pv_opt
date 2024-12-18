@@ -114,6 +114,7 @@ class InverterController:
                 else:
                     conf[item] = defs[item]
 
+    @property
     def is_online(self):
         entity_id = INVERTER_DEFS[self.type].get("online", (None, None))
         if entity_id is not None:

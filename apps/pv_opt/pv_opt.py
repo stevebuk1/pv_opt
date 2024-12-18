@@ -14,82 +14,11 @@ from numpy import nan
 from datetime import datetime, timedelta
 import re
 
-VERSION = "3.19.0-Beta-21"
-
-
-# Change history
-# -------
-# 3.16.0:
-# Beta-4:
-# Add additional comment text
-# Clear IOG car charging plan once end time is reached
-# Beta-5:
-# Supress any negative values after substracting EV consumption from Total Consumption
-# Beta-6:
-# Tidy up debug logging behind debug switch
-# Beta-7: 
-# Correct typo in _get_io_car_slots
-# Beta-8:
-# Add fixes for tariff overrides when Octopus Auto = False (to allow development of EV charge control on Agile)
-# Beta-9:
-# Introduce category based logging (i.e a filter on debug = true)
-# Correct error in Forced Discharging introduced in 3.15.4 
-# Beta-10:
-# Add extra logging of kWh power consumption, and temporarily add logging of all Zappi sensors on startup 
-
-# 3.17.1:
-# Beta-1: #Start car charging for Agile
-# Tidyup all logging
-# Write basic car charging
-# Change all car charging variable names to be tariff inspecific (i.e remove "iog" and "io" from names)
-# Beta-2: 
-# Fixed timezones/UTC conversions in Car charging plan
-# Added additional attributes to car_slots and candidate_car_slots for Dashboard display
-# Beta-3:
-# Corrected logic for car slots when Zappi not seen as part of house load (no inverter holding is necessary)
-# Beta-4
-# Trial : commented out supression of MQTT generation of "active" in _expose_configs, to correct 3 switches not being written to
-# Beta-5 
-# Final fixes for trial above to ensure updates to _active don't retrigger optimiser
-# Add Debug category "X" for verbose logging of charge/discharge windows
-# Calculate EV windows from slots for dashboard display
-# Move calculations of EV charging summaries from _write_output to more appropriate place.
-
-# 3.17.1 Beta changes merged back into 3.17.0-Beta-11. 
-
-# 3.17.0 Beta-12
-# Fixed factoring
-# Reloaded IOG car plan on every optimiser run
-# 3.17.0 Beta-13
-# Tidied up logging and added additonal logging category "B". 
-# 3.17.0 Beta-14
-# Fixes to pickup IOG slots that have already started or are <1/2 hour long
-
-# 3.18.0 Beta-15
-# Roll minor version to 18 to reflect latest production release
-# Change search string on Intelligent Charge Limit/Target to suit new Octopus Energy Integration
-# Minor bugfixes and logging fixes
-# 3.19.0 Beta-16
-# Roll minor version to 19 to reflect latest production release
-# Incorporated Sols Cloud changes made in solis.py
-# Added Prevent_Discharge functionality
-# Added Zappi multiple charger support
-# 3.19.0-Beta-17
-# Tidy up logging
-# round charge current to nearest integer for Solarman_V2 integration
-# 3.19.0-Beta-18
-# Bugfix: Removed call to setup_schedule if state change includes the word "forced" - resolves multiple optimiser runs every 10 minutes
-# 3.19.0-Beta-19
-# Tidy up comments, print out version number on each optimiser run
-# 3.19.0-Beta-20
-# Incorporate Pull Request #312 changes from main into dev
-# 3.19.0-Beta-21
-# Reload IOG pricing on every optimiser run from BottlecapDave Octopus Energy Integration
-# moved get_io_tariffs from pypy.py to pv_opt.py (to enable the above)
-# Changed Solax holding current from 1W to 1A (to prevent Sleep SOC)
-# Made self.io_prices a global variable (workaround/hack - needs fixing properly via variable passing between classes)
-# Corrected error in "value_changed" logic that meant if the end minutes werent changed, the inverter would not be updated
-#  for the Solax_modbus integration
+VERSION = "3.20.0-Beta-22"
+UNITS = {
+    "current": "A",
+    "power": "W",
+}
 
 OCTOPUS_PRODUCT_URL = r"https://api.octopus.energy/v1/products/"
 
@@ -140,11 +69,12 @@ MAX_HASS_HISTORY_CALLS = 5
 OVERWRITE_ATTEMPTS = 5
 ONLINE_RETRIES = 12
 WRITE_POLL_SLEEP = 0.5
-WRITE_POLL_TIME_SLEEP = 2  #added for Solarman_V2 integration that writes to HA entities of type time. 
-                           #Using WRITE_POLL_SLEEP value of 0.5 is not sufficient)
+WRITE_POLL_TIME_SLEEP = 2  # added for Solarman_V2 integration that writes to HA entities of type time.
+# Using WRITE_POLL_SLEEP value of 0.5 is not sufficient)
 WRITE_POLL_RETRIES = 5
 GET_STATE_RETRIES = 5
 GET_STATE_WAIT = 0.5
+
 
 BOTTLECAP_DAVE = {
     "domain": "event",
@@ -161,12 +91,14 @@ OPTIONS_TIME = [((BASE_TIME + timedelta(seconds=minute * 60)).strftime("%H:%M"))
 
 INVERTER_TYPES = [
     "SOLIS_SOLAX_MODBUS",
+    "SOLIS_SOLAX_MODBUS_FB00",
     "SOLIS_CORE_MODBUS",
     "SOLIS_SOLARMAN",
-    "SOLIS_SOLARMAN_V2", 
+    "SOLIS_SOLARMAN_V2",
     "SUNSYNK_SOLARSYNK2",
     "SOLAX_X1",
-    # "SOLIS_CLOUD",
+    "SOLIS_CLOUD",
+    "SOLIS_SOLARMAN_V2",
 ]
 
 SYSTEM_ARGS = [
@@ -590,7 +522,8 @@ DEFAULT_CONFIG = {
         },
     },
     "transfer_car_charge_plan": {
-        "default": False, "domain": "switch",
+        "default": False,
+        "domain": "switch",
     },
 }
 
@@ -602,6 +535,7 @@ def importName(modulename, name):
     except ImportError:
         return None
     return vars(module)[name]
+
 
 class PVOpt(hass.Hass):
     @ad.app_lock
@@ -626,6 +560,7 @@ class PVOpt(hass.Hass):
             self.debug = True
 
         self.debug = self.args.get("debug", self.debug)
+        self.prefix = self.args.get("prefix", "solis")
         self.debug_cat = self.args.get("debug_categories", self.debug_cat)
 
         self.log(f"Debug Categories selected = {self.debug_cat}")
@@ -655,12 +590,12 @@ class PVOpt(hass.Hass):
         self._load_inverter()
 
         retry_count = 0
-        while (not self.inverter.is_online()) and (retry_count < ONLINE_RETRIES):
+        while (not self.inverter.is_online) and (retry_count < ONLINE_RETRIES):
             self.log("Inverter controller appears not to be running. Waiting 5 secomds to re-try")
             time.sleep(5)
             retry_count += 1
 
-        if not self.inverter.is_online():
+        if not self.inverter.is_online:
             e = "Unable to get expected response from Inverter Controller for {self.inverter_type}"
             self.status(e)
             self.log(e, level="ERROR")
@@ -687,8 +622,8 @@ class PVOpt(hass.Hass):
         self.candidate_car_slots = pd.DataFrame()
         self.car_slots = pd.DataFrame()
         self.ev_windows = pd.DataFrame()
-        self.contract_last_loaded = pd.Timestamp(2024,1,1)
-        self.car_slots_last_loaded = pd.Timestamp(2024,1,1)
+        self.contract_last_loaded = pd.Timestamp(2024, 1, 1)
+        self.car_slots_last_loaded = pd.Timestamp(2024, 1, 1)
         self.agile_prices_updated = False
         self.candidate_ev_total_charge = 0
         self.candidate_ev_total_cost = 0
@@ -697,7 +632,7 @@ class PVOpt(hass.Hass):
         self.ev_total_cost = 0
         self.ev_percent_to_add = 0
         self.car_charging = False
-        
+
         self.bottlecap_entities = {"import": None, "export": None}
         self.octopus_import_entity = []
 
@@ -710,9 +645,15 @@ class PVOpt(hass.Hass):
         # self._estimate_capacity()
         self._load_pv_system_model()
         self._load_contract()
-        self.ev = self.get_config("ev_charger") in DEFAULT_CONFIG["ev_charger"]["attributes"]["options"][1:]  # Is set true only for Zappi at this point
+        self.ev = (
+            self.get_config("ev_charger") in DEFAULT_CONFIG["ev_charger"]["attributes"]["options"][1:]
+        )  # Is set true only for Zappi at this point
+
         self.car_charging = self.get_config("control_car_charging")
-        self._check_for_zappi()
+
+        if self.ev:
+            self._check_for_zappi()
+
 
         if self.get_config("alt_tariffs") is not None:
             self._compare_tariffs()
@@ -818,7 +759,6 @@ class PVOpt(hass.Hass):
             self.io_charge_to_add = 0  # Set default value of 0
             self.old_io_charge_to_add = 0
 
-
     def get_io_tariffs(self, entity_id1):
 
         x = {}
@@ -841,7 +781,7 @@ class PVOpt(hass.Hass):
             # SVB logging
             self.rlog(f"      Reading current day IOG prices from  {entity_id1}")
 
-            if (self.debug and "T" in self.debug_cat):
+            if self.debug and "T" in self.debug_cat:
                 self.log(f"\n{x.to_string()}")
         else:
             self.log("      No data found in current day rate")
@@ -851,11 +791,10 @@ class PVOpt(hass.Hass):
 
         y = pd.DataFrame(self.get_state_retry(entity_id1, attribute=("rates")))
 
-        if (self.debug and "T" in self.debug_cat):
+        if self.debug and "T" in self.debug_cat:
             self.log("")
             self.log("Read of Bottlecap next day rate entity simplfied is.....")
             self.log(f"\n{y.to_string()}")
-
 
         if not y.empty:
             y = y.set_index("start")["value_inc_vat"]
@@ -864,7 +803,7 @@ class PVOpt(hass.Hass):
             y *= 100
             self.rlog(f"      Reading next day IOG prices from  {entity_id1}")
 
-            if (self.debug and "T" in self.debug_cat):
+            if self.debug and "T" in self.debug_cat:
                 self.log(f"\n{y.to_string()}")
 
         else:
@@ -873,7 +812,7 @@ class PVOpt(hass.Hass):
         # Concatenate todays and tomorrows tariffs into one DataSeries
         if not x.empty:
             z = x.combine_first(y)
-            if (self.debug and "T" in self.debug_cat):
+            if self.debug and "T" in self.debug_cat:
                 self.log("")
                 self.log("IOG prices are")
                 self.log(f"\n{z.to_string()}")
@@ -881,7 +820,6 @@ class PVOpt(hass.Hass):
             z = y
 
         return z
-
 
     def _get_io_car_slots(self):
         # IOG: Get Planned Car dispatches from Intelligent Dispatching sensor
@@ -913,7 +851,6 @@ class PVOpt(hass.Hass):
             df["start_local"] = df["start_dt"].dt.tz_convert(self.tz)
             df["end_local"] = df["end_dt"].dt.tz_convert(self.tz)
 
-        
         self.log("")
         self.log("    Octopus Intelligent Go Smart Charging Schedule is.... ")
 
@@ -935,7 +872,7 @@ class PVOpt(hass.Hass):
 
         # If a Zappi entity previously found/configured and EV charger is Zappi, schedule an IOG tariff reload on the next optimizer run when its
         # detected the car has been plugged in.
-              
+
         if (len(self.zappi_plug_entity) > 0) and self.ev:
             plug_status = self.get_state(self.zappi_plug_entity)
             # self.log(plug_status)
@@ -972,30 +909,44 @@ class PVOpt(hass.Hass):
                     self.car_plugin_detected = 1
                     self.log("Charge to add changed, IOG tariff reload scheduled for next optimiser run")
             else:
-                self.log("Octopus Energy Integration not detected (or disabled): Charge to add is not available, IOG tariff not reloaded")
+                self.log(
+                    "Octopus Energy Integration not detected (or disabled): Charge to add is not available, IOG tariff not reloaded"
+                )
 
     def _check_car_plugin_agile(self):
 
         # If Zappi entity previously found/selected and EV charger is Zappi, trigger a car charging plan to be generated on car plugin
-        # If more than one charger, currently limited to 1. 
+        # If more than one charger, currently limited to 1.
         # However, there is no reason why the whole of this logic cannot be replicated for multiple chargers.
 
-        if (len(self.zappi_plug_entity) > 0) and self.ev: 
+        if (len(self.zappi_plug_entity) > 0) and self.ev:
             plug_status = self.get_state(self.zappi_plug_entity)
             # self.log(plug_status)
-            if ((plug_status == "EV Connected") or (plug_status == "EV Ready to Charge")) and (self.car_plugin_detected_delayed == 0):
+            if ((plug_status == "EV Connected") or (plug_status == "EV Ready to Charge")) and (
+                self.car_plugin_detected_delayed == 0
+            ):
                 self.car_plugin_detected = 1
                 self.log("EV plug-in event detected, transfer Candidate Agile Car Charging Plan to Active Plan")
 
-            elif ((plug_status == "EV Connected") or (plug_status == "EV Ready to Charge")) and (self.car_plugin_detected_delayed == 1) and (self.agile_car_plan_activated == 1):
+            elif (
+                ((plug_status == "EV Connected") or (plug_status == "EV Ready to Charge"))
+                and (self.car_plugin_detected_delayed == 1)
+                and (self.agile_car_plan_activated == 1)
+            ):
                 self.log("EV is connected but Candidate Car charging plan previously transfered.")
                 self.car_plugin_detected = 0
 
-            elif ((plug_status == "EV Connected") or (plug_status == "EV Ready to Charge")) and (self.agile_car_plan_activated == 0):
+            elif ((plug_status == "EV Connected") or (plug_status == "EV Ready to Charge")) and (
+                self.agile_car_plan_activated == 0
+            ):
                 self.car_plugin_detected = 1
-                self.log("EV is connected but no Car charging plan exists, transfer Candidate Agile Car Charging Plan to Active Plan")
+                self.log(
+                    "EV is connected but no Car charging plan exists, transfer Candidate Agile Car Charging Plan to Active Plan"
+                )
 
-            elif (plug_status == "Charging") and (self.agile_car_plan_activated == 0):  # needed for Pv_opt restart during car charging, where active plan will then be empty
+            elif (plug_status == "Charging") and (
+                self.agile_car_plan_activated == 0
+            ):  # needed for Pv_opt restart during car charging, where active plan will then be empty
                 self.log("Car has commenced charging but no plan exists. Transfer Candidate Plan to Active Plan")
                 self.car_plugin_detected = 1
 
@@ -1006,8 +957,8 @@ class PVOpt(hass.Hass):
             else:
                 self.log("EV not plugged in. Car charging plan not required.")
                 self.car_plugin_detected = 0
-                
-            if ((plug_status == "EV Connected") or (plug_status == "EV Ready to Charge")):
+
+            if (plug_status == "EV Connected") or (plug_status == "EV Ready to Charge"):
                 self.car_plugged_in = True
             else:
                 self.car_plugged_in = False
@@ -1017,10 +968,12 @@ class PVOpt(hass.Hass):
         self.log("Attempting to autodetect Zappi consumption sensor(s)")
         sensor_entities = self.get_state("sensor")
 
-        self.zappi_consumption_entities = [k for k in sensor_entities if "zappi" in k for x in ["charge_added_session"] if x in k]
+        self.zappi_consumption_entities = [
+            k for k in sensor_entities if "zappi" in k for x in ["charge_added_session"] if x in k
+        ]
 
-        #force two Zappis for test purposes
-        #self.zappi_consumption_entities = ["sensor.myenergi_zappi_12345679_charge_added_session", "sensor.myenergi_zappi_12345678_charge_added_session" ]
+        # force two Zappis for test purposes
+        # self.zappi_consumption_entities = ["sensor.myenergi_zappi_12345679_charge_added_session", "sensor.myenergi_zappi_12345678_charge_added_session" ]
 
         if len(self.zappi_consumption_entities) > 0:
             for entity_id in self.zappi_consumption_entities:
@@ -1032,7 +985,6 @@ class PVOpt(hass.Hass):
         else:
             self.log("No Zappi Consumption sensors autodetected")
 
-
         self.log("Attempting to autodetect Zappi Plugin status sensor(s)")
         self.zappi_plug_entities = [k for k in sensor_entities if "zappi" in k for x in ["plug_status"] if x in k]
 
@@ -1043,28 +995,34 @@ class PVOpt(hass.Hass):
                 self.log("Zappi plug_status sensor(s) found:")
                 self.rlog(f"  {entity_id}")
 
-            self.zappi_plug_entity = self.zappi_plug_entities[0] # If multiple, select the first by default. 
+            self.zappi_plug_entity = self.zappi_plug_entities[0]  # If multiple, select the first by default.
             if len(self.zappi_plug_entities) > 1:
                 self.log("")
-                self.log(f"Multiple Zappis found, defaulting to {self.zappi_plug_entity} to trigger car charge planning updates." )
+                self.log(
+                    f"Multiple Zappis found, defaulting to {self.zappi_plug_entity} to trigger car charge planning updates."
+                )
                 self.log("If necessary, map desired sensor using id_zappi_plug_status in config.yaml")
                 self.log("Checking config.yaml for presence of id_zappi_plug_status...")
         else:
             self.log("No Zappi Plug Status sensors autodetected")
             self.log("Checking config.yaml for presence of id_zappi_plug_status....")
 
-        # Check config.yaml for entry of id_zappi_plug_status, if so, override whats autodetected as first entry. 
-        
+        # Check config.yaml for entry of id_zappi_plug_status, if so, override whats autodetected as first entry.
+
         if "id_zappi_plug_status" in self.config:
             entity_id = self.config["id_zappi_plug_status"]
             self.log("")
             self.log(f"id_zappi_plug_status value in config.yaml = {entity_id}")
-            self.log(f"Overriding auto detected plug_status sensor ({self.zappi_plug_entity}) to mapping provided in config.yaml ({entity_id})")
+            self.log(
+                f"Overriding auto detected plug_status sensor ({self.zappi_plug_entity}) to mapping provided in config.yaml ({entity_id})"
+            )
             self.zappi_plug_entity = entity_id
         else:
             self.log("")
-            self.log(f"No entry found in config.yaml for plug_status sensor, leaving any autodetected sensor in place.")
-        
+            self.log(
+                f"No entry found in config.yaml for plug_status sensor, leaving any autodetected sensor in place."
+            )
+
         self.log("")
 
     def _get_zappi(self, start, end, log=False):
@@ -1074,10 +1032,10 @@ class PVOpt(hass.Hass):
         for entity_id in self.zappi_consumption_entities:
             i += 1
             df = self._get_hass_power_from_daily_kwh(entity_id, start=start, end=end, log=log)
-            
+
             if i == 1:
                 df_all = df.copy()
-            if i > 1: #If more than one charger, add data as extra column
+            if i > 1:  # If more than one charger, add data as extra column
                 df_all = pd.concat([df_all, df], axis=1)
 
             if log and (self.debug and "E" in self.debug_cat):
@@ -1087,19 +1045,18 @@ class PVOpt(hass.Hass):
                 self.rlog(">>> df_all")
                 self.log(f">>>\n{df_all.to_string()}")
 
-              
         df_all = df_all.fillna(0)  # fill any missing values with 0
         if i == 1:
             df = df_all
         if i > 1:
-            df = df_all.sum(axis=1)      # sum across columns
+            df = df_all.sum(axis=1)  # sum across columns
 
         if log and (self.debug and "E" in self.debug_cat):
             self.rlog("Final result of get_zappi......")
             self.log(f">>>\n{df.to_string()}")
 
         return df
-    
+
     def calculate_agile_car_slots(self):
 
         # Reload charge target, ready by time and max price on each run
@@ -1129,28 +1086,28 @@ class PVOpt(hass.Hass):
         # LAter versions of code will add this
 
         # Convert to number of slots by mutiplying by 2, then rounding up
-        ev_slots_required = math.ceil(ev_charge_time*2)
+        ev_slots_required = math.ceil(ev_charge_time * 2)
 
         self.log(f"EV Charging Candidate plan requires {ev_slots_required} x 1/2 hour slots")
         self.log("")
 
         # now = datetime.now()
         # ready_by_time = datetime.strptime(self.ev_ready_by_time, "%H:%M")
-        
+
         # Get timenow, this is in local time)
         now = pd.Timestamp.now()
         # self.log(f"Time Now = {now}")
 
-        # Get ready by time, this will also be in local time. 
+        # Get ready by time, this will also be in local time.
         ready_by_time = pd.to_datetime(self.ev_ready_by_time, errors="coerce", format="%H:%M")
-                
-        Y = int(now.strftime("%Y"))    #Extract year
-        M = int(now.strftime("%-m"))   #Extract month
-        D = int(now.strftime("%-d"))   #Extract day
 
-        ready_by_datetime = ready_by_time.replace(year=Y, month=M, day = D)
+        Y = int(now.strftime("%Y"))  # Extract year
+        M = int(now.strftime("%-m"))  # Extract month
+        D = int(now.strftime("%-d"))  # Extract day
 
-        # Is ready time in the past? If so make it the same time tomorrow. 
+        ready_by_datetime = ready_by_time.replace(year=Y, month=M, day=D)
+
+        # Is ready time in the past? If so make it the same time tomorrow.
         if ready_by_datetime < now:
             ready_by_datetime += pd.Timedelta(hours=24)
 
@@ -1158,25 +1115,24 @@ class PVOpt(hass.Hass):
         ready_by_datetime = ready_by_datetime.tz_localize(self.tz)
         ready_by_datetime = ready_by_datetime.tz_convert("UTC")
 
-        df = self.opt [["import", "export"]]
+        df = self.opt[["import", "export"]]
         df["start"] = df.index
         df["end"] = df.index + pd.Timedelta(30, "minutes")
-
 
         if self.debug and "E" in self.debug_cat:
             self.log(f"Ready By time after converstion to UTC is = {ready_by_datetime}")
             self.log("Df = ")
             self.log(f"\n{df.to_string()}")
-          
+
         # Trim self.car_charge_slots to remove all slots after "ready_by_datetime"
-        df = df[df["start"]  < ready_by_datetime]
+        df = df[df["start"] < ready_by_datetime]
 
         if self.debug and "E" in self.debug_cat:
             self.log(f"\n{df.to_string()}")
 
         # Reorder dataframe slots to cheapest import slot first
         df = df.sort_values("import")
-      
+
         # Keep the number of rows required to charge the car, delete the rest
         df = df.iloc[:ev_slots_required]
 
@@ -1189,7 +1145,7 @@ class PVOpt(hass.Hass):
         df["start_local"] = df["start_dt"].dt.tz_convert(self.tz)
         df["end_local"] = df["end_dt"].dt.tz_convert(self.tz)
 
-        # If max slot price is set to zero then its disabled. 
+        # If max slot price is set to zero then its disabled.
         # If non-zero, delete all slots that cost above the max price set
 
         if self.ev_max_slot_price != 0:
@@ -1198,7 +1154,7 @@ class PVOpt(hass.Hass):
             car_charge_slots = df
 
         # Add "charge_in_kwh" col, fixed at charger power * efficiency
-        car_charge_slots['charge_in_kwh'] = (self.ev_charger_power / 1000) * (self.ev_charger_efficiency/100 * 0.5)
+        car_charge_slots["charge_in_kwh"] = (self.ev_charger_power / 1000) * (self.ev_charger_efficiency / 100 * 0.5)
 
         # Reorder dataframe back to date order
         car_charge_slots = car_charge_slots.sort_index()
@@ -1217,23 +1173,24 @@ class PVOpt(hass.Hass):
 
         self.log("Candidate EV Charge Plan:")
 
-        #self.log(f"\n{car_charge_slots.to_string()}")
-        #self.log("")
+        # self.log(f"\n{car_charge_slots.to_string()}")
+        # self.log("")
 
         for window in car_charge_slots.iterrows():
             self.log(
                 f"  {window[1]['start_local'].strftime('%d-%b %H:%M %Z'):>13s} - {window[1]['end_local'].strftime('%d-%b %H:%M %Z'):<13s}  Charge: {window[1]['charge_in_kwh']:3.2f}kWh  Slot Price: {window[1]['import']:3.1f}p"
             )
         self.log("")
-        self.log(f"Charge to Add = {ev_total_charge} kWh, Total Cost = {ev_total_cost:4.0f}p, % to Add = {ev_percent_to_add:3.0f}%")
+        self.log(
+            f"Charge to Add = {ev_total_charge} kWh, Total Cost = {ev_total_cost:4.0f}p, % to Add = {ev_percent_to_add:3.0f}%"
+        )
 
         return car_charge_slots, ev_total_charge, ev_total_cost, ev_percent_to_add
 
-    def _control_EV_charger(self): 
+    def _control_EV_charger(self):
 
         self.log("")
         self.ulog("Updating EV charge control")
-
 
         if self.debug and "E" in self.debug_cat:
             self.log("")
@@ -1245,9 +1202,7 @@ class PVOpt(hass.Hass):
         else:
             self.car_charging_slot = "off"
 
-
-        ### SVB add a safeguard to ensure charger is off once plan is expired? 
-        
+        ### SVB add a safeguard to ensure charger is off once plan is expired?
 
         self.log(f"Updating Car_Charging Slot Control to {self.car_charging_slot}")
 
@@ -1258,7 +1213,6 @@ class PVOpt(hass.Hass):
                 "friendly_name": "Car Charging Slot",
             },
         )
-    
 
     def rlog(self, str, **kwargs):
         if self.redact:
@@ -1310,9 +1264,15 @@ class PVOpt(hass.Hass):
     def _load_inverter(self):
         if self.inverter_type in INVERTER_TYPES:
             inverter_brand = self.inverter_type.split("_")[0].lower()
-            InverterController = importName(f"{inverter_brand}", "InverterController")
             self.log(f"Inverter type: {self.inverter_type}: inverter module: {inverter_brand}.py")
-            self.inverter = InverterController(inverter_type=self.inverter_type, host=self)
+            if inverter_brand == "solis":
+                # for now only Solis uses the new setup
+                create_inverter_controller = importName(f"{inverter_brand}", "create_inverter_controller")
+                self.inverter = create_inverter_controller(inverter_type=self.inverter_type, host=self)
+            else:
+                InverterController = importName(f"{inverter_brand}", "InverterController")
+                self.inverter = InverterController(inverter_type=self.inverter_type, host=self)
+
             self.log(f"  Device name:   {self.device_name}")
             self.rlog(f"  Serial number: {self.inverter_sn}")
 
@@ -1339,7 +1299,6 @@ class PVOpt(hass.Hass):
         )
         self.pv_system = pv.PVsystemModel("PV_Opt", self.inverter_model, self.battery_model, host=self)
 
-
         ### SVB: once code is up and running for Agile EV charging, should probably put these parameters in something like pv.EvModel (as they don't change)
         # Needs a gate for systems with no EV? Something like:
         # If EV_charger = Zappi then:
@@ -1349,7 +1308,7 @@ class PVOpt(hass.Hass):
         self.ev_max_slot_price = self.get_config("max_ev_price_p")
         self.ev_charge_target = self.get_config("ev_charge_target_percent")
         self.ev_ready_by_time = self.get_config("car_charging_ready_by")
-            
+
     # def _setup_agile_schedule(self):
     #     start = (pd.Timestamp.now(tz="UTC") + pd.Timedelta(1, "minutes")).to_pydatetime()
     #     self.timer_handle = self.run_every(
@@ -1391,7 +1350,7 @@ class PVOpt(hass.Hass):
         grid = grid.set_axis(cols, axis=1).fillna(0)
         grid["grid_export"] *= -1
 
-        cost_today = self.contract.net_cost(grid_flow=grid, log=self.debug, day_ahead=False)
+        cost_today = self.contract.net_cost(grid_flow=grid, log=self.debug, day_ahead=False, sum=False)
 
         return cost_today
 
@@ -1515,9 +1474,9 @@ class PVOpt(hass.Hass):
                         self._get_io_sensors()  # Find the Octopus Zappi sensors
                         car_slots = self._get_io_car_slots()  # Load the car charging slots
 
-                        #Set import import price to 0 for slots (isnt used/displayed if using IOG, but is in Agile)
-                        
-                        car_slots['import'] = 0  
+                        # Set import import price to 0 for slots (isnt used/displayed if using IOG, but is in Agile)
+
+                        car_slots["import"] = 0
 
                         if self.debug and "E" in self.debug_cat:
                             self.log("")
@@ -1526,7 +1485,6 @@ class PVOpt(hass.Hass):
 
                         self.car_slots = car_slots
                         self.car_slots_last_loaded = pd.Timestamp.now(tz="UTC")
-                        
 
                     self.log("")
                     self.log("Contract tariffs loaded OK")
@@ -1629,7 +1587,6 @@ class PVOpt(hass.Hass):
         else:
             self.contract_last_loaded = pd.Timestamp.now(tz="UTC")
 
-            
             # self.log("Printing self.contract.tariffs at end of 'load_contract'")
             # self.log(self.contract.tariffs)
             # self.log("")
@@ -1971,7 +1928,7 @@ class PVOpt(hass.Hass):
                         # try getting values from all the entities
                         elif valid_strings:
                             self.config[item] = valid_strings[0][0]
-                            if not "sensor" and not "_active" in valid_strings[0][1]:   #SVB trial
+                            if not "sensor" and not "_active" in valid_strings[0][1]:  # SVB trial
                                 self.change_items[valid_strings[0][1]] = item
                             self.rlog(
                                 f"    {item:34s} = {str(self.config[item]):57s} {str(self.get_config(item)):>6s}: HA entities listed in YAML"
@@ -2038,7 +1995,7 @@ class PVOpt(hass.Hass):
                         )
                         # If these change then we need to trigger automatically
                         for v in values[:-1]:
-                            if not "sensor" and not "_active" in v:   #SVB trial
+                            if not "sensor" and not "_active" in v:  # SVB trial
                                 self.change_items[v] = item
 
                     else:
@@ -2230,12 +2187,11 @@ class PVOpt(hass.Hass):
 
         # SVB 25/11/2024
         # Commented out call to setup_schedule - it shouldn't be needed to do something special if the Optimised Discharge (forced_discharge) entity is toggled. Having
-        # it appears to generate an addtional optimiser callback every 10 minutes that then persists forever, so removed. 
-        # Believed to be a hangover from when the charging and discharging algorithms had thier own seperate callbacks, long since removed. 
+        # it appears to generate an addtional optimiser callback every 10 minutes that then persists forever, so removed.
+        # Believed to be a hangover from when the charging and discharging algorithms had thier own seperate callbacks, long since removed.
 
-        #if "forced" in item:
+        # if "forced" in item:
         #    self._setup_schedule()
-
 
         ### SVB: Add additional EV items to this list: Car capacity, charger efficiency, charger power, and add an Ev model to pv_system_model routine
         if item in [
@@ -2312,7 +2268,9 @@ class PVOpt(hass.Hass):
         self.log(f"  Contract last loaded at {self.contract_last_loaded.strftime(DATE_TIME_FORMAT_SHORT)}")
 
         # Reload Ev selector status
-        self.ev = self.get_config("ev_charger") in DEFAULT_CONFIG["ev_charger"]["attributes"]["options"][1:]  # Is set true only for Zappi at this point
+        self.ev = (
+            self.get_config("ev_charger") in DEFAULT_CONFIG["ev_charger"]["attributes"]["options"][1:]
+        )  # Is set true only for Zappi at this point
 
         # Reload EV Charge plan control
         self.car_charging = self.get_config("control_car_charging")
@@ -2333,15 +2291,15 @@ class PVOpt(hass.Hass):
             if (pd.Timestamp.now(tz=self.tz).hour == 16) and (pd.Timestamp.now(tz=self.tz).minute >= 40):
                 self.log("   About to reload Octopus Intelligent Pricing - 16:40")
                 self._load_contract()
-                
+
             if (pd.Timestamp.now(tz=self.tz).hour == 0) and (pd.Timestamp.now(tz=self.tz).minute <= 20):
                 self.log("   About to reload Octopus Intelligent Pricing - 00:20")
                 self._load_contract()
-                
+
             if (pd.Timestamp.now(tz=self.tz).hour == 5) and (pd.Timestamp.now(tz=self.tz).minute >= 10):
                 self.log("   About to reload Octopus Intelligent Pricing - 05:10")
                 self._load_contract()
-                
+
             if self.car_plugin_detected == 1:
                 self.log(
                     "Car plugin detected or charge to add value changed. About to reload Octopus Intelligent Pricing"
@@ -2350,12 +2308,11 @@ class PVOpt(hass.Hass):
                 self.tariff_reloaded = 1
 
             # reload pricing from bottlecap dave sensors on every optimiser run
-            
+
             self.log("")
             self.ulog("Reload IOG prices from Octopus Energy Integration")
 
             self.io_prices = self.get_io_tariffs(self.octopus_import_entity[0])
-            
 
         elif self.contract_last_loaded.day != pd.Timestamp.now(tz="UTC").day:
             self._load_contract()
@@ -2403,11 +2360,11 @@ class PVOpt(hass.Hass):
         self.static = self.static[self.time_now.floor("30min") :].fillna(0)
 
         self.soc_now = self.get_config("id_battery_soc")
-        x = self.hass2df(self.config["id_battery_soc"], days=1, log=self.debug)
+        soc_last_day = self.hass2df(self.config["id_battery_soc"], days=1, log=self.debug)
         if self.debug and "S" in self.debug_cat:
             self.log(f">>> soc_now: {self.soc_now}")
-            self.log(f">>> x: {x}")
-            self.log(f">>> Original: {x.loc[x.loc[: self.static.index[0]].index[-1] :]}")
+            self.log(f">>> soc_last_day: {soc_last_day}")
+            self.log(f">>> Original: {soc_last_day.loc[soc_last_day.loc[: self.static.index[0]].index[-1] :]}")
 
         try:
             self.soc_now = float(self.soc_now)
@@ -2415,32 +2372,34 @@ class PVOpt(hass.Hass):
         except:
             self.log("")
             self.log("Unable to get current SOC from HASS. Using last value from History.", level="WARNING")
-            self.soc_now = x.iloc[-1]
+            self.soc_now = soc_last_day.iloc[-1]
 
         # x = x.astype(float)
 
-        x = pd.to_numeric(x, errors="coerce").interpolate()
+        try:
+            soc_last_day = pd.to_numeric(soc_last_day, errors="coerce").interpolate()
 
-        x = x.loc[x.loc[: self.static.index[0]].index[-1] :]
-        if self.debug and "S" in self.debug_cat:
-            self.log(f">>> Fixed   : {x.loc[x.loc[: self.static.index[0]].index[-1] :]}")
+            soc_last_day = soc_last_day.loc[soc_last_day.loc[: self.static.index[0]].index[-1] :]
+            if self.debug and "S" in self.debug_cat:
+                self.log(f">>> Fixed   : {soc_last_day.loc[soc_last_day.loc[: self.static.index[0]].index[-1] :]}")
 
-        x = pd.concat(
-            [
-                x,
-                pd.Series(
-                    data=[self.soc_now, nan],
-                    index=[self.time_now, self.static.index[0]],
-                ),
-            ]
-        ).sort_index()
+            soc_last_day = pd.concat(
+                [
+                    soc_last_day,
+                    pd.Series(
+                        data=[self.soc_now, nan],
+                        index=[self.time_now, self.static.index[0]],
+                    ),
+                ]
+            ).sort_index()
+            self.initial_soc = soc_last_day.interpolate().loc[self.static.index[0]]
+        except:
+            self.initial_soc = None
 
-        self.initial_soc = x.interpolate().loc[self.static.index[0]]
         if not isinstance(self.initial_soc, float):
             self.log("")
-            self.log("Unable to optimise without initial SOC", level="ERROR")
-            self.status("ERROR: No initial SOC")
-            return
+            self.log("Unable to retrieve initial SOC - assuming it is the same as current SOC", level="WARNING")
+            self.initial_soc = self.soc_now
 
         self.log("")
         self.log(f"Initial SOC: {self.initial_soc}")
@@ -2460,7 +2419,7 @@ class PVOpt(hass.Hass):
             self.status("ERROR: Baseline performance")
             return
 
-        self.optimised_cost = {"Base": self.contract.net_cost(self.flows["Base"])}
+        self.optimised_cost = {"Base": self.contract.net_cost(self.flows["Base"], sum=False)}
 
         self.log("")
         if self.get_config("use_solar", True):
@@ -2513,7 +2472,7 @@ class PVOpt(hass.Hass):
                 max_iters=MAX_ITERS,
             )
 
-            self.optimised_cost[case] = self.contract.net_cost(self.flows[case])
+            self.optimised_cost[case] = self.contract.net_cost(self.flows[case], sum=False)
 
         self.ulog("Optimisation Summary")
         self.log(f"  {'Base cost:':40s} {self.optimised_cost['Base'].sum():6.1f}p")
@@ -2534,9 +2493,9 @@ class PVOpt(hass.Hass):
         self.opt = self.flows[self.selected_case]
 
         # SVB debug logging
-        #self.log("")
-        #self.log("Returned from .flows. self.opt is........")
-        #self.log(f"\n{self.opt.to_string()}")
+        # self.log("")
+        # self.log("Returned from .flows. self.opt is........")
+        # self.log(f"\n{self.opt.to_string()}")
 
         # create a df with an index value the same as self.opt (just copy it from self.opt)
         # Copy two columns to force y to be a dataframe
@@ -2546,13 +2505,12 @@ class PVOpt(hass.Hass):
         y["start"] = self.opt.index.tz_convert(self.tz).copy()
         y["end"] = self.opt.index.tz_convert(self.tz).copy() + pd.Timedelta(30, "minutes")
 
-        #self.log("")
-        #self.log("Y is........")
-        #self.log(f"\n{y.to_string()}")
-       
+        # self.log("")
+        # self.log("Y is........")
+        # self.log(f"\n{y.to_string()}")
 
         # Create a Pd series to store any 1/2 hour car charge slots  (1 = car charge slot, 0 = not a car charge slot)
-        # Note: self.opt will now include attribute "carslot" regardless of actual tariff, but be set 
+        # Note: self.opt will now include attribute "carslot" regardless of actual tariff, but be set
         # to 0 unless on 1) IOG and dispatches are planned or 2) Car charging on agile is required
         car_on = pd.Series(index=y.index, data=0, name="carslot")
 
@@ -2561,16 +2519,21 @@ class PVOpt(hass.Hass):
 
         if self.intelligent:
             car_slots = self._get_io_car_slots()  # Load the car charging slots
-            car_slots['import'] = 0
+            car_slots["import"] = 0
             self.car_slots = car_slots
             self.car_slots_last_loaded = pd.Timestamp.now(tz="UTC")
-        
-        # If on Agile tariff, (re)calculate car slots now. 
+
+        # If on Agile tariff, (re)calculate car slots now.
 
         if self.agile and self.ev and self.car_charging:
             self.log("")
             self.ulog("Calculating candidate Car Charging Plan")
-            self.candidate_car_slots, self.candidate_ev_total_charge, self.candidate_ev_total_cost, self.candidate_ev_percent_to_add = self.calculate_agile_car_slots()
+            (
+                self.candidate_car_slots,
+                self.candidate_ev_total_charge,
+                self.candidate_ev_total_cost,
+                self.candidate_ev_percent_to_add,
+            ) = self.calculate_agile_car_slots()
 
         if self.debug and "E" in self.debug_cat:
             self.log("Self.candidate_car_slots is")
@@ -2583,18 +2546,18 @@ class PVOpt(hass.Hass):
             self.log(y.to_string())
 
         # For each time range in the IOG Charging Schedule/Agile Car Charge Plan, set 1/2 hour Car slot flag to "1"
-        # Problem: If the car is plugged in and starts to charge, car slot flag is not being set. 
-        # i.e y(start) = 22:00, car_slots(start) = 22:07 should set a car_on flag but it isnt. 
-        # need to not only use y["start"] but also y["end"] to search. 
+        # Problem: If the car is plugged in and starts to charge, car slot flag is not being set.
+        # i.e y(start) = 22:00, car_slots(start) = 22:07 should set a car_on flag but it isnt.
+        # need to not only use y["start"] but also y["end"] to search.
         if not self.car_slots.empty and self.ev:
             for h in range(len(self.car_slots)):
                 for i in range(len(y)):
-                    #self.log(f"i is {i}")
+                    # self.log(f"i is {i}")
                     if (y["start"].iloc[i] >= self.car_slots["start_dt"].iloc[h]) and (
                         y["start"].iloc[i] < self.car_slots["end_dt"].iloc[h]
                     ):
-                    # Repeat for end times in case car just plugged in and already charging
-                    # also needed for IOG slots that are less than 1/2 hour long. 
+                        # Repeat for end times in case car just plugged in and already charging
+                        # also needed for IOG slots that are less than 1/2 hour long.
                         car_on.iat[i] = 1
                     if (y["end"].iloc[i] > self.car_slots["start_dt"].iloc[h]) and (
                         y["end"].iloc[i] <= self.car_slots["end_dt"].iloc[h]
@@ -2628,7 +2591,6 @@ class PVOpt(hass.Hass):
         if self.agile and not self.car_charging:
             self.car_slots = pd.DataFrame()
 
-            
         if self.intelligent and self.ev:
             self.log("")
             self.ulog("Checking EV Status (IOG tariff)")
@@ -2638,13 +2600,13 @@ class PVOpt(hass.Hass):
             self.log("")
             self.ulog("Checking EV Status (Agile Tariff)")
             self._check_car_plugin_agile()
-            
-            # Copy candidate car slots to active plan upon 
+
+            # Copy candidate car slots to active plan upon
             # 1) plugin detected
             # 2) new agile prices are available (and EV is plugged in)
             # 3) Transfer button is pressed
 
-            #For 3: Check if Manual transfer button is pressed
+            # For 3: Check if Manual transfer button is pressed
             car_button = self.get_config("transfer_car_charge_plan")
 
             if self.debug and "E" in self.debug_cat:
@@ -2653,38 +2615,41 @@ class PVOpt(hass.Hass):
                 self.log(f"Transfer_car_charge_plan = {car_button}")
 
             ### Currently there is nothing that clears "self.agile_prices_updated". I think this only needs doing if the car is already plugged in,
-              # so just clear it after this routine is finished? (i.e. not within the if)
+            # so just clear it after this routine is finished? (i.e. not within the if)
 
-            if (self.car_plugin_detected == 1 and self.car_plugin_detected_delayed == 0) or (self.agile_prices_updated and self.car_plugged_in) or car_button == True: 
+            if (
+                (self.car_plugin_detected == 1 and self.car_plugin_detected_delayed == 0)
+                or (self.agile_prices_updated and self.car_plugged_in)
+                or car_button == True
+            ):
                 self.log("Transferring EV Candidate Plan to Active Plan")
 
-                
                 if self.debug and "E" in self.debug_cat:
                     self.log("Candidate Plan is:.....")
                     self.log(f"\n{self.candidate_car_slots.to_string()}")
-    
+
                     self.log("Active Plan before transfer is.....")
                     self.log(f"\n{self.car_slots.to_string()}")
                     self.log("Active Plan last loaded (UTC).....")
                     self.log(self.car_slots_last_loaded)
-                
+
                 self.car_slots = self.candidate_car_slots
 
                 if self.debug and "E" in self.debug_cat:
                     self.log("Active Plan after transfer is:.....")
                     self.log(f"\n{self.car_slots.to_string()}")
-                
-                self.agile_car_plan_activated = 1            #Set car plan active flag
-                self.car_plugin_detected_delayed = self.car_plugin_detected         
-                
+
+                self.agile_car_plan_activated = 1  # Set car plan active flag
+                self.car_plugin_detected_delayed = self.car_plugin_detected
+
                 # Set the manual transfer switch back to off (if routine triggered by manual car switch)
                 if car_button:
                     self.write_to_hass(state="off", entity=f"switch.{self.prefix}_transfer_car_charge_plan")
                 # Update plan time transfer for display in Dashboard
                 self.car_slots_last_loaded = pd.Timestamp.now(tz="UTC")
 
-            #Calculate summary for active plan, for dashboard display
-        
+            # Calculate summary for active plan, for dashboard display
+
             if not self.car_slots.empty:
                 self.ev_total_charge = self.car_slots["charge_in_kwh"].sum()
                 self.ev_total_cost = self.car_slots["import"].sum()
@@ -2693,20 +2658,21 @@ class PVOpt(hass.Hass):
                 self.log("")
                 self.log("Active EV charge plan:")
 
-                #self.log(f"\n{self.car_slots.to_string()}")
-                #self.log("")
+                # self.log(f"\n{self.car_slots.to_string()}")
+                # self.log("")
 
                 for window in self.car_slots.iterrows():
                     self.log(
                         f"  {window[1]['start_local'].strftime('%d-%b %H:%M %Z'):>13s} - {window[1]['end_local'].strftime('%d-%b %H:%M %Z'):<13s}  Charge: {window[1]['charge_in_kwh']:3.2f}kWh  Slot Price: {window[1]['import']:3.1f}p"
                     )
                 self.log("")
-                self.log(f"Charge to Add = {self.ev_total_charge} kWh, Total Cost = {self.ev_total_cost:4.0f}p, % to Add = {self.ev_percent_to_add:3.0f}%")
+                self.log(
+                    f"Charge to Add = {self.ev_total_charge} kWh, Total Cost = {self.ev_total_cost:4.0f}p, % to Add = {self.ev_percent_to_add:3.0f}%"
+                )
             else:
                 self.log("")
                 self.log("No Active EV Charge Plan")
                 self.log("")
-
 
         # If all slots expired then car charging plan is finished, clear activation flags.
         # Note: needs to be done after checking for car plugins, otherwise for agile a load of the candidate plan will be triggered as it thinks the car is charging
@@ -2714,12 +2680,10 @@ class PVOpt(hass.Hass):
             self.agile_car_plan_activated = 0
             self.tariff_reloaded = 0
 
-
         self._create_windows()
 
         self._create_ev_windows()
 
-        
         self.log("")
         self.log(
             f"Plan time: {self.static.index[0].strftime('%d-%b %H:%M')} - {self.static.index[-1].strftime('%d-%b %H:%M')} Initial SOC: {self.initial_soc} Base Cost: {self.optimised_cost['Base'].sum():5.1f} Opt Cost: {self.optimised_cost[self.selected_case].sum():5.1f}"
@@ -2742,7 +2706,6 @@ class PVOpt(hass.Hass):
         self.status("Writing to HA")
         self._write_output()
 
-
         if self.get_config("read_only"):
             self.log("Read only mode enabled. Not querying inverter.")
             self.status("Idle (Read Only)")
@@ -2758,9 +2721,9 @@ class PVOpt(hass.Hass):
             did_something = True
             self.status("Updating Inverter")
 
-            #self.log("")
-            #entity_id = self.config[f"id_timed_charge_current"]
-            #self.log(self.get_state_retry(entity_id))
+            # self.log("")
+            # entity_id = self.config[f"id_timed_charge_current"]
+            # self.log(self.get_state_retry(entity_id))
             ##End logging
 
             inverter_update_count = 0
@@ -2769,6 +2732,11 @@ class PVOpt(hass.Hass):
 
                 status = self.inverter.status
                 self._log_inverterstatus(status)
+
+                retries = 0
+                while not self.inverter.timed_mode and retries < WRITE_POLL_RETRIES:
+                    retries += 1
+                    self.inverter.enable_timed_mode()
 
                 time_to_slot_start = (self.charge_start_datetime - pd.Timestamp.now(self.tz)).total_seconds() / 60
                 time_to_slot_end = (self.charge_end_datetime - pd.Timestamp.now(self.tz)).total_seconds() / 60
@@ -2816,7 +2784,7 @@ class PVOpt(hass.Hass):
                         )
                     # For IOG hold slots, so they don't write to the inverter all night
                     # This however will not pickup normal hold slots "<=", they are dealt with below when actually within a hold period.
-                    
+
                     elif (self.charge_power == 1) & (self.windows["hold_soc"].iloc[0] == "<=Car"):
                         self.log("Car slot")
                         self.inverter.control_discharge(enable=False)
@@ -2840,7 +2808,6 @@ class PVOpt(hass.Hass):
                     # If the current slot is a Hold SOC slot and we aren't holding then we need to
                     # enable Hold SOC. Uses backup mode instead of charge current = 0 to allow excess solar to charge batteries.
 
-
                     if (
                         self.hold and self.hold[0]["active"]
                     ):  # Should not activate for Car slots (as self.hold shouldnt be active)
@@ -2852,8 +2819,10 @@ class PVOpt(hass.Hass):
                         self.log("")
                         self.log(self.hold)  # Two elements, active (true/false) and SOC (value)
                         self.log(self.hold[0]["soc"])  # SOC value stored in first row of self.hold
-                        self.log(status["hold_soc"]["active"])  # What the inverter thinks its doing
-                        self.log(status["hold_soc"]["soc"])  # The value of backup_soc last read from the inverter.
+                        self.log(status.get("hold_soc", {}).get("active", False))  # What the inverter thinks its doing
+                        self.log(
+                            status.get("hold_soc", {}).get("soc", 0)
+                        )  # The value of backup_soc last read from the inverter.
 
                         # If status is not hold OR the inverter SOC value isnt matching the required SOC hold value
                         if (
@@ -2861,8 +2830,8 @@ class PVOpt(hass.Hass):
                         ):  #  not sure what this line will report
                             self.log("....but status is not hold")
                             self.log(f"  Enabling SOC hold at SOC of {self.hold[0]['soc']:0.0f}%")
-                            self.inverter.hold_soc_old(enable=True, soc=self.hold[0]["soc"])
-
+                            # self.inverter.hold_soc_old(enable=True, soc=self.hold[0]["soc"])
+                            self.inverter.hold_soc(enable=True, soc=self.hold[0]["soc"])
                         else:
                             self.log(f"  Inverter already holding SOC of {self.hold[0]['soc']:0.0f}%")
 
@@ -2872,20 +2841,27 @@ class PVOpt(hass.Hass):
                         if self.charge_power > 0:  # Intentionally 0 (not 1) to ensure Car slots are also encompassed.
                             if not status["charge"]["active"]:
                                 self.log("Charge status is not active, setting start time value now")
-                                start = pd.Timestamp.now(tz=self.tz)
+                                start = pd.Timestamp.now(tz=self.tz).floor("1min")
+                                self.log(f"Setting start time to {start.strftime(DATE_TIME_FORMAT_SHORT)}")
                             else:
                                 self.log("Charge status is active, not setting start time")
                                 start = None
 
                             if status["discharge"]["active"]:
+                                self.log("Disabling discharge")
                                 self.inverter.control_discharge(
                                     enable=False,
                                 )
 
+                            end = self.charge_end_datetime
+                            self.log(f"Setting end time to {end.strftime(DATE_TIME_FORMAT_SHORT)}")
+                            self.log(f"Setting power to {self.charge_power}")
+                            self.log(f"Setting SOC to {self.charge_target_soc}")
+
                             self.inverter.control_charge(
                                 enable=True,
                                 start=start,
-                                end=self.charge_end_datetime,
+                                end=end,
                                 power=self.charge_power,
                                 target_soc=self.charge_target_soc,
                             )
@@ -2974,8 +2950,8 @@ class PVOpt(hass.Hass):
                             self.inverter.control_charge(enable=False)
                             did_something = True
 
-                    if status["hold_soc"]["active"]:
-                        self.inverter.hold_soc_old(enable=False)
+                    if status.get("hold_soc", {}).get("active", False):
+                        self.inverter.hold_soc(enable=False)
                         str_log += " but inverter is holding SOC. Disabling."
                         self.log(str_log)
                         did_something = True
@@ -3002,7 +2978,7 @@ class PVOpt(hass.Hass):
                 "hold_soc": "off",
             }
 
-            if status["hold_soc"]["active"]:
+            if status.get("hold_soc", {}).get("active", False):
                 self.status(f"Holding SOC at {status['hold_soc']['soc']:0.0f}%")
                 status_switches["hold_soc"] = "on"
 
@@ -3025,7 +3001,7 @@ class PVOpt(hass.Hass):
                     entity_id=entity_id,
                 )
 
-            # Inverter updates complete. Now command EV charger on/off. 
+            # Inverter updates complete. Now command EV charger on/off.
             self._control_EV_charger()
             self.log("")
 
@@ -3037,13 +3013,13 @@ class PVOpt(hass.Hass):
         # As the .flows calls are all done with now, the "forced" power can be set back to what the inverter needs it to be, which is the original value prior to factoring
 
         # Get the time of the first slot
-        #self.opt["start"] = self.opt.index.tz_convert(self.tz)
-        #self.charge_start_datetime = self.opt["start"].iloc[0]
+        # self.opt["start"] = self.opt.index.tz_convert(self.tz)
+        # self.charge_start_datetime = self.opt["start"].iloc[0]
 
-        #slot_left_factor = 0
+        # slot_left_factor = 0
 
         # Are we already partway through that slot?
-        #if pd.Timestamp.now(self.tz) > self.charge_start_datetime:
+        # if pd.Timestamp.now(self.tz) > self.charge_start_datetime:
         #    slot_left_factor = 1800 / (
         #        (self.charge_start_datetime + pd.Timedelta(30, "minutes") - pd.Timestamp.now(self.tz)).total_seconds()
         #    )
@@ -3056,13 +3032,12 @@ class PVOpt(hass.Hass):
         # 1) Handle large multiplication factors for programme restarts at time values very close to the half hour boundaries. Just limit to 6. DONE
         # 2) To handle slots that even when factored, are still limited by the inverter power - these ones we don't want to multiply.
 
-        # In 2), is it just a limit of charger power we need to apply? Or do we require something more complex? 
+        # In 2), is it just a limit of charger power we need to apply? Or do we require something more complex?
 
-        #if not slot_left_factor == 0:
+        # if not slot_left_factor == 0:
         #    if slot_left_factor > 6:
         #        slot_left_factor = 6
         #    self.opt["forced"].iloc[0] = self.opt["forced"].iloc[0] * slot_left_factor
-        
 
         # SVB Previous code created a seperate period if the power stored in "forced" differed between rows (1/2 hour slots) by anything bigger than 0.
         # On IOG, as all high cost swaps are shared equally between the 12 1/2 hour slots, we only need a small rounding error for the value of "forced" to end up different
@@ -3081,7 +3056,7 @@ class PVOpt(hass.Hass):
         ).cumsum()
 
         if self.debug and "O" in self.debug_cat:
-            self.log("")                
+            self.log("")
             self.ulog("1/2 Hour Optimsation summary")
             self.log(f"\n{self.opt.to_string()}")
 
@@ -3103,7 +3078,6 @@ class PVOpt(hass.Hass):
                 self.log("Printing X for charge slots.....")
                 # self.log(x.to_string())
                 self.log(f"\n{x.to_string()}")
-
 
             # Create the charge window by taking the first and the last entry for each period.
             windows_c = pd.concat(
@@ -3128,7 +3102,6 @@ class PVOpt(hass.Hass):
                 self.log("")
                 self.log("Printing X for discharge slots.....")
                 self.log(f"\n{x.to_string()}")
-
 
             windows_d = pd.concat(
                 [
@@ -3179,13 +3152,11 @@ class PVOpt(hass.Hass):
                 axis=1,
             )
 
-
             if self.debug and "W" in self.debug_cat:
                 self.log("")
                 self.log("Printing Window_car for Car slots")
                 self.log(f"\n{windows_car.to_string()}")
 
- 
             if self.debug and "W" in self.debug_cat:
                 self.log("")
                 self.log("Printing Combined Window for Charge and Discharge Slots")
@@ -3223,7 +3194,6 @@ class PVOpt(hass.Hass):
                     self.log("")
                     self.log("Checking for Hold SOC slots (SOC changes less than 3%)")
 
-
                 self.windows.loc[
                     ((self.windows["soc_end"] - self.windows["soc"]).abs() < HOLD_TOLERANCE)
                     & (
@@ -3237,13 +3207,13 @@ class PVOpt(hass.Hass):
                     self.log("Printing Combined Window after Hold SOC check.....")
                     self.log(f"\n{self.windows.to_string()}")
 
-            ### Need to add Agile tariff into this, but only if car charging is enabled (EV Charger = Zappi?) 
+            ### Need to add Agile tariff into this, but only if car charging is enabled (EV Charger = Zappi?)
             #   DONE needs verifying
-            
-            #if self.intelligent or (self.agile and self.ev) :  # gate removed******
+
+            # if self.intelligent or (self.agile and self.ev) :  # gate removed******
             if self.debug and "W" in self.debug_cat:
                 self.log("")
-                self.log("Setting Car slots (Forced = 1) to hold")  
+                self.log("Setting Car slots (Forced = 1) to hold")
 
             # If forced = 1 then the window is an Car Slot. It will already have a "<=" set as we made start SOC = end SOC, but we
             # possibly want to differentiate the two for later processing.
@@ -3254,7 +3224,7 @@ class PVOpt(hass.Hass):
 
             # Set soc end to equal start soc for any car slots (Forced = 1) (purely for dashboard display purposes)
             self.windows["soc_end"] = self.windows["soc_end"].where(self.windows["forced"] != 1, self.windows["soc"])
-            #end of gate removed******
+            # end of gate removed******
 
             if self.debug and "W" in self.debug_cat:
 
@@ -3274,6 +3244,11 @@ class PVOpt(hass.Hass):
 
             self.charge_power = self.windows["forced"].iloc[0]
             voltage = self.get_config("battery_voltage", default=50)
+            try:
+                voltage = float(voltage)
+            except:
+                voltage = 50
+
             if voltage > 0 and not self.charge_power == 1:
                 self.charge_current = self.charge_power / voltage
             elif voltage > 0 and self.charge_power == 1:
@@ -3315,7 +3290,7 @@ class PVOpt(hass.Hass):
             self.windows = pd.DataFrame()
 
     def _create_ev_windows(self):
-        
+
         # At the moment the only purpose of this routine is for dashboard display (in the future)
         # Actual charging is done by reading self.opt
 
@@ -3323,29 +3298,27 @@ class PVOpt(hass.Hass):
         self.opt["period"] = 0
 
         # Increment "period" if non-contiguous car slot detected.
-        self.opt["period"] = (
-            (self.opt["carslot"].diff() > 0)
-        ).cumsum()
+        self.opt["period"] = ((self.opt["carslot"].diff() > 0)).cumsum()
 
-        if ((self.opt["carslot"] != 0).sum() > 0):
+        if (self.opt["carslot"] != 0).sum() > 0:
             x = self.opt[self.opt["carslot"] > 0].copy()
             x["start"] = x.index.tz_convert(self.tz)
             x["end"] = x.index.tz_convert(self.tz) + pd.Timedelta(30, "minutes")
 
             # Create the EV charge windows by taking the first and the last entry for each period.
             ev_windows = pd.concat(
-               [
-                   x.groupby("period").first()[["start"]],
-                   x.groupby("period").last()[["end"]],
-               ],
-               axis=1,
+                [
+                    x.groupby("period").first()[["start"]],
+                    x.groupby("period").last()[["end"]],
+                ],
+                axis=1,
             )
 
             ### SVB to do
             # Add a "Average slot price" and a "total kWh" to each window
 
             if self.debug and "E" in self.debug_cat:
-                self.log("")      
+                self.log("")
                 self.log("EV Windows are")
                 self.log(f"\n{ev_windows.to_string()}")
 
@@ -3355,7 +3328,7 @@ class PVOpt(hass.Hass):
             self.log("Optimal EV charging slots:")
             for window in self.ev_windows.iterrows():
                 self.log(
-                    #f"  {window[1]['start'].strftime('%d-%b %H:%M %Z'):>13s} - {window[1]['end'].strftime('%d-%b %H:%M %Z'):<13s}  Power: {window[1]['forced']:5.0f}W  SOC: {window[1]['soc']:4d}% -> {window[1]['soc_end']:4d}%  {window[1]['hold_soc']}"
+                    # f"  {window[1]['start'].strftime('%d-%b %H:%M %Z'):>13s} - {window[1]['end'].strftime('%d-%b %H:%M %Z'):<13s}  Power: {window[1]['forced']:5.0f}W  SOC: {window[1]['soc']:4d}% -> {window[1]['soc_end']:4d}%  {window[1]['hold_soc']}"
                     f"  {window[1]['start'].strftime('%d-%b %H:%M %Z'):>13s} - {window[1]['end'].strftime('%d-%b %H:%M %Z'):<13s}"
                 )
 
@@ -3369,10 +3342,13 @@ class PVOpt(hass.Hass):
             else:
                 self.log(f"  {s:18s}:")
                 for x in status[s]:
+                    units = UNITS.get(x, "")
                     if isinstance(status[s][x], pd.Timestamp):
                         self.log(f"    {x:16s}: {status[s][x].strftime(DATE_TIME_FORMAT_SHORT)}")
+                    elif isinstance(status[s][x], float):
+                        self.log(f"    {x:16s}: {status[s][x]:0.1f} {units}")
                     else:
-                        self.log(f"    {x:16s}: {status[s][x]}")
+                        self.log(f"    {x:16s}: {status[s][x]} {units}")
         self.log("")
 
     def write_to_hass(self, entity, state, attributes={}):
@@ -3524,7 +3500,7 @@ class PVOpt(hass.Hass):
             | {"ev_total_charge": self.candidate_ev_total_charge}
             | {"ev_total_cost": self.candidate_ev_total_cost}
             | {"ev_percent_to_add": self.candidate_ev_percent_to_add}
-        ) 
+        )
 
         self.write_to_hass(
             entity=f"sensor.{self.prefix}_candidate_car_slots",
@@ -3553,7 +3529,7 @@ class PVOpt(hass.Hass):
             | {"ev_total_cost": self.ev_total_cost}
             | {"ev_percent_to_add": self.ev_percent_to_add}
             | {"ev_car_slots_last_loaded": self.car_slots_last_loaded}
-        ) 
+        )
 
         self.write_to_hass(
             entity=f"sensor.{self.prefix}_car_slots",
@@ -3580,14 +3556,13 @@ class PVOpt(hass.Hass):
             | {"ev_total_cost": self.ev_total_cost}
             | {"ev_percent_to_add": self.ev_percent_to_add}
             | {"ev_car_slots_last_loaded": self.car_slots_last_loaded}
-        ) 
+        )
 
         self.write_to_hass(
             entity=f"sensor.{self.prefix}_car_windows",
             state=io_slot_datetime,
             attributes=attributes,
         )
-
 
         self.write_to_hass(
             entity=f"sensor.{self.prefix}_charge_end",
@@ -3622,14 +3597,12 @@ class PVOpt(hass.Hass):
             }
             self.write_to_hass(entity=entity_id, state=soc, attributes=attributes)
 
-
         if self.intelligent:
             tariff = "intelligent"
         elif self.agile:
             tariff = "agile"
         else:
-            tariff = "other"        
-
+            tariff = "other"
 
         self.write_to_hass(
             entity=f"sensor.{self.prefix}_tariff",
@@ -3638,7 +3611,6 @@ class PVOpt(hass.Hass):
                 "friendly_name": "PV Opt Tariff",
             },
         )
-
 
     def load_solcast(self):
         if not self.get_config("use_solar", True):
@@ -3784,16 +3756,20 @@ class PVOpt(hass.Hass):
                 self.status("ERROR: No consumption history.")
                 return
 
-            actual_days = int(
-                round(
-                    (df.index[-1] - df.index[0]).total_seconds() / 3600 / 24,
-                    0,
+            if len(df) > 0:
+                actual_days = int(
+                    round(
+                        (df.index[-1] - df.index[0]).total_seconds() / 3600 / 24,
+                        0,
+                    )
                 )
-            )
+                self.log(
+                    f"  - Got {actual_days} days history from {entity_id} from {df.index[0].strftime(DATE_TIME_FORMAT_SHORT)} to {df.index[-1].strftime(DATE_TIME_FORMAT_SHORT)}"
+                )
+            else:
+                actual_days = 0
+                self.log(f"  - Got no consumption history")
 
-            self.log(
-                f"  - Got {actual_days} days history from {entity_id} from {df.index[0].strftime(DATE_TIME_FORMAT_SHORT)} to {df.index[-1].strftime(DATE_TIME_FORMAT_SHORT)}"
-            )
             if int(actual_days) == days:
                 str_days = "OK"
             else:
@@ -3801,7 +3777,6 @@ class PVOpt(hass.Hass):
                 str_days = "Potential error. <<<"
 
             self.log(f"  - {days} days was expected. {str_days}")
-
 
             if (len(self.zappi_consumption_entities) > 0) and self.ev:
                 self.log("Getting consumption in kWh from Zappi Charger(s)")
@@ -3924,10 +3899,9 @@ class PVOpt(hass.Hass):
 
         self.log("")
 
-
         ### This next section prints a consumption based on two days worth, as predicted from the last 7 days
         # What we want is a predicted consumption for the next day, so we can compare it to fixed consumption
-        # problems: 
+        # problems:
         # Not sure where two days is created from  (as df is definitley one day)
         # Each of the two days has different, so its not a straight double generated from the one day df
 
@@ -3935,8 +3909,6 @@ class PVOpt(hass.Hass):
             f"    Total consumption from {consumption.index[0].strftime(DATE_TIME_FORMAT_SHORT)} to {consumption.index[-1].strftime(DATE_TIME_FORMAT_SHORT)}:"
         )
         self.log(f"    Total consumption: {(consumption['consumption'].sum() / 2000):0.1f} kWh")
-
-
 
         if self.debug and "P" in self.debug_cat:
             self.log("Printing final result of routine load_consumption.....")
@@ -4056,7 +4028,7 @@ class PVOpt(hass.Hass):
         ]
 
         for contract in contracts:
-            net_base = contract.net_cost(base, day_ahead=False)
+            net_base = contract.net_cost(base, day_ahead=False, sum=False)
             opt = self.pv_system.optimised_force(
                 initial_soc,
                 static,
@@ -4078,7 +4050,7 @@ class PVOpt(hass.Hass):
                 "net_base": round(net_base.sum() / 100, 2),
             } | {col: opt[["period_start", col]].to_dict("records") for col in cols if col in opt.columns}
 
-            net_opt = contract.net_cost(opt, day_ahead=False)
+            net_opt = contract.net_cost(opt, day_ahead=False, sum=False)
             self.log(f"  {contract.name:20s}  {(net_base.sum()/100):>20.3f}  {(net_opt.sum()/100):>20.3f}")
             entity_id = f"sensor.{self.prefix}_opt_cost_{contract.name}"
             self.set_state(
@@ -4198,8 +4170,8 @@ class PVOpt(hass.Hass):
         for domain in domains:
             states = self.get_state_retry(domain)
 
-            states = {k: states[k] for k in states if (self.device_name) in k}
-            #states = {k: states[k] for k in states if self.device_name in k or "zappi" in k}  # : print zappi entities as well
+            states = {k: states[k] for k in states if (f"{self.device_name}_") in k}
+            # states = {k: states[k] for k in states if self.device_name in k or "zappi" in k}  # : print zappi entities as well
             for entity_id in states:
                 x = entity_id + f" ({states[entity_id]['attributes'].get('device_class',None)}):"
                 x = f"  {x:60s}"
@@ -4254,32 +4226,71 @@ class PVOpt(hass.Hass):
 
         return df
 
-    def write_and_poll_value(self, entity_id, value, tolerance=0.0, verbose=False):
+    def write_and_poll_time(self, entity_id, time: str | pd.Timestamp, verbose=False):
         changed = False
         written = False
-        state = float(self.get_state_retry(entity_id=entity_id))
-        new_state = None
-        diff = abs(state - value)
-        if diff > tolerance:
+        if isinstance(time, pd.Timestamp):
+            time = time.strftime("%H:%M")
+        state = self.get_state_retry(entity_id=entity_id)
+        if state != time:
             changed = True
             try:
-                self.call_service("number/set_value", entity_id=entity_id, value=str(value))
+                self.call_service("time/set_value", entity_id=entity_id, time=time)
 
                 written = False
                 retries = 0
                 while not written and retries < WRITE_POLL_RETRIES:
                     retries += 1
                     time.sleep(WRITE_POLL_SLEEP)
-                    new_state = float(self.get_state_retry(entity_id=entity_id))
-                    written = new_state == value
+                    new_state = self.get_state_retry(entity_id=entity_id)
+                    written = new_state == time
 
             except:
                 written = False
 
             if verbose:
-                str_log = f"Entity: {entity_id:30s} Value: {float(value):4.1f}  Old State: {float(state):4.1f} "
-                str_log += f"New state: {float(new_state):4.1f} Diff: {diff:4.1f} Tol: {tolerance:4.1f}"
+                str_log = f"Entity: {entity_id:30s} Time: {time}  Old State: {state} "
+                str_log += f"New state: {new_state}"
                 self.log(str_log)
+
+        return (changed, written)
+
+    def write_and_poll_value(self, entity_id, value: int | float, tolerance=0.0, verbose=True):
+        changed = False
+        written = False
+        if tolerance == -1:
+            state = int(float(self.get_state_retry(entity_id=entity_id)))
+            changed = True
+            if state == int(value):
+                if value == 100:
+                    value = 99
+                else:
+                    value += 1
+            diff = -1
+        else:
+            state = float(self.get_state_retry(entity_id=entity_id))
+            diff = abs(state - value)
+            changed = diff > tolerance
+
+        new_state = None
+        if changed:
+            try:
+                self.call_service("number/set_value", entity_id=entity_id, value=str(value))
+                written = False
+                retries = 0
+                while not written and retries < WRITE_POLL_RETRIES:
+                    retries += 1
+                    time.sleep(WRITE_POLL_SLEEP)
+                    new_state = float(self.get_state_retry(entity_id=entity_id))
+                    written = new_state == float(value)
+
+            except:
+                written = False
+
+        if verbose:
+            str_log = f"Entity: {entity_id:30s} Value: {float(value):4.1f}  Old State: {float(state):4.1f} "
+            str_log += f"New state: {new_state} Diff: {diff:4.1f} Tol: {tolerance:4.1f}"
+            self.log(str_log)
 
         return (changed, written)
 
@@ -4289,46 +4300,44 @@ class PVOpt(hass.Hass):
 
         # Set consistent date for all comparisons
         value = value.replace(year=2024, month=1, day=1)
-        
+
         old_time = pd.to_datetime("2024/01/01 " + self.get_state_retry(entity_id=entity_id))
         new_time = None
 
-        #self.log(f"Write_and_poll_time: time = {value}, old_time = {old_time}")
-        
-        #Convert time to string of HH:MM:SS for call_service routine
-        value_str = value.strftime('%X')
+        # self.log(f"Write_and_poll_time: time = {value}, old_time = {old_time}")
+
+        # Convert time to string of HH:MM:SS for call_service routine
+        value_str = value.strftime("%X")
 
         if old_time != value:
             changed = True
-            #self.log(f"Write_and_poll_time: Changed = true")
+            # self.log(f"Write_and_poll_time: Changed = true")
 
             try:
-                #self.call_service("number/set_value", entity_id=entity_id, value=value)
+                # self.call_service("number/set_value", entity_id=entity_id, value=value)
                 self.call_service("time/set_value", entity_id=entity_id, time=value_str)
 
                 written = False
                 retries = 0
                 while not written and retries < WRITE_POLL_RETRIES:
-                    #self.log("Write_and_poll_time: Entered while loop")
+                    # self.log("Write_and_poll_time: Entered while loop")
                     retries += 1
                     time.sleep(WRITE_POLL_TIME_SLEEP)
 
                     new_time = pd.to_datetime("2024/01/01 " + self.get_state_retry(entity_id=entity_id))
-                    
-                    #self.log(f"Write_and_poll_time:  while loop, new_time = {new_time}")
+
+                    # self.log(f"Write_and_poll_time:  while loop, new_time = {new_time}")
 
                     written = new_time == value
 
             except:
                 written = False
-                #self.log("Write_and_poll_time: Exception logged")
+                # self.log("Write_and_poll_time: Exception logged")
 
             str_log = f"Entity: {entity_id} Time: {value}  Value_str: {value_str}  Old Time: {old_time} New time: {(new_time)} "
             self.log(str_log)
 
         return (changed, written)
-
-
 
     def set_select(self, item, state):
         if state is not None:
