@@ -1,11 +1,15 @@
 # %%
-import pandas as pd
-import requests
 from copy import copy
-from numpy import isnan
-
 # from scipy.stats import linregress
 from datetime import datetime
+
+import numpy as np
+import pandas as pd
+import requests
+from numpy import isnan
+
+# from scipy.optimize import differential_evolution
+
 
 OCTOPUS_PRODUCT_URL = r"https://api.octopus.energy/v1/products/"
 AGILE_PREDICT_URL = r"https://agilepredict.com/api/"
@@ -273,7 +277,9 @@ class Tariff:
                             data=[{"unit": x["price"]} for x in self.unit],
                         ).sort_index()
                         for midnight in pd.date_range(
-                            start.floor("1D") - pd.Timedelta("1D"), end.ceil("1D"), freq="1D"
+                            start.floor("1D") - pd.Timedelta("1D"),
+                            end.ceil("1D"),
+                            freq="1D",
                         )
                     ]
                 )
@@ -346,7 +352,12 @@ class Tariff:
                     # self.log(f"\n{self.agile_predict}")
 
                 if self.agile_predict is not None:
-                    df = pd.concat([df, self.agile_predict.loc[df.index[-1] + pd.Timedelta("30min") : end]])
+                    df = pd.concat(
+                        [
+                            df,
+                            self.agile_predict.loc[df.index[-1] + pd.Timedelta("30min") : end],
+                        ]
+                    )
                     # self.log("Df concat with agile predict is")
                     # self.log(f"\n{df}")
 
@@ -550,7 +561,13 @@ class BatteryModel:
         voltage: An int describing the voltage of the battery system.
     """
 
-    def __init__(self, capacity: int, max_dod: float = 0.15, current_limit_amps: int = 100, voltage: int = 50) -> None:
+    def __init__(
+        self,
+        capacity: int,
+        max_dod: float = 0.15,
+        current_limit_amps: int = 100,
+        voltage: int = 50,
+    ) -> None:
         self.capacity = capacity
         self.max_dod = max_dod
         self.current_limit_amps = current_limit_amps
@@ -723,24 +740,27 @@ class PVsystemModel:
         else:
             self.log = print
             self.tz = "GB"
-        self._slots = []
-        self._net_cost = 0
+        self.prices = None
+        self.static_flows = None
+        self.solar_id = "solar"
+        self.consumption_id = "consumption"
+        self.flows = None
+        self.contract = None
 
     def __str__(self):
         pass
 
-    def flows(self, initial_soc, static_flows, slots=[], soc_now=None, merge=False, prices=None, **kwargs):
-        cols = {k: kwargs.get(k, k) for k in ["solar", "consumption"]}
-        solar = static_flows[cols["solar"]]
-        consumption = static_flows[cols["consumption"]]
+    def calculate_flows(self, slots=[], solar_id="solar", consumption_id="consumption", **kwargs):
+        solar = self.static_flows[solar_id]
+        consumption = self.static_flows[consumption_id]
 
-        df = static_flows.copy()
+        self.flows = self.static_flows.copy()
 
         battery_flows = solar - consumption
-        forced_charge = pd.Series(index=df.index, data=0)
+        forced_charge = pd.Series(index=self.flows.index, data=0)
 
         if len(slots) > 0:
-            timed_slot_flows = pd.Series(index=df.index, data=0)
+            timed_slot_flows = pd.Series(index=self.flows.index, data=0)
 
             for t, c in slots:
                 if not isnan(c):
@@ -750,13 +770,13 @@ class PVsystemModel:
             battery_flows[chg_mask] = timed_slot_flows[chg_mask]
             forced_charge[chg_mask] = timed_slot_flows[chg_mask]
 
-        if soc_now is None:
-            chg = [initial_soc / 100 * self.battery.capacity]
-            freq = pd.infer_freq(static_flows.index) / pd.Timedelta(60, "minutes")
+        if self.soc_now is None:
+            chg = [self.initial_soc / 100 * self.battery.capacity]
+            freq = pd.infer_freq(self.static_flows.index) / pd.Timedelta(60, "minutes")
 
         else:
-            chg = [soc_now[1] / 100 * self.battery.capacity]
-            freq = (soc_now[0] - df.index[0]) / pd.Timedelta(60, "minutes")
+            chg = [self.soc_now[1] / 100 * self.battery.capacity]
+            freq = (self.soc_now[0] - self.flows.index[0]) / pd.Timedelta(60, "minutes")
 
         for i, flow in enumerate(battery_flows):
             if flow < 0:
@@ -780,98 +800,160 @@ class PVsystemModel:
                     1,
                 )
             )
-            if (soc_now is not None) and (i == 0):
-                freq = pd.infer_freq(static_flows.index) / pd.Timedelta(60, "minutes")
+            if (self.soc_now is not None) and (i == 0):
+                freq = pd.infer_freq(self.static_flows.index) / pd.Timedelta(60, "minutes")
 
-        if soc_now is not None:
-            chg[0] = [initial_soc / 100 * self.battery.capacity]
+        if self.soc_now is not None:
+            chg[0] = self.initial_soc / 100 * self.battery.capacity
 
-        df["chg"] = chg[:-1]
-        df["chg"] = df["chg"].ffill()
-        df["chg_end"] = chg[1:]
-        df["chg_end"] = df["chg_end"].bfill()
-        df["battery"] = (pd.Series(chg).diff(-1) / freq)[:-1].to_list()
-        df.loc[df["battery"] > 0, "battery"] = df["battery"] * self.inverter.inverter_efficiency
-        df.loc[df["battery"] < 0, "battery"] = df["battery"] / self.inverter.charger_efficiency
-        df["grid"] = -(solar - consumption + df["battery"]).round(0)
-        df["forced"] = forced_charge
-        df["soc"] = (df["chg"] / self.battery.capacity) * 100
-        df["soc_end"] = (df["chg_end"] / self.battery.capacity) * 100
+        self.flows["chg"] = chg[:-1]
+        self.flows["chg"] = self.flows["chg"].ffill()
+        self.flows["chg_end"] = chg[1:]
+        self.flows["chg_end"] = self.flows["chg_end"].bfill()
+        self.flows["battery"] = (pd.Series(chg).diff(-1) / freq)[:-1].to_list()
+        self.flows.loc[self.flows["battery"] > 0, "battery"] = (
+            self.flows["battery"] * self.inverter.inverter_efficiency
+        )
+        self.flows.loc[self.flows["battery"] < 0, "battery"] = self.flows["battery"] / self.inverter.charger_efficiency
+        self.flows["grid"] = -(solar - consumption + self.flows["battery"]).round(0)
+        self.flows["forced"] = forced_charge
+        self.flows["soc"] = (self.flows["chg"] / self.battery.capacity) * 100
+        self.flows["soc_end"] = (self.flows["chg_end"] / self.battery.capacity) * 100
 
-        if merge and (prices is not None):
-            df = pd.concat(
-                [prices, consumption, df],
+        if self.prices is not None:
+            self.flows = pd.concat(
+                [self.prices, consumption, self.flows],
                 axis=1,
             )
-        return df
 
-    def optimised_force(self, initial_soc, static_flows, contract: Contract, **kwargs):
-        log = kwargs.pop("log", True)
+    @property
+    def net_cost(self):
+        if self.flows is not None:
+            return self.contract.net_cost(self.flows)
+
+    def optimised_force(
+        self,
+        log=True,
+        discharge=False,
+        use_export=True,
+        max_iters=MAX_ITERS,
+    ):
 
         if log and (self.host.debug and "B" in self.host.debug_cat):
             self.log("Called optimised_force")
 
-        cols = {k: kwargs.get(k, k) for k in ["consumption", "solar"]}
-        consumption = static_flows[cols["consumption"]]
-        consumption.name = "consumption"
+        start = self.static_flows.index[0]
+        end = self.static_flows.index[-1]
 
-        discharge = kwargs.pop("discharge", False)
-        use_export = kwargs.pop("export", True)
-        max_iters = kwargs.pop("max_iters", MAX_ITERS)
-
-        # prices = pd.DataFrame()
-
-        # for direction in contract.tariffs:
-        #     if contract.tariffs[direction] is not None:
-        #         prices = pd.concat(
-        #             [
-        #                 prices,
-        #                 contract.tariffs[direction].to_df(start=static_flows.index[0], end=static_flows.index[-1])[
-        #                     "unit"
-        #                 ],
-        #             ],
-        #             axis=1,
-        #         )
-
-        start = static_flows.index[0]
-        end = static_flows.index[-1]
-
-        prices = contract.prices(start=start, end=end)
-
-        if log and (self.host.debug and "B" in self.host.debug_cat):
-
-            self.log("")
-            self.log("Prices is")
-            self.log(f"\n{prices.to_string()}")
-            self.log("")
-
-        if log:
-            self.log(
-                f"Optimiser prices loaded for period {prices.index[0].strftime(TIME_FORMAT)} - {prices.index[-1].strftime(TIME_FORMAT)}"
-            )
-
-        prices = prices.set_axis([t for t in contract.tariffs.keys() if contract.tariffs[t] is not None], axis=1)
+        self.prices = self.contract.prices(start=start, end=end)
+        self.prices = self.prices.set_axis(
+            [t for t in self.contract.tariffs.keys() if self.contract.tariffs[t] is not None],
+            axis=1,
+        )
 
         if not use_export:
             if log:
                 self.log(f"Ignoring export pricing because Use Export is turned off")
             discharge = False
-            prices["export"] = 0
+            self.prices["export"] = 0
 
-        df = self.flows(
-            initial_soc,
-            static_flows,
-            merge=True,
-            prices=prices,
-            **kwargs,
-        )
-        base_cost = contract.net_cost(df)
+        if log and (self.host.debug and "B" in self.host.debug_cat):
+            self.log("")
+            self.log("Prices is")
+            self.log(f"\n{self.prices.to_string()}")
+            self.log("")
 
         if log:
-            self.log(f"Base cost:  {base_cost}")
+            self.log(
+                f"Optimiser prices loaded for period {self.prices.index[0].strftime(TIME_FORMAT)} - {self.prices.index[-1].strftime(TIME_FORMAT)}"
+            )
 
-        slots = []
+        self.calculate_flows()
+        self.base_cost = self.net_cost
+        self.best_cost = self.base_cost
 
+        self.net_costs = [self.base_cost]
+
+        if log:
+            self.log(f"Base cost:  {self.base_cost}")
+
+        self._high_cost_swaps(log=log)
+
+        # Only do the rest if there is an export tariff:
+        # self.log(f"Sum of Export Prices = {prices['export'].sum()}")
+        if self.prices["export"].sum() > 0:
+            j = 0
+        else:
+            j = max_iters
+
+        self.slots_added = 999
+
+        while (self.slots_added > 0) and (j < max_iters):
+            j += 1
+            # No need to iterate if this is charge only
+            if not discharge:
+                j += max_iters
+
+            self._low_cost_charging(log=log)
+
+            if log:
+                self.log(f"Iteration {j:2d}: Slots added: {self.slots_added:3d}")
+
+            if discharge:
+                self._discharging(log=log)
+
+        self.calculate_flows(slots=self.slots)
+
+        # df.index = pd.to_datetime(df.index)
+
+        if (not self.host.get_config("allow_cyclic")) and (len(self.slots) > 0) and discharge:
+            if log:
+                self.log("")
+                self.log("Removing cyclic charge/discharge")
+            a = self.flows["forced"][self.flows["forced"] != 0].to_dict()
+            new_slots = [(k, a[k]) for k in a]
+
+            revised_slots = []
+            skip_flag = False
+            for i, x in enumerate(zip(new_slots[:-1], new_slots[1:])):
+
+                if (
+                    (int(x[0][1]) == self.inverter.charger_power)
+                    & (int(-x[1][1]) == self.inverter.charger_power)
+                    & (x[1][0] - x[0][0] == pd.Timedelta("30min"))
+                ):
+                    skip_flag = True
+                    if log:
+                        self.log(
+                            f"  Skipping slots at {x[0][0].strftime(TIME_FORMAT)} ({x[0][1]}W) and {x[1][0].strftime(TIME_FORMAT)} ({x[1][1]}W)"
+                        )
+                elif skip_flag:
+                    skip_flag = False
+                else:
+                    revised_slots.append(x[0])
+                    if i == len(new_slots) - 2:
+                        revised_slots.append(x[1])
+
+            self.calculate_flows(slots=revised_slots)
+
+            best_cost_new = self.net_cost
+            if log:
+                self.log(f"  Net cost revised from {self.best_cost:0.1f}p to {best_cost_new:0.1f}p")
+            slots = revised_slots
+            # self.flows.index = pd.to_datetime(df.index)
+        return self.flows
+
+    def _search_window(self, df: pd.DataFrame, available: pd.Series, max_slot):
+        x = df.loc[: max_slot - pd.Timedelta("30min")].copy().iloc[:-1]
+        if len(x) > 0:
+            x = x[available.loc[: max_slot - pd.Timedelta("30min")]]
+            x["countback"] = (x["soc_end"] >= 97).sum() - (x["soc_end"] >= 97).cumsum()
+            x = x[x["countback"] == 0]
+            x = x[x["forced"] < (self.inverter.charger_power)]
+            x = x[x["soc_end"] <= 97]
+        return x
+
+    def _high_cost_swaps(self, log=True):
         # --------------------------------------------------------------------------------------------
         #  Charging 1st Pass
         # --------------------------------------------------------------------------------------------
@@ -887,53 +969,36 @@ class PVsystemModel:
                 )
                 self.log("")
 
-        # self.log(slots)
-        net_cost = []
-        net_cost_opt = base_cost
-
         done = False
-        # self.log("Resetting i to 0")
         i = 0
-        df = self.flows(
-            initial_soc,
-            static_flows,
-            slots=slots,
-            merge=True,
-            prices=prices,
-            **kwargs,
-        )
-
-        available = pd.Series(index=df.index, data=(df["forced"] == 0))
-
-        net_cost = [base_cost]
-        plunge_slots = slots
+        slots = []
+        available = pd.Series(index=self.flows.index, data=(self.flows["forced"] == 0))
+        tested = pd.Series(index=self.flows.index, data=False)
         slot_count = [0]
+        best_cost = self.base_cost
 
         while not done:
-            old_cost = contract.net_cost(df, sum=False)
-            old_soc = df["soc_end"]
             i += 1
 
             if (i > 96) or (available.sum() == 0):
                 done = True
 
-            import_cost = ((df["import"] * df["grid"]).clip(0) / 2000)[available]
+            import_cost = ((self.flows["import"] * self.flows["grid"]).clip(0) / 2000)[~tested]
 
-            if len(import_cost[df["forced"] == 0]) > 0:
-                max_import_cost = import_cost[df["forced"] == 0].max()
+            if len(import_cost[self.flows["forced"] == 0]) > 0:
+                max_import_cost = import_cost[self.flows["forced"] == 0].max()
                 if len(import_cost[import_cost == max_import_cost]) > 0:
                     max_slot = import_cost[import_cost == max_import_cost].index[0]
-                    max_slot_energy = round(df["grid"].loc[max_slot] / 2000, 2)  # kWh
+                    max_slot_energy = round(self.flows["grid"].loc[max_slot] / 2000, 2)  # kWh
+                    str_log = f"{i:3d} {available.sum():3d} {max_slot.tz_convert(self.tz).strftime(TIME_FORMAT)}:"
 
                     if max_slot_energy > 0:
                         round_trip_energy_required = (
                             max_slot_energy / self.inverter.charger_efficiency / self.inverter.inverter_efficiency
                         )
 
-                        search_window = self._search_window(df, available, max_slot)
-                        str_log = f"{i:3d} {available.sum():3d} {max_slot.tz_convert(self.tz).strftime(TIME_FORMAT)}: {round_trip_energy_required:5.2f} kWh at {max_import_cost:6.2f}p. "
-                        if len(search_window) == 0:
-                            done = True
+                        search_window = self._search_window(self.flows, available, max_slot)
+                        str_log += f" {round_trip_energy_required:5.2f} kWh at {max_import_cost:6.2f}p. "
 
                         if len(search_window) > 0:
                             min_price = search_window["import"].min()
@@ -948,18 +1013,14 @@ class PVsystemModel:
 
                             factors = [1 / len(window) for slot in window]
 
-                            # for slot in window:
-                            #     factors.append(1)
-
-                            # factors = [f / sum(factors) for f in factors]
-
                             if round(cost_at_min_price, 1) < round(max_import_cost, 1):
+                                slots_added = 0
                                 for slot, factor in zip(window, factors):
                                     slot_power_required = max(round_trip_energy_required * 2000 * factor, 0)
                                     slot_charger_power_available = max(
                                         self.inverter.charger_power
                                         - search_window["forced"].loc[slot]
-                                        - search_window[cols["solar"]].loc[slot],
+                                        - search_window["solar"].loc[slot],
                                         0,
                                     )
                                     slot_available_capacity = max(
@@ -969,7 +1030,9 @@ class PVsystemModel:
                                         0,
                                     )
                                     min_power = min(
-                                        slot_power_required, slot_charger_power_available, slot_available_capacity
+                                        slot_power_required,
+                                        slot_charger_power_available,
+                                        slot_available_capacity,
                                     )
                                     remaining_slot_capacity = slot_charger_power_available - min_power
 
@@ -977,6 +1040,7 @@ class PVsystemModel:
                                         available[slot] = False
 
                                     if log and self.host.debug:
+                                        # if log:
                                         str_log_x = (
                                             f">>> {i:3d} Slot: {slot.strftime(TIME_FORMAT)} Factor: {factor:0.3f} Forced: {search_window['forced'].loc[slot]:6.0f}W  "
                                             + f"End SOC: {search_window['soc_end'].loc[slot]:4.1f}%  SPR: {slot_power_required:6.0f}W  "
@@ -993,392 +1057,262 @@ class PVsystemModel:
                                             round(min_power, 0),
                                         )
                                     )
+                                    slots_added += 1
 
-                                df = self.flows(
-                                    initial_soc,
-                                    static_flows,
-                                    slots=slots,
-                                    merge=True,
-                                    prices=prices,
-                                    **kwargs,
-                                )
-                                net_cost.append(contract.net_cost(df))
+                                self.calculate_flows(slots=slots)
+                                self.net_costs.append(self.net_cost)
                                 slot_count.append(len(factors))
 
-                                str_log += f"New SOC: {df.loc[start_window]['soc']:5.1f}%->{df.loc[start_window]['soc_end']:5.1f}% "
-                                net_cost_opt = net_cost[-1]
-                                str_log += f"Net: {net_cost_opt:6.1f}"
+                                str_log += f"New SOC: {self.flows.loc[start_window]['soc']:5.1f}%->{self.flows.loc[start_window]['soc_end']:5.1f}% "
+                                best_cost = self.net_costs[-1]
+                                str_log += f"Net: {best_cost:6.1f}"
+
                                 if log:
                                     self.log(str_log)
-                                    if self.host.debug and "F" in self.host.debug_cat:
-                                        xx = pd.concat(
-                                            [
-                                                old_cost,
-                                                old_soc,
-                                                contract.net_cost(df, sum=False),
-                                                df["soc_end"],
-                                                df["import"],
-                                            ],
-                                            axis=1,
-                                        ).set_axis(["Old", "Old_SOC", "New", "New_SOC", "import"], axis=1)
-                                        xx["Diff"] = xx["New"] - xx["Old"]
-                                        self.log(f"\n{xx.loc[window[0] : max_slot].to_string()}")
                             else:
-                                available[max_slot] = False
+                                if log:
+                                    self.log(str_log + "No cheaper slots")
+                                tested.loc[max_slot] = True
+                        else:
+                            if log:
+                                self.log(str_log + "No search window")
+                            done = True
                 else:
                     done = True
             else:
                 self.log("No slots available")
                 done = True
 
-        df = self.flows(
-            initial_soc,
-            static_flows,
-            slots=slots,
-            merge=True,
-            prices=prices,
-            **kwargs,
-        )
-        net_cost_opt = contract.net_cost(df)
+        self.calculate_flows(slots=slots)
+        self.best_cost = self.net_cost
 
-        if base_cost - net_cost_opt <= self.host.get_config("pass_threshold_p"):
+        if self.base_cost - best_cost <= self.host.get_config("pass_threshold_p"):
             if log:
                 self.log(
-                    f"Charge net cost delta:  {base_cost - net_cost_opt:0.1f}p: < Pass Threshold ({self.host.get_config('pass_threshold_p'):0.1f}p) => Slots Excluded"
+                    f"Charge net cost delta:  {self.base_cost - best_cost:0.1f}p: < Pass Threshold ({self.host.get_config('pass_threshold_p'):0.1f}p) => Slots Excluded"
                 )
-            slots = plunge_slots
-            net_cost_opt = base_cost
-            df = self.flows(
-                initial_soc,
-                static_flows,
-                slots=slots,
-                merge=True,
-                prices=prices,
-                **kwargs,
-            )
+            slots = []
+            self.best_cost = self.base_cost
+            self.calculate_flows()
 
-        slots_added = 999
+        self.slots = slots
 
-        # Only do the rest if there is an export tariff:
-        # self.log(f"Sum of Export Prices = {prices['export'].sum()}")
+    def _low_cost_charging(self, log=True):
+        slots = [slot for slot in self.slots]
+        best_cost = self.best_cost
+        slots_added = 0
 
-        if prices["export"].sum() > 0:
-            j = 0
-        else:
-            j = max_iters
+        # Check how many slots which aren't full are at an import price less than any export price:
+        max_export_price = self.flows[self.flows["forced"] <= 0]["export"].max()
+        if log:
+            self.log("")
+            self.log("Low Cost Charging")
+            self.log("------------------")
+            self.log("")
 
-        while (slots_added > 0) and (j < max_iters):
-            slots_added = 0
-            j += 1
-            # No need to iterate if this is charge only
-            if not discharge:
-                j += max_iters
+        # net_cost_previous = best_cost
 
-            # Check how many slots which aren't full are at an import price less than any export price:
-            max_export_price = df[df["forced"] <= 0]["export"].max()
-            if log:
-                self.log("")
-                self.log("Low Cost Charging")
-                self.log("------------------")
-                self.log("")
+        if log:
+            self.log(f"Max export price when there is no forced charge: {max_export_price:0.2f}p/kWh.")
 
-            net_cost_pre = net_cost_opt
-            slots_pre = copy(slots)
-
-            if log:
-                self.log(f"Max export price when there is no forced charge: {max_export_price:0.2f}p/kWh.")
-
-            i = 0
-            available = (
-                (df["import"] < max_export_price) & (df["forced"] < self.inverter.charger_power) & (df["forced"] >= 0)
-            )
-
-            # self.log(df["import"]<max_export_price)
-            a0 = available.sum()
-            if log:
-                self.log(f"{available.sum()} slots have an import price less than the max export price")
-            done = available.sum() == 0
-
-            if self.host.debug and "C" in self.host.debug_cat:
-                self.log(f"\n{df.to_string()}")
-
-            while not done:
-                x = (
-                    df.loc[available]
-                    .loc[df["import"] < max_export_price]
-                    .loc[df["forced"] < self.inverter.charger_power]
-                    .loc[df["forced"] >= 0]
-                    .copy()
-                )
-                i += 1
-                done = i > a0
-
-                min_price = x["import"].min()
-
-                # Add rounding to ensure matching (may not be needed)
-                x["import"] = x["import"].round(2)
-                min_price = min_price.round(2)
-
-                if len(x[x["import"] == min_price]) > 0:
-                    start_window = x[x["import"] == min_price].index[0]
-                    available.loc[start_window] = False
-                    str_log = ""
-                    str_log = f"{available.sum():>2d} Min import price {min_price:5.2f}p/kWh at {start_window.strftime(TIME_FORMAT)} {x.loc[start_window]['forced']:4.0f}W "
-
-                    str_log += "  "
-                    factor = 1
-
-                    str_log += f"SOC: {x.loc[start_window]['soc']:5.1f}%->{x.loc[start_window]['soc_end']:5.1f}% "
-
-                    if self.host.debug and "C" in self.host.debug_cat:
-                        self.log(
-                            f"SOC (before modelling Forced Charge): {x.loc[start_window]['soc']:5.1f}%->{x.loc[start_window]['soc_end']:5.1f}% "
-                        )
-
-                    forced_charge = min(
-                        min(self.battery.max_charge_power, self.inverter.charger_power)
-                        - x["forced"].loc[start_window]
-                        - x[cols["solar"]].loc[start_window],
-                        ((100 - x["soc_end"].loc[start_window]) / 100 * self.battery.capacity) * 2 * factor,
-                    )
-                    if self.host.debug and "C" in self.host.debug_cat:
-                        self.log(f"Forced Charge = {forced_charge}")
-                    slot = (
-                        start_window,
-                        forced_charge,
-                    )
-
-                    slots.append(slot)
-
-                    df = self.flows(
-                        initial_soc,
-                        static_flows,
-                        slots=slots,
-                        merge=True,
-                        prices=prices,
-                        **kwargs,
-                    )
-
-                    if self.host.debug and "F" in self.host.debug_cat:
-                        self.log("Df after flows called = ")
-                        self.log(f"\n{df.to_string()}")
-
-                    net_cost = contract.net_cost(df)
-
-                    str_log += f"Net: {net_cost:5.1f} "
-                    if net_cost < net_cost_opt - self.host.get_config("slot_threshold_p"):
-                        str_log += (
-                            f"New SOC: {df.loc[start_window]['soc']:5.1f}%->{df.loc[start_window]['soc_end']:5.1f}% "
-                        )
-                        str_log += f"Max export: {-df['grid'].min():0.0f}W "
-                        net_cost_opt = net_cost
-                        slots_added += 1
-                        if log:
-                            self.log(str_log)
-                    else:
-                        # done = True
-                        slots = slots[:-1]
-                        df = self.flows(
-                            initial_soc,
-                            static_flows,
-                            slots=slots,
-                            merge=True,
-                            prices=prices,
-                            **kwargs,
-                        )
-
-                    done = available.sum() == 0
-                else:
-                    done = True
-
-            cost_delta = net_cost_opt - net_cost_pre
-            str_log = f"Charge net cost delta:{(-cost_delta):5.1f}p"
-            if cost_delta > -self.host.get_config("pass_threshold_p"):
-                slots = slots_pre
-                slots_added = 0
-                net_cost_opt = net_cost_pre
-                str_log += f": < Pass Threshold {self.host.get_config('pass_threshold_p'):0.1f}p => Slots Excluded"
-            else:
-                str_log += f": > Pass Threshold {self.host.get_config('pass_threshold_p'):0.1f}p => Slots Included"
-
-            if log:
-                self.log("")
-                self.log(str_log)
-
-            # -----------
-            # Discharging
-            # -----------
-            if discharge:
-                net_cost_pre = net_cost_opt
-                slots_pre = copy(slots)
-                slots_added_pre = slots_added
-                net_cost_pre = net_cost_opt
-
-                # Check how many slots which aren't full are at an export price less than any import price:
-                min_import_price = df["import"].min()
-                if log:
-                    self.log("")
-                    self.log("Forced Discharging")
-                    self.log("------------------")
-                    self.log("")
-
-                i = 0
-                available = (df["export"] > min_import_price) & (df["forced"] == 0)
-                a0 = available.sum()
-                if log:
-                    self.log(f"{available.sum()} slots have an export price greater than the min import price")
-                done = available.sum() == 0
-
-                while not done:
-                    x = df[available].copy()
-                    i += 1
-                    done = i > a0
-                    max_price = x["export"].max()
-
-                    if len(x[x["export"] == max_price]) > 0:
-                        # self.log("Entered routine successfully")
-                        start_window = x[x["export"] == max_price].index[0]
-                        available.loc[start_window] = False
-                        str_log = f"{available.sum():>2d} Max export price {max_price:5.2f}p/kWh at {start_window.strftime(TIME_FORMAT)} "
-                        str_log += "  "
-
-                        factor = 1
-                        str_log += f"SOC: {x.loc[start_window]['soc']:5.1f}%->{x.loc[start_window]['soc_end']:5.1f}% "
-
-                        slot = (
-                            start_window,
-                            -min(
-                                min(self.battery.max_discharge_power, self.inverter.charger_power)
-                                - x[kwargs.get("solar", "solar")].loc[start_window],
-                                ((x["soc_end"].loc[start_window] - self.battery.max_dod) / 100 * self.battery.capacity)
-                                * 2
-                                * factor,
-                            ),
-                        )
-
-                        slots.append(slot)
-
-                        df = self.flows(
-                            initial_soc,
-                            static_flows,
-                            slots=slots,
-                            merge=True,
-                            prices=prices,
-                            **kwargs,
-                        )
-
-                        if self.host.debug and "F" in self.host.debug_cat:
-                            self.log("Df after flows called = ")
-                            self.log(f"\n{df.to_string()}")
-
-                        net_cost = contract.net_cost(df)
-
-                        str_log += f"Net: {net_cost:5.1f} "
-                        if net_cost < net_cost_opt - self.host.get_config("slot_threshold_p"):
-                            str_log += f"New SOC: {df.loc[start_window]['soc']:5.1f}%->{df.loc[start_window]['soc_end']:5.1f}% "
-                            str_log += f"Max export: {-df['grid'].min():0.0f}W "
-                            net_cost_opt = net_cost
-                            slots_added += 1
-
-                            if self.host.debug and "D" in self.host.debug_cat:
-                                self.log(str_log)
-                        else:
-                            # done = True
-                            slots = slots[:-1]
-                            df = self.flows(
-                                initial_soc,
-                                static_flows,
-                                slots=slots,
-                                merge=True,
-                                prices=prices,
-                                **kwargs,
-                            )
-
-                            if self.host.debug and "D" in self.host.debug_cat:
-                                self.log(str_log)
-                    else:
-                        done = True
-
-                cost_delta = net_cost_opt - net_cost_pre
-                str_log = f"Discharge net cost delta:{(-cost_delta):5.1f}p"
-                if cost_delta > -self.host.get_config("discharge_threshold_p"):
-                    slots = slots_pre
-                    slots_added = slots_added_pre
-                    str_log += f": < Discharge threshold ({self.host.get_config('discharge_threshold_p'):0.1f}p) => Slots excluded"
-                    net_cost_opt = net_cost_pre
-                else:
-                    str_log += f": > Discharge Threshold ({self.host.get_config('discharge_threshold_p'):0.1f}p) => Slots included"
-
-                if log:
-                    self.log("")
-                    self.log(str_log)
-
-            if log:
-                self.log(f"Iteration {j:2d}: Slots added: {slots_added:3d}")
-
-        df = self.flows(
-            initial_soc,
-            static_flows,
-            slots=slots,
-            merge=True,
-            prices=prices,
-            **kwargs,
+        i = 0
+        available = (
+            (self.flows["import"] < max_export_price)
+            & (self.flows["forced"] < self.inverter.charger_power)
+            & (self.flows["forced"] >= 0)
         )
 
-        df.index = pd.to_datetime(df.index)
+        a0 = available.sum()
+        if log:
+            self.log(f"{available.sum()} slots have an import price less than the max export price")
+        done = available.sum() == 0
 
-        if (not self.host.get_config("allow_cyclic")) and (len(slots) > 0) and discharge:
-            if log:
-                self.log("")
-                self.log("Removing cyclic charge/discharge")
-            a = df["forced"][df["forced"] != 0].to_dict()
-            new_slots = [(k, a[k]) for k in a]
+        if self.host.debug and "C" in self.host.debug_cat:
+            self.log(f"\n{self.flows.to_string()}")
 
-            revised_slots = []
-            skip_flag = False
-            for i, x in enumerate(zip(new_slots[:-1], new_slots[1:])):
-
-                if (
-                    (int(x[0][1]) == self.inverter.charger_power)
-                    & (int(-x[1][1]) == self.inverter.inverter_power)
-                    & (x[1][0] - x[0][0] == pd.Timedelta("30min"))
-                ):
-                    skip_flag = True
-                    if log:
-                        self.log(
-                            f"  Skipping slots at {x[0][0].strftime(TIME_FORMAT)} ({x[0][1]}W) and {x[1][0].strftime(TIME_FORMAT)} ({x[1][1]}W)"
-                        )
-                elif skip_flag:
-                    skip_flag = False
-                else:
-                    revised_slots.append(x[0])
-                    if i == len(new_slots) - 2:
-                        revised_slots.append(x[1])
-
-            df = self.flows(
-                initial_soc,
-                static_flows,
-                slots=revised_slots,
-                merge=True,
-                prices=prices,
-                **kwargs,
+        while not done:
+            x = (
+                self.flows.loc[available]
+                .loc[self.flows["import"] < max_export_price]
+                .loc[self.flows["forced"] < self.inverter.charger_power]
+                .loc[self.flows["forced"] >= 0]
+                .copy()
             )
+            i += 1
+            done = i > a0
 
-            net_cost_opt_new = contract.net_cost(df)
-            if log:
-                self.log(f"  Net cost revised from {net_cost_opt:0.1f}p to {net_cost_opt_new:0.1f}p")
-            slots = revised_slots
-            df.index = pd.to_datetime(df.index)
-        return df
+            min_price = x["import"].min()
 
-    def _search_window(self, df: pd.DataFrame, available: pd.Series, max_slot):
-        x = df.loc[:max_slot].copy()
-        x = x[available.loc[:max_slot]]
-        x["countback"] = (x["soc_end"] >= 97).sum() - (x["soc_end"] >= 97).cumsum()
-        x = x[x["countback"] == 0]
-        x = x[x["forced"] < (self.inverter.charger_power)]
-        x = x[x["soc_end"] <= 97]
-        return x
+            # Add rounding to ensure matching (may not be needed)
+            x["import"] = x["import"].round(2)
+            min_price = min_price.round(2)
+
+            if len(x[x["import"] == min_price]) > 0:
+                start_window = x[x["import"] == min_price].index[0]
+                available.loc[start_window] = False
+                str_log = ""
+                str_log = f"{available.sum():>2d} Min import price {min_price:5.2f}p/kWh at {start_window.strftime(TIME_FORMAT)} {x.loc[start_window]['forced']:4.0f}W "
+
+                str_log += "  "
+                factor = 1
+
+                str_log += f"SOC: {x.loc[start_window]['soc']:5.1f}%->{x.loc[start_window]['soc_end']:5.1f}% "
+
+                if self.host.debug and "C" in self.host.debug_cat:
+                    self.log(
+                        f"SOC (before modelling Forced Charge): {x.loc[start_window]['soc']:5.1f}%->{x.loc[start_window]['soc_end']:5.1f}% "
+                    )
+
+                forced_charge = min(
+                    min(self.battery.max_charge_power, self.inverter.charger_power)
+                    - x["forced"].loc[start_window]
+                    - x["solar"].loc[start_window],
+                    ((100 - x["soc_end"].loc[start_window]) / 100 * self.battery.capacity) * 2 * factor,
+                )
+                if self.host.debug and "C" in self.host.debug_cat:
+                    self.log(f"Forced Charge = {forced_charge}")
+                slot = (
+                    start_window,
+                    forced_charge,
+                )
+
+                slots.append(slot)
+
+                self.calculate_flows(slots=slots)
+
+                if self.host.debug and "F" in self.host.debug_cat:
+                    self.log("self.flows after flows called = ")
+                    self.log(f"\n{self.flows.to_string()}")
+
+                net_cost = self.net_cost
+
+                str_log += f"Net: {net_cost:5.1f} "
+                if net_cost < best_cost - self.host.get_config("slot_threshold_p"):
+                    str_log += f"New SOC: {self.flows.loc[start_window]['soc']:5.1f}%->{self.flows.loc[start_window]['soc_end']:5.1f}% "
+                    str_log += f"Max export: {-self.flows['grid'].min():0.0f}W "
+                    best_cost = net_cost
+                    slots_added += 1
+                    if log:
+                        self.log(str_log)
+                else:
+                    # done = True
+                    slots = slots[:-1]
+                    self.calculate_flows(slots=slots)
+
+                done = available.sum() == 0
+            else:
+                done = True
+
+        cost_delta = best_cost - self.best_cost
+        str_log = f"Charge net cost delta:{(-cost_delta):5.1f}p"
+        if cost_delta > -self.host.get_config("pass_threshold_p"):
+            self.slots_added = 0
+            str_log += f": < Pass Threshold {self.host.get_config('pass_threshold_p'):0.1f}p => Slots Excluded"
+            self.calculate_flows(slots=self.slots)
+        else:
+            str_log += f": > Pass Threshold {self.host.get_config('pass_threshold_p'):0.1f}p => Slots Included"
+            self.slots = slots
+            self.slots_added = slots_added
+            self.best_cost = best_cost
+
+        if log:
+            self.log("")
+            self.log(str_log)
+
+    def _discharging(self, log=True):
+        # -----------
+        # Discharging
+        # -----------
+        slots = [slot for slot in self.slots]
+        best_cost = self.best_cost
+        slots_added = self.slots_added
+
+        # Check how many slots which aren't full are at an export price less than any import price:
+        min_import_price = self.flows["import"].min()
+        if log:
+            self.log("")
+            self.log("Forced Discharging")
+            self.log("------------------")
+            self.log("")
+
+        i = 0
+        available = (self.flows["export"] > min_import_price) & (self.flows["forced"] == 0)
+        a0 = available.sum()
+        if log:
+            self.log(f"{available.sum()} slots have an export price greater than the min import price")
+        done = available.sum() == 0
+
+        while not done:
+            x = self.flows[available].copy()
+            i += 1
+            done = i > a0
+            max_price = x["export"].max()
+
+            if len(x[x["export"] == max_price]) > 0:
+                # self.log("Entered routine successfully")
+                start_window = x[x["export"] == max_price].index[0]
+                available.loc[start_window] = False
+                str_log = f"{available.sum():>2d} Max export price {max_price:5.2f}p/kWh at {start_window.strftime(TIME_FORMAT)} "
+                str_log += "  "
+
+                factor = 1
+                str_log += f"SOC: {x.loc[start_window]['soc']:5.1f}%->{x.loc[start_window]['soc_end']:5.1f}% "
+
+                slot = (
+                    start_window,
+                    -min(
+                        min(
+                            self.battery.max_discharge_power,
+                            self.inverter.charger_power,
+                        )
+                        - x["solar"].loc[start_window],
+                        ((x["soc_end"].loc[start_window] - self.battery.max_dod) / 100 * self.battery.capacity)
+                        * 2
+                        * factor,
+                    ),
+                )
+
+                slots.append(slot)
+
+                self.calculate_flows(slots=slots)
+
+                if self.host.debug and "F" in self.host.debug_cat:
+                    self.log("self.flows after flows called = ")
+                    self.log(f"\n{self.flows.to_string()}")
+
+                net_cost = self.net_cost
+
+                str_log += f"Net: {net_cost:5.1f} "
+                if net_cost < best_cost - self.host.get_config("slot_threshold_p"):
+                    str_log += f"New SOC: {self.flows.loc[start_window]['soc']:5.1f}%->{self.flows.loc[start_window]['soc_end']:5.1f}% "
+                    str_log += f"Max export: {-self.flows['grid'].min():0.0f}W "
+                    best_cost = net_cost
+                    slots_added += 1
+                    self.log(str_log)
+                else:
+                    # done = True
+                    slots = slots[:-1]
+                    self.calculate_flows(slots=slots)
+            else:
+                done = True
+
+        cost_delta = best_cost - self.best_cost
+        str_log = f"Discharge net cost delta:{(-cost_delta):5.1f}p"
+        if cost_delta > -self.host.get_config("discharge_threshold_p"):
+            str_log += (
+                f": < Discharge threshold ({self.host.get_config('discharge_threshold_p'):0.1f}p) => Slots excluded"
+            )
+        else:
+            str_log += (
+                f": > Discharge Threshold ({self.host.get_config('discharge_threshold_p'):0.1f}p) => Slots included"
+            )
+            self.slots = slots
+            self.slots_added = slots_added
+            self.best_cost = best_cost
+
+        if log:
+            self.log("")
+            self.log(str_log)
 
 
 # %%

@@ -1,6 +1,7 @@
-import pandas as pd
-import time
 import json
+import time
+
+import pandas as pd
 
 TIMEFORMAT = "%H:%M"
 INVERTER_DEFS = {

@@ -1,13 +1,14 @@
 # %%
+import base64
 import hashlib
 import hmac
-import base64
 import json
 import re
-import requests
-from http import HTTPStatus
 from datetime import datetime, timezone
+from http import HTTPStatus
+
 import pandas as pd
+import requests
 
 # def getInverterList(config):
 #     body = getBody(stationId=config['plantId'])
@@ -72,7 +73,11 @@ class SolisCloud:
         date = now.strftime("%a, %d %b %Y %H:%M:%S GMT")
 
         encrypt_str = "POST" + "\n" + content_md5 + "\n" + content_type + "\n" + date + "\n" + canonicalized_resource
-        hmac_obj = hmac.new(self.key_secret.encode("utf-8"), msg=encrypt_str.encode("utf-8"), digestmod=hashlib.sha1)
+        hmac_obj = hmac.new(
+            self.key_secret.encode("utf-8"),
+            msg=encrypt_str.encode("utf-8"),
+            digestmod=hashlib.sha1,
+        )
         sign = base64.b64encode(hmac_obj.digest())
         authorization = "API " + self.key_id + ":" + sign.decode("utf-8")
 
@@ -227,7 +232,7 @@ sc.set_timer("charge", pd.Timestamp("00:50"), pd.Timestamp("01:00"), 3000)
 # %%
 sc.set_mode_switch(35)
 # %%
-r=sc.set_code(696, 3600)
+r = sc.set_code(696, 3600)
 # %%
 
 # %%

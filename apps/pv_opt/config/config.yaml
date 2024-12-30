@@ -28,7 +28,7 @@ pv_opt:
   # ========================================
 
   # If true the current config in HA will be over-written with that in the config.yaml.
-  overwrite_ha_on_restart: true
+  overwrite_ha_on_restart: false
   list_entities: true
 
   # If true the personal data will be redacted from the log files.

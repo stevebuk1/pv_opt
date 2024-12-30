@@ -1,0 +1,49 @@
+name: Auto Release for Main Branch
+
+on:
+  push:
+    branches:
+      - main  # Trigger on pushes to main (e.g., after a PR is merged)
+  pull_request_review:
+    types:
+      - submitted  # Trigger when a review is submitted
+
+jobs:
+  publish-release:
+    name: Publish Release
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step 1: Checkout the repository
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      # Step 2: Extract Version from `pv_opt.py`
+      - name: Extract Version
+        id: extract_version
+        run: |
+          # Extract the VERSION variable from pv_opt.py
+          VERSION=$(grep -oP '(?<=^VERSION = ")[^"]+' apps/pv_opt/pv_opt.py)
+          if [ -z "$VERSION" ]; then
+            echo "Error: VERSION not found in apps/pv_opt/pv_opt.py"
+            exit 1
+          fi
+          echo "VERSION=$VERSION"
+          echo "version=$VERSION" >> $GITHUB_ENV  # Save to environment file
+
+      # Step 3: Create GitHub Release
+      - name: Create GitHub Release
+        if: |
+          github.event_name == 'push' || 
+          (github.event_name == 'pull_request_review' && github.event.review.state == 'approved')
+        uses: actions/create-release@v1
+        with:
+          tag_name: "v${{ env.version }}"
+          release_name: "Release v${{ env.version }}"
+          body: |
+            ## Changes
+            This release was automatically generated.
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
