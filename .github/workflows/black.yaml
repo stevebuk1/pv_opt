@@ -1,0 +1,132 @@
+name: Auto-format and Validate Version
+
+on:
+  pull_request:
+
+jobs:
+  auto-format:
+    name: Auto-format Code
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step 1: Checkout the repository
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      # Step 2: Set up Python environment
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      # Step 3: Install tools (black and isort)
+      - name: Install Tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install black isort
+
+      # Step 4: Run black and isort to format the code
+      - name: Format Code with Black and isort
+        run: |
+          black --line-length=119 .
+          isort --profile="black" .
+
+      # Step 5: Commit Formatting Changes
+      - name: Commit Formatting Changes
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add .
+          if git diff --cached --quiet; then
+            echo "No formatting changes to commit."
+            exit 0
+          fi
+          git commit -m "Auto-format code with Black and isort"
+          git push origin HEAD
+
+  validate-version:
+    name: Validate Version
+    runs-on: ubuntu-latest
+    needs: auto-format
+    if: github.base_ref == 'main'
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Skip Validation for Non-patch/dev Branches
+        run: |
+          if [[ "$GITHUB_HEAD_REF" != patch* && "$GITHUB_HEAD_REF" != dev* ]]; then
+            echo "Skipping validation for non-patch/dev branch."
+            exit 0
+          fi
+
+      - name: Get Latest Tag
+        id: get_latest_tag
+        run: |
+          LATEST_TAG=$(git describe --tags --abbrev=0)
+          if [ -z "$LATEST_TAG" ]; then
+            echo "Error: No tags found in the repository." >&2
+            exit 1
+          fi
+          VERSION=$(echo "$LATEST_TAG" | sed -E 's/^v?([0-9]+\.[0-9]+\.[0-9]+)$/\1/')
+          echo "tag_version=$VERSION" >> $GITHUB_ENV
+
+      - name: Get VERSION from Current Branch
+        id: get_patch_version
+        run: |
+          VERSION=$(grep -m 1 -oP '(?<=^VERSION = ")[^"]+' apps/pv_opt/pv_opt.py)
+          if [ -z "$VERSION" ]; then
+            echo "Error: VERSION not found in apps/pv_opt/pv_opt.py on source branch." >&2
+            exit 1
+          fi
+          echo "patch_version=$VERSION" >> $GITHUB_ENV
+
+      - name: Validate or Fix Version Increment
+        id: validate_or_fix_version
+        run: |
+          patch_version=$patch_version
+          tag_version=$tag_version
+
+          tag_major=$(echo "$tag_version" | awk -F '.' '{print $1}')
+          tag_minor=$(echo "$tag_version" | awk -F '.' '{print $2}')
+          tag_patch=$(echo "$tag_version" | awk -F '.' '{print $3}')
+
+          if [[ "$GITHUB_HEAD_REF" == patch* ]]; then
+            new_patch_version="$tag_major.$tag_minor.$((tag_patch + 1))"
+          elif [[ "$GITHUB_HEAD_REF" == dev* ]]; then
+            new_patch_version="$tag_major.$((tag_minor + 1)).0"
+          else
+            echo "Error: Unsupported source branch type." >&2
+            exit 1
+          fi
+
+          sed -i "s/^VERSION = \".*\"/VERSION = \"$new_patch_version\"/" apps/pv_opt/pv_opt.py
+          echo "Corrected version to $new_patch_version."
+          echo "new_patch_version=$new_patch_version" >> $GITHUB_ENV
+          echo "VERSION_CHANGED=true" >> $GITHUB_ENV
+
+      - name: Update README.md version
+        run: |
+          new_patch_version=${{ env.new_patch_version }}
+          sed -i "1s/v[0-9]*\.[0-9]*\.[0-9]*/v$new_patch_version/" README.md
+
+      - name: Commit Version Changes
+        if: env.VERSION_CHANGED == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -B $GITHUB_HEAD_REF
+          git add apps/pv_opt/pv_opt.py README.md
+          if git diff --cached --quiet; then
+            echo "No version changes to commit."
+            exit 0
+          fi
+          git commit -m "Update version to ${{ env.new_patch_version }}"
+          git push origin $GITHUB_HEAD_REF

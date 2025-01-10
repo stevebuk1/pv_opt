@@ -1,5 +1,6 @@
-import pandas as pd
 import time
+
+import pandas as pd
 
 TIMEFORMAT = "%H:%M"
 LIMITS = ["start", "end"]
@@ -78,6 +79,11 @@ class InverterController:
                 else:
                     conf[item] = defs[item]
 
+    @property
+    def timed_mode(self):
+        return True
+
+    @property
     def is_online(self):
         entity_id = INVERTER_DEFS[self.type].get("online", (None, None))
         if entity_id is not None:
@@ -117,7 +123,14 @@ class InverterController:
                     current = abs(round(power / voltage, 1))
                     current = min(current, self.host.get_config("battery_current_limit_amps"))
 
-                    self.log(f"Power {power:0.0f} = {current:0.1f}A at {self.host.get_config('battery_voltage')}V")
+                    # If power is exactly "1" then this is a car hold slot, to prevent sleep, set to 1A
+                    if power == 1:
+                        current = 1
+                        self.log("Power = 1W (hold slot). Setting current to 1A (to prevent sleep SOC being reached)")
+                        self.log("")
+                    else:
+                        self.log(f"Power {power:0.0f} = {current:0.1f}A at {self.host.get_config('battery_voltage')}V")
+
                     changed, written = self.host.write_and_poll_value(
                         entity_id=entity_id, value=current, tolerance=1, verbose=True
                     )
@@ -154,6 +167,12 @@ class InverterController:
                 self.host.set_select("charge_end_time_1", end)
                 self.host.set_select("charge_start_time_2", start)
                 self.host.set_select("charge_end_time_2", end)
+                # Added to reset current back to 20A after any charging operations.
+                current = 20
+                entity_id = self.host.config[f"id_max_charge_current"]
+                changed, written = self.host.write_and_poll_value(
+                    entity_id=entity_id, value=current, tolerance=1, verbose=True
+                )
 
         else:
             self._unknown_inverter()
@@ -229,7 +248,8 @@ class InverterController:
         if self.type == "SOLAX_X1":
             return {
                 limit: pd.Timestamp(
-                    self.host.get_state_retry(entity_id=self.host.config[f"id_charge_{limit}_time_1"]), tz=self.tz
+                    self.host.get_state_retry(entity_id=self.host.config[f"id_charge_{limit}_time_1"]),
+                    tz=self.tz,
                 )
                 for limit in LIMITS
             } | {"current": self.host.get_state_retry(entity_id=self.host.config[f"id_max_charge_current"])}

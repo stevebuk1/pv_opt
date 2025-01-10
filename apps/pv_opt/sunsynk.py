@@ -1,6 +1,7 @@
-import pandas as pd
-import time
 import json
+import time
+
+import pandas as pd
 
 TIMEFORMAT = "%H:%M"
 INVERTER_DEFS = {
@@ -114,6 +115,7 @@ class InverterController:
                 else:
                     conf[item] = defs[item]
 
+    @property
     def is_online(self):
         entity_id = INVERTER_DEFS[self.type].get("online", (None, None))
         if entity_id is not None:

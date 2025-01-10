@@ -1,3 +1,11 @@
+This contains code from the following projects:
+
+[solis_control](https://github.com/stevegal/solis_control)
+
+It has been modified by fboundy. The original licenses for all above projects can be found in the
+[licenses folder](https://github.com/fboundy/pv_opt/licenses). 
+
+
 MIT License
 
 Copyright (c) 2023 fboundy
@@ -19,3 +27,4 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+

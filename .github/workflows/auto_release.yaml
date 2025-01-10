@@ -1,0 +1,87 @@
+name: Auto Release for Main Branch
+
+on:
+  push:
+    branches:
+      - main  # Trigger on pushes to main (e.g., after a PR is merged)
+
+jobs:
+  publish-release:
+    name: Publish Release
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step 1: Checkout the repository
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # Fetch all history for all branches and tags
+
+      # Step 2: Debug Tag Visibility
+      - name: List Tags
+        run: |
+          echo "Listing all available tags:"
+          git tag
+
+      # Step 3: Extract Version from `pv_opt.py`
+      - name: Extract Version
+        id: extract_version
+        run: |
+          echo "Extracting version from apps/pv_opt/pv_opt.py"
+          # Extract the VERSION variable from pv_opt.py
+          VERSION=$(grep -oP '(?<=^VERSION = ")[^"]+' apps/pv_opt/pv_opt.py)
+          if [ -z "$VERSION" ]; then
+            echo "Error: VERSION not found in apps/pv_opt/pv_opt.py"
+            exit 1
+          fi
+          echo "Extracted VERSION=$VERSION"
+          echo "version=$VERSION" >> $GITHUB_ENV  # Save to environment file
+
+      # Step 4: Generate Release Notes
+      - name: Generate Release Notes
+        id: generate_notes
+        run: |
+          echo "Generating release notes..."
+          # Get the latest tag before this release
+          LAST_TAG=$(git describe --tags --abbrev=0 --match "v*" 2>/dev/null)
+
+          # If no tags exist, use the initial commit hash
+          if [ -z "$LAST_TAG" ]; then
+            echo "No previous tags found. Using initial commit as starting point."
+            LAST_TAG=$(git rev-list --max-parents=0 HEAD)
+          else
+            echo "Found latest tag: $LAST_TAG"
+          fi
+
+          # Gather commit messages since the last tag
+          echo "Collecting commits since $LAST_TAG..."
+          COMMITS=$(git log ${LAST_TAG}..HEAD --pretty=format:"- %s (%h)")
+
+          # Format the release notes
+          RELEASE_NOTES="## Changes\n"
+          if [ -z "$COMMITS" ]; then
+            echo "No significant changes found."
+            RELEASE_NOTES+="No significant changes."
+          else
+            echo "Found commits:"
+            echo "${COMMITS}"
+            RELEASE_NOTES+="${COMMITS}"
+          fi
+
+          # Output the release notes
+          echo "Release notes generated:"\n"${RELEASE_NOTES}"
+          echo "release_notes<<EOF" >> $GITHUB_ENV
+          echo "${RELEASE_NOTES}" >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
+      # Step 5: Create GitHub Release
+      - name: Create GitHub Release
+        uses: actions/create-release@v1
+        with:
+          tag_name: "v${{ env.version }}"
+          release_name: "Release v${{ env.version }}"
+          body: ${{ env.release_notes }}
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

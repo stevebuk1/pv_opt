@@ -1,4 +1,5 @@
-# PV Opt: Home Assistant Solar/Battery Optimiser v3.18.0 Beta-15
+# PV Opt: Home Assistant Solar/Battery Optimiser v4.0.6
+
 
 Solar / Battery Charging Optimisation for Home Assistant. This appDaemon application attempts to optimise charging and discharging of a home solar/battery system to minimise cost electricity cost on a daily basis using freely available solar forecast data from SolCast. This is particularly beneficial for Octopus Agile but is also benefeficial for other time-of-use tariffs such as Octopus Flux or simple Economy 7.
 
@@ -6,9 +7,11 @@ The application will integrate fully with Solis inverters which are controlled u
 
 - [Home Assistant Solax Modbus Integration](https://github.com/wills106/homeassistant-solax-modbus) 
 - [Home Assistant Core Modbus Integration](https://github.com/fboundy/ha_solis_modbus) 
-- [Home Assistant Solarman Integration](https://github.com/StephanJoubert/home_assistant_solarman) 
-- [Home Assistant Solis Sensor Integration](https://github.com/hultenvp/solis-sensor) (read-only mode)
-- [Home Assistant Solis Control Integration](https://github.com/stevegal/solis_control) (allows inverter control via solis_cloud and HA automations)
+- [Home Assistant Solis Sensor Integration](https://github.com/hultenvp/solis-sensor) 
+- [Home Assistant Solarman Integration](https://github.com/davidrapan/ha-solarman) (1)
+
+(1) https://github.com/StephanJoubert/home_assistant_solarman appears to be no longer maintained so has been replaced with
+https://github.com/davidrapan/ha-solarman. This should be used for new installs for PvOpt v3.17.0 onwards.
 
 Once installed it should require miminal configuration. Other inverters/integrations can be added if required or can be controlled indirectly using automations.
 
@@ -59,7 +62,8 @@ This app is not stand-alone it requires the following:
 
 <h3>3. Install the Solcast PV Solar Integration (v4.1.x)</h3>
 
-1. Install the integation: https://github.com/BJReplay/ha-solcast-solar
+
+1. Install the integation via HACS: https://github.com/BJReplay/ha-solcast-solar
 2. Add the Integration via Settings: http://homeassistant.local:8123/config/integrations/dashboard
 3. Once installed configure using your Solcast API Key from (1) . 
 4. Set up an automation to update according to your desired schedule. Once every 3 hours will work.
@@ -73,9 +77,8 @@ This excellent integration will pull Octopus Price data in to Home Assistant. Pv
 
 <h3>5. Install the Integration to Control Your Inverter</h3>
 
-At present this app only works directly with Solis hybrid inverters using either the Solax Modbus integration (https://github.com/wills106/homeassistant-solax-modbus), the HA Core Modbus as described here: https://github.com/fboundy/ha_solis_modbus, or combining the [Solis-Senor](https://github.com/hultenvp/solis-sensor) and [Solis-Control](https://github.com/hultenvp/solis_control) integrations. 
-
-Support for the Solarman integration (https://github.com/StephanJoubert/home_assistant_solarman) is in test. At the moment writing to the inverter is disabled pending further testing by Solarman users.
+At present this app only works directly with Solis hybrid inverters using either the Solax Modbus integration (https://github.com/wills106/homeassistant-solax-modbus) or the HA Core Modbus as described here: https://github.com/fboundy/ha_solis_modbus, or combining the [Solis-Senor](https://github.com/hultenvp/solis-sensor) and [Solis-Control](https://github.com/hultenvp/solis_control) integrations.  
+Support for the Solarman integrations (https://github.com/StephanJoubert/home_assistant_solarman and https://github.com/davidrapan/ha-solarman) are in test. 
 
 <h4>Solax Modbus:</h4>
 
@@ -107,7 +110,14 @@ Follow the Github instruction here: https://github.com/hultenvp/solis_control
 
 <h4>Solarman</h4>
 
-Follow the Github instructions here: https://github.com/StephanJoubert/home_assistant_solarman 
+Follow the Github instructions here: (https://github.com/davidrapan/ha-solarman) 
+
+For Solis Inverters, replace existing Solis_Hybrid.yaml with this one:
+
+https://github.com/stevebuk1/pv_opt/blob/patch2/apps/pv_opt/solis_hybrid.yaml
+
+Note:  installs using https://github.com/StephanJoubert/home_assistant_solarman have writes to the inverter disabled. For full inverter control, reinstall using the Solarman repo 
+above.
 
 <h3>6. Install the MQTT Integraion in Home Assistant</h3>
 
@@ -202,14 +212,16 @@ And add the `client_user` and `client_password` keys to `secrets.yaml` like this
           pv_opt_log:
             name: PV_Opt
             filename: /share/logs/pv_opt.log
+            log_generations: 9
+            log_size: 10000000
             date_format: '%H:%M:%S'      
             format: '{asctime} {levelname:>8s}: {message}'
 
-4. Open the AppDaemon Add-On via Settings: http://homeassistant.local:8123/hassio/addon/a0d7b954_appdaemon/info
+5. Open the AppDaemon Add-On via Settings: http://homeassistant.local:8123/hassio/addon/a0d7b954_appdaemon/info
 
-5. Click on <b>Configuration</b> at the top
+6. Click on <b>Configuration</b> at the top
 
-6. Click the 3 dots and <b>Edit in YAML</b> to add `pandas` and `numpy` as Python packages. Note that `numpy` has to be set to version `1.26.4` due to an unresolved compatability issue between Home Assistant and `2.0.0`:
+7. Click the 3 dots and <b>Edit in YAML</b> to add `pandas` and `numpy` as Python packages. Note that `numpy` has to be set to version `1.26.4` due to an unresolved compatability issue between Home Assistant and `2.0.0`:
 
    ```
    init_commands: []
@@ -220,9 +232,9 @@ And add the `client_user` and `client_password` keys to `secrets.yaml` like this
 
    ```
 
-7. Go back to the <b>Info</b> page and click on <b>Start</b>
+8. Go back to the <b>Info</b> page and click on <b>Start</b>
 
-8. Click on <b>Log</b>. Appdaemon will download and install numpy and pandas. Click on <b>Refresh</b> until you see:
+9. Click on <b>Log</b>. Appdaemon will download and install numpy and pandas. Click on <b>Refresh</b> until you see:
 
    ```
     s6-rc: info: service init-appdaemon successfully started
@@ -233,7 +245,7 @@ And add the `client_user` and `client_password` keys to `secrets.yaml` like this
     s6-rc: info: service legacy-services successfully started
    ```
 
-9. Either click on `Info` followed by `OPEN WEB UI` and then `Logs` or open your `main_log` file from the location specified in step (3) above. You should see:
+10. Either click on `Info` followed by `OPEN WEB UI` and then `Logs` or open your `main_log` file from the location specified in step (3) above. You should see:
 
     ```
     13:16:24 INFO AppDaemon: AppDaemon Version 4.4.2 starting
@@ -287,7 +299,7 @@ That's it. AppDaemon is up and running. There is futher documentation for the on
 Once downloaded AppDaemon should see the app and attempt to load it using the default configuration. Go back to the AppDaemon logs and this time open pv_opt_log. You should see:
 
   ```
-  16:53:23     INFO: ******************* PV Opt v3.0.1 *******************
+  16:53:23     INFO: ******************* PV Opt v3.19.0-Beta-17 *******************
   16:53:23     INFO: 
   16:53:23     INFO: Time Zone Offset: 0.0 minutes
   16:53:23     INFO: Reading arguments from YAML:
@@ -328,135 +340,31 @@ Restarts between Home Assistant and Add-Ons are not synchronised so it is helpfu
           addon: a0d7b954_appdaemon
     mode: single
 
-<h3>14. For Solis-Control: Add Automation to Control Inverter</h3>
-
-If you're using the solis-sensor and solis_control integrations through Solis Cloud, you'll need to add the following automation which will send the messages to Solis Cloud in order to control your inverter.  N.B: It's important that you've set up the solis_control integration correctly and requested API access via Solis Cloud Technical Support.
-
-```
-alias: "Solis: Use PV_Opt"
-description: "Use the output of pv_opt to control your Solis inverter via Solis Cloud."
-trigger:
-  - platform: state
-    entity_id:
-      - sensor.pvopt_status
-    to: Idle (Read Only)
-    for:
-      hours: 0
-      minutes: 0
-      seconds: 5
-    enabled: false
-  - platform: time_pattern
-    hours: /1
-    minutes: "00"
-    seconds: "05"
-  - platform: time_pattern
-    hours: /1
-    minutes: "30"
-    seconds: "05"
-  - platform: state
-    entity_id:
-      - sensor.pvopt_charge_start
-condition: []
-action:
-  - if:
-      - condition: template
-        value_template: >-
-          {{ states('sensor.pvopt_charge_start') | as_datetime | as_local <=
-          today_at("23:59") }}
-    then:
-      - data:
-          days:
-            - chargeCurrent: >-
-                {% set direction = float(states('sensor.pvopt_charge_current'),
-                0.0) %} {% set chargeAmps = min((max(direction, 0.0) |
-                round(method='floor')), 50)%} {{ chargeAmps }}
-              dischargeCurrent: >-
-                {% set direction = float(states('sensor.pvopt_charge_current'),
-                0.0) %} {% set dischargeAmps = min((min(direction, 0.0) | abs |
-                round(method='floor')), 50) %} {{ dischargeAmps }}
-              chargeStartTime: >-
-                {% set direction = float(states('sensor.pvopt_charge_current'),
-                0.0) %} {% set startChargeTime = '00:00' %} {% if direction >=
-                0.0 -%}
-                  {% set startChargeTime = (as_local(as_datetime(states('sensor.pvopt_charge_start')))|string)[11:16] %}
-                {%- endif %} {{ startChargeTime }}
-              chargeEndTime: >-
-                {% set direction = float(states('sensor.pvopt_charge_current'),
-                0.0) %} {% set endChargeTime = '00:00' %} {% if direction >= 0.0
-                -%}
-                  {% set endChargeTime = (as_local(as_datetime(states('sensor.pvopt_charge_end')))|string)[11:16] %}
-                {%- endif %} {{ endChargeTime }}
-              dischargeStartTime: >-
-                {% set direction = float(states('sensor.pvopt_charge_current'),
-                0.0) %} {% set startDischargeTime = '00:00' %} {% if direction <
-                0.0 -%}
-                  {% set startDischargeTime = (as_local(as_datetime(states('sensor.pvopt_charge_start')))|string)[11:16] %}
-                {%- endif %} {{ startDischargeTime }}
-              dischargeEndTime: >-
-                {% set direction = float(states('sensor.pvopt_charge_current'),
-                0.0) %} {% set endDischargeTime = '00:00' %} {% if direction <
-                0.0 -%}
-                  {% set endDischargeTime = (as_local(as_datetime(states('sensor.pvopt_charge_end')))|string)[11:16] %}
-                {%- endif %} {{ endDischargeTime }}
-            - chargeCurrent: "0"
-              dischargeCurrent: "0"
-              chargeStartTime: "00:00"
-              chargeEndTime: "00:00"
-              dischargeStartTime: "00:00"
-              dischargeEndTime: "00:00"
-            - chargeCurrent: "0"
-              dischargeCurrent: "0"
-              chargeStartTime: "00:00"
-              chargeEndTime: "00:00"
-              dischargeStartTime: "00:00"
-              dischargeEndTime: "00:00"
-          config:
-            secret: <<Your secret without quotes>>
-            key_id: "<<Your key id with quotes>>"
-            username: <<Your username without quotes>>
-            password: <<Your password without quotes>>
-            plantId: "<<Your plant_id with quotes>>"
-        action: pyscript.solis_control
-    else:
-      - data:
-          days:
-            - chargeCurrent: "0"
-              dischargeCurrent: "0"
-              chargeStartTime: "00:00"
-              chargeEndTime: "00:00"
-              dischargeStartTime: "00:00"
-              dischargeEndTime: "00:00"
-            - chargeCurrent: "0"
-              dischargeCurrent: "0"
-              chargeStartTime: "00:00"
-              chargeEndTime: "00:00"
-              dischargeStartTime: "00:00"
-              dischargeEndTime: "00:00"
-            - chargeCurrent: "0"
-              dischargeCurrent: "0"
-              chargeStartTime: "00:00"
-              chargeEndTime: "00:00"
-              dischargeStartTime: "00:00"
-              dischargeEndTime: "00:00"
-          config:
-            secret: <<Your secret without quotes>>
-            key_id: "<<Your key id with quotes>>"
-            username: <<Your username without quotes>>
-            password: <<Your password without quotes>>
-            plantId: "<<Your plant_id with quotes>>"
-        action: pyscript.solis_control
-mode: single
-```
-
 
 <h2>Configuration</h2>
 
 If you have the Solcast, Octopus and Solax integrations set up as specified above, there should be minimal configuration required. 
 
-If you are running a different integration or inverter brand you will need to edit the `config.yaml` file to select the correct `inverter_type`. You may also need to change the `device_name`. This is the name given to your inverter by your integration. The default is `solis` but this can also be changed in `config.yaml`.
+If you are running a different integration or inverter brand you will need to edit the `config.yaml` file in the appropriate section to select the correct `inverter_type`. 
+You may also need to change the `device_name`. This is the name given to your inverter by your integration. The default is `solis` but this can also be changed in `config.yaml`.
+
+E.g:
+
+For the Core Modbus Integration:
 
     inverter_type: SOLIS_CORE_MODBUS
     device_name: solis
+
+For the Solarman integration (legacy installs using https://github.com/StephanJoubert/home_assistant_solarman)
+
+    inverter_type: SOLIS_SOLARMAN
+    device_name: solis
+
+For the Solarman integration (new installs using https://github.com/davidrapan/ha-solarman)
+
+    inverter_type: SOLIS_SOLARMAN_V2
+    device_name: solis
+    
 
 The `config.yaml` file also includes all the other configuration used by PV Opt. If you are using the default setup you shouldn't need to change this but you can edit anything by un-commenting the relevant line in the file. The configuration is grouped by inverter/integration and should be self-explanatory. Once PV Opt is installed the config is stored within entities in Home Assistant. It you want these over-ritten please ensure that `overwrite_ha_on_restart` is set to `true`:
 
@@ -507,16 +415,18 @@ These parameters will define how PV Opt estimates daily consumption:
 
 | Parameter | Units | Entity | Default | Description |
 |:--|:--:| :-- | :--:|:--|
-| EV Charger | None / Zappi / Other | `select.pvopt_ev_charger` | None | Set EV Charger Type. At the current release, only 'Zappi' is supported, 'Other' is unused and is for a future release. Note: Zappi support requires the MyEnergi integration to be installed. |
-| EV Part of House Load | On / Off | `switch.pvopt_ev_part_of_house_load` | On | Prevents house battery discharge when EV is charging. If your EV Charger is wired so it is seen as part of the house load, then it will discharge to the EV when the EV is charging. Setting this to On prevents this, as well as ensuring that any EV consumption is removed from Consumption History. If your Zappi is wired on its own Henley block and thus outside of what the inverter CT clamp will measure, then set this to Off. Note: PV Opt does not support allowing the house battery to be used to charge the car. |
-| Car Charge Plan | kWh | `switch.control_car_charging` | Off | Toggle Car Plan generation On/Off. For users on Agile, setitng to On will generate candidate car charging plan on each optimiser run based on the settings below. The candidate plan is made active upon car plugin, or via Dashbaord command (see "Transfer Car Charge Plan" below). The active car charging plan is output on binary_sensor.pvopt_car_charging_slot for use in HA automations. An example HA automation to control a Zappi charger is included at XXXXXXX. Intelligent Octopus Go users should set this to Off. If Off, the rest of the EV parameters below have no effect. |
-| Transfer Car Charge Plan | On/Off | `switch.transfer_car_charge_plan` | 30 | Make Candidate Car Charging Plan the active plan. Useful if adjusting any of the below paramaters after the car has been plugged in. This will automatically be set back to Off after the plan is transferred. This ensures any external HA automations used to auto-calculate "Car Charge to Add" based on car SOC don't corrupt the car charging plan once the car starts charging. |
-| EV Charger Power | W | `number.pvopt_ev_charger_power_watts` | 7000 | Set EV charger power. |
-| EV Batttery Capacity | kWh | `number.pvopt_ev_battery_capacity_kwh` | 60 | Set EV Battery Capacity.   |
-| Car Ready  By | Time | `select.car_charging_ready_by` | 06:30 | Set Time for when the Car is to be ready by.   |
-| Car Charge to Add | % | `number.ev_charge_target_percent` | 30 | % of 'charge to add' to the car. I.e if your car is at 40% and want it to be charged to 90% then set this to 50%.  |
-| Car Charge Slot max price | p | `number.max_ev_price_p` | 30 | Maximum 1/2 hour slot price per kWh in pence added to the candidate car charging plan. Disable by setting to 0. Note: setting a low value may mean the car will not charge to the required SOC if overnight Agile rates are high. |
-| Car Charge Efficiency | % | `number.ev_charger_efficiency_percent` | 92 | Charging Efficiency for EV Charger/Car. 92% is average for most cars/chargers but adjust if the car is consistently undercharging or overcharging against its target. |
+| EV Charger| None / Zappi / Other | `select.pvopt_ev_charger` | None | Set EV Charger Type. At the current release, only 'Zappi' is supported, 'Other' is unused and is for a future release. Note: Zappi support requires the MyEnergi integration to be installed. |
+| EV Part of House Load| On / Off | `switch.pvopt_ev_part_of_house_load` | On | Prevents house battery discharge when EV is charging. If your EV Charger is wired so it is seen as part of the house load, then it will discharge to the EV when the EV is charging. Setting this to On prevents this, as well as ensuring that any EV consumption is removed from Consumption History. If your Zappi is wired on its own Henley block and thus outside of what the inverter CT clamp will measure, then set this to Off. Note: PV Opt does not support allowing the house battery to be used to charge the car. |
+| Car Charge Plan| kWh | `switch.control_car_charging` | Off | Toggle Car Plan generation On/Off. For users on Agile, setitng to On will generate candidate car charging plan on each optimiser run based on the settings below. The candidate plan is made active upon car plugin, or via Dashbaord command (see "Transfer Car Charge Plan" below). The active car charging plan is output live on binary_sensor.pvopt_car_charging_slot for use in HA automations to switch the EV charger on and off. An example HA automation to control a Zappi charger is included at XXXXXXX. Intelligent Octopus Go users should set this to Off. If Off, the rest of the EV parameters below have no effect. |
+| Transfer Car Charge Plan| On/Off | `switch.transfer_car_charge_plan` | 30 | Make Candidate Car Charging Plan the active plan. Useful if adjusting any of the below paramaters after the car has been plugged in. This will automatically be set back to Off after the plan is transferred. This ensures any external HA automations used to auto-calculate "Car Charge to Add" based on car SOC don't corrupt the car charging plan once the car starts charging. |
+| EV Charger Power| W | `number.pvopt_ev_charger_power_watts` | 7000 | Set EV charger power. |
+| EV Batttery Capacity| kWh | `number.pvopt_ev_battery_capacity_kwh` | 60 | Set EV Battery Capacity.   |
+| Car Ready By| Time | `select.car_charging_ready_by` | 06:30 | Set Time for when the Car is to be ready by.   |
+| Car Charge to Add| % | `number.ev_charge_target_percent` | 30 | % of 'charge to add' to the car. I.e if your car is at 40% and want it to be charged to 90% then set this to 50%.  |
+| Car Charge Slot max price| p | `number.max_ev_price_p` | 30 | Maximum 1/2 hour slot price per kWh in pence added to the candidate car charging plan. Disable by setting to 0. Note: setting a low value may mean the car will not charge to the required SOC if overnight Agile rates are high. |
+| Car Charge Efficiency| % | `number.ev_charger_efficiency_percent` | 92 | Charging Efficiency for EV Charger/Car. 92% is average for most cars/chargers but adjust if the car is consistently undercharging or overcharging against its target. |
+| Prevent Discharge| On/off | `switch.pvopt_prevent_discharge` | Off | Set to prevent house battery discharge. Clear to allow normal inverter use. Useful for house battery dicharge prevention when high loads are being used (EVs not otherwise coupled in to Pv_opt, showers etc). When set, does not affect the house battery charge plan. |
+| id_zappi_plug_status| `string` |    | Autodetected | In config.yaml, remap the autodeteted Zappi car plugin status entity to a named entity. If you have a single Zappi then this line should remain commented out. If you have multiple zappis then if required, change the entity name to the Zappi linked to IOG / load the Agile car charging plan. |
 
 <h3>Pricing Parameters</h3>
 These parameters set the price that PV Opt uses:
