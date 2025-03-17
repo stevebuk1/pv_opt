@@ -1,0 +1,221 @@
+views:
+  - theme: Backend-selected
+    title: PV Opt EV Charging Control
+    path: pv_opt
+    subview: false
+    type: custom:masonry-layout
+    layout:
+      max_cols: 4
+      reflow: true
+    icon: mdi:solar-power-variant
+    cards:
+      - type: custom:stack-in-card
+        title: Car Charging Controls and Settings
+        cards:
+          - type: entities
+            entities:
+              - entity: sensor.pvopt_status
+                name: Status
+                secondary_info: last-updated
+              - entity: switch.pvopt_control_car_charging
+                name: Enable Agile Car Charge Control
+          - type: markdown
+            content: <h3>Control Parameters
+          - type: conditional
+            conditions:
+              - condition: state
+                entity: switch.pvopt_control_car_charging
+                state: 'on'
+            card:
+              type: entities
+              entities:
+                - entity: select.pvopt_car_charging_ready_by1
+                  name: EV Ready By Time
+                - entity: number.pvopt_ev_charge_target_percent
+                  name: EV % to Add
+                - entity: number.pvopt_max_ev_price_p
+                  name: Ev Max Slot price (p)
+                - entity: switch.pvopt_transfer_car_charge_plan
+                  name: Transfer Candidate to Active
+                  icon: mdi:arrow-right-bold
+          - type: markdown
+            content: <h3>EV and Charger Settings
+          - type: conditional
+            conditions:
+              - condition: state
+                entity: switch.pvopt_control_car_charging
+                state: 'on'
+            card:
+              type: entities
+              entities:
+                - entity: number.pvopt_ev_charger_power_watts
+                  name: EV Charger Power
+                - entity: number.pvopt_ev_battery_capacity_kwh
+                  name: EV Battery Capacity
+                - entity: number.pvopt_ev_charger_efficiency_percent
+                  name: EV Charge Efficiency
+      - type: vertical-stack
+        cards:
+          - type: custom:bar-card
+            title: Status
+            entities:
+              - entity: sensor.solis_pv_total_power
+                unit_of_measurement: W
+                target: '{{states(''sensor.solcast_forecast_today'')}}'
+                name: Solar
+                max: 5000
+                icon: mdi:solar-power-variant
+              - entity: sensor.solis_house_load
+                name: Load
+                max: 5000
+              - entity: sensor.solis_battery_soc
+                name: SOC
+                max: 100
+                icon: mdi:battery
+              - entity: sensor.solis_grid_import_power
+                name: Import Power
+                max: 5000
+                min: 0
+              - entity: sensor.solis_grid_export_power
+                name: Export Power
+                max: 5000
+                min: 0
+              - entity: sensor.solis_battery_output_energy
+                name: House Battery Discharge
+                max: 5000
+                min: 0
+              - entity: sensor.solis_battery_input_energy
+                name: House Battery Charge
+                max: 5000
+                min: 0
+              - entity: sensor.myenergi_zappi_12027800_internal_load_ct1
+                name: EV Charge
+                max: 8000
+                min: 0
+          - type: entities
+            entities:
+              - entity: sensor.pvopt_candidate_car_slots
+                name: Candidate_Car_slots
+              - entity: sensor.pvopt_car_slots
+                name: Active_Car_slots
+              - entity: binary_sensor.pvopt_car_charging_slot
+              - entity: sensor.pvopt_car_windows
+                name: Active_Car_Windows
+      - type: vertical-stack
+        cards:
+          - type: conditional
+            conditions:
+              - condition: state
+                entity: select.pvopt_ev_charger
+                state: Zappi
+            card:
+              type: markdown
+              content: >
+
+
+                <h3><u> Active Car Charging Plan</u></h3>
+
+
+                | Start | | | End |||
+
+                |:--------|--|--|:-----------|--|--|{% for a in
+                state_attr('sensor.pvopt_car_windows', 'windows') %}
+
+                {% set tf = '%H:%M'%} | 
+                {{as_local(as_datetime(a['start'])).strftime(tf)}}    |||
+                {{as_local(as_datetime(a['end'])).strftime(tf)}} ||| |{%endfor%}
+
+
+                Charge to add =
+                {{'%8.2f'|format(state_attr('sensor.pvopt_car_windows','ev_total_charge')
+                | float)}} kWh
+
+                Charge to add  =
+                +{{'%3.0f'|format(state_attr('sensor.pvopt_car_windows','ev_percent_to_add')
+                | float)}}%
+
+                Total Cost  =
+                {{'%8.0f'|format(state_attr('sensor.pvopt_car_windows','ev_total_cost')
+                | float)}}p
+
+                {% set tf = '%d-%b %H:%M'%}
+
+                Active Plan Last updated = 
+                {{as_local(as_datetime(state_attr('sensor.pvopt_car_windows','ev_car_slots_last_loaded'))).strftime(tf)}}
+              title: Car Charging Plan (Windows)
+      - type: vertical-stack
+        cards:
+          - type: conditional
+            conditions:
+              - condition: state
+                entity: select.pvopt_ev_charger
+                state: Zappi
+            card:
+              type: markdown
+              content: >
+
+                <h3><u> Candidate Car Charging Plan</u></h3>
+
+
+                | Start | | | End |||       Energy  ||| Slot Price   |
+
+                |:--------|--|--|:-----------|--|--|:------------------:|--|--|:-----|{%
+                for a in state_attr('sensor.pvopt_candidate_car_slots',
+                'windows') %}
+
+                {% set tf = '%H:%M'%} | 
+                {{as_local(as_datetime(a['start_local'])).strftime(tf)}}    |||
+                {{as_local(as_datetime(a['end_local'])).strftime(tf)}} |||
+                {{a['charge_in_kwh'] | float | round(2)}}kWh ||| {{a['import'] |
+                float | round(2)}}p |{%endfor%}
+
+
+                Charge to add =
+                {{'%8.2f'|format(state_attr('sensor.pvopt_candidate_car_slots','ev_total_charge')
+                | float)}} kWh
+
+                Charge to add  =
+                +{{'%3.0f'|format(state_attr('sensor.pvopt_candidate_car_slots','ev_percent_to_add')
+                | float)}}%
+
+                Total Cost  =
+                {{'%8.0f'|format(state_attr('sensor.pvopt_candidate_car_slots','ev_total_cost')
+                | float)}}p
+
+
+
+                <h3><u> Active Car Charging Plan</u></h3>
+
+
+                | Start | | | End |||       Energy  ||| Price (p)   |
+
+                |:--------|--|--|:-----------|--|--|:------------------:|--|--|:-----|{%
+                for a in state_attr('sensor.pvopt_car_slots', 'windows') %}
+
+                {% set tf = '%H:%M'%} | 
+                {{as_local(as_datetime(a['start_local'])).strftime(tf)}}    |||
+                {{as_local(as_datetime(a['end_local'])).strftime(tf)}} |||
+                {{a['charge_in_kwh'] | float | round(2)}}kWh ||| {{a['import'] |
+                float | round(2)}}p |{%endfor%}
+
+
+                Charge to add =
+                {{'%8.2f'|format(state_attr('sensor.pvopt_car_slots','ev_total_charge')
+                | float)}} kWh
+
+                Charge to add  =
+                +{{'%3.0f'|format(state_attr('sensor.pvopt_car_slots','ev_percent_to_add')
+                | float)}}%
+
+                Total Cost  =
+                {{'%8.0f'|format(state_attr('sensor.pvopt_car_slots','ev_total_cost')
+                | float)}}p
+
+                {% set tf = '%d-%b %H:%M'%}
+
+                Active Plan Last updated = 
+                {{as_local(as_datetime(state_attr('sensor.pvopt_car_slots','ev_car_slots_last_loaded'))).strftime(tf)}}
+              title: Car Charging Plans (1/2 hour slots)
+      - type: entities
+        entities:
+          - entity: switch.pvopt_prevent_discharge

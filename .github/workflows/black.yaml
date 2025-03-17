@@ -38,13 +38,22 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Ensure you are on the correct branch
+          git checkout -B $GITHUB_HEAD_REF || git checkout -b new-branch-name
+
+          # Stage and commit changes
           git add .
           if git diff --cached --quiet; then
             echo "No formatting changes to commit."
             exit 0
           fi
           git commit -m "Auto-format code with Black and isort"
-          git push origin HEAD
+
+          # Push changes
+          git push origin $GITHUB_HEAD_REF
+
+
 
   validate-version:
     name: Validate Version

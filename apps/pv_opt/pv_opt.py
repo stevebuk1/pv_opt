@@ -13,11 +13,14 @@ import pandas as pd
 import pvpy as pv
 from numpy import nan
 
-VERSION = "4.0.6"
+
+VERSION = "4.0.8"
+
 UNITS = {
     "current": "A",
     "power": "W",
 }
+
 
 OCTOPUS_PRODUCT_URL = r"https://api.octopus.energy/v1/products/"
 
@@ -548,6 +551,7 @@ class PVOpt(hass.Hass):
         self.io = False
         self.agile = False
         self.ev = False
+        self.zappi_plug_entity = ""
         self.debug = DEBUG
         self.debug_cat = DEBUG_CATEGORIES
         self.redact_regex = REDACT_REGEX
@@ -2354,67 +2358,69 @@ class PVOpt(hass.Hass):
             return
 
         self.pv_system.static_flows = pd.concat([solcast, consumption], axis=1)
-        self.time_now = pd.Timestamp.utcnow()
+        self.time_now = pd.Timestamp.utcnow().floor("1min")
 
         self.pv_system.static_flows = self.pv_system.static_flows[self.time_now.floor("30min") :].fillna(0)
+        self.pv_system.static_flows.index = [self.time_now] + list(self.pv_system.static_flows.index[1:])
 
         soc_now = self.get_config("id_battery_soc")
-        soc_last_day = self.hass2df(self.config["id_battery_soc"], days=1, log=self.debug)
-        if self.debug and "S" in self.debug_cat:
-            self.log(f">>> soc_now: {soc_now}")
-            self.log(f">>> soc_last_day: {soc_last_day}")
-            self.log(
-                f">>> Original: {soc_last_day.loc[soc_last_day.loc[: self.pv_system.static_flows.index[0]].index[-1] :]}"
-            )
+        self.pv_system.initial_soc = soc_now
+        # soc_last_day = self.hass2df(self.config["id_battery_soc"], days=1, log=self.debug)
+        # if self.debug and "S" in self.debug_cat:
+        #     self.log(f">>> soc_now: {soc_now}")
+        #     self.log(f">>> soc_last_day: {soc_last_day}")
+        #     self.log(
+        #         f">>> Original: {soc_last_day.loc[soc_last_day.loc[: self.pv_system.static_flows.index[0]].index[-1] :]}"
+        #     )
 
-        try:
-            soc_now = float(soc_now)
+        # try:
+        #     soc_now = float(soc_now)
 
-        except:
-            self.log("")
-            self.log(
-                "Unable to get current SOC from HASS. Using last value from History.",
-                level="WARNING",
-            )
-            soc_now = soc_last_day.iloc[-1]
+        # except:
+        #     self.log("")
+        #     self.log(
+        #         "Unable to get current SOC from HASS. Using last value from History.",
+        #         level="WARNING",
+        #     )
+        #     soc_now = soc_last_day.iloc[-1]
 
-        # x = x.astype(float)
+        # # x = x.astype(float)
 
-        try:
-            soc_last_day = pd.to_numeric(soc_last_day, errors="coerce").interpolate()
+        # try:
+        #     soc_last_day = pd.to_numeric(soc_last_day, errors="coerce").interpolate()
 
-            soc_last_day = soc_last_day.loc[soc_last_day.loc[: self.pv_system.static_flows.index[0]].index[-1] :]
-            if self.debug and "S" in self.debug_cat:
-                self.log(
-                    f">>> Fixed   : {soc_last_day.loc[soc_last_day.loc[: self.pv_system.static_flows.index[0]].index[-1] :]}"
-                )
+        #     soc_last_day = soc_last_day.loc[soc_last_day.loc[: self.pv_system.static_flows.index[0]].index[-1] :]
+        #     if self.debug and "S" in self.debug_cat:
+        #         self.log(
+        #             f">>> Fixed   : {soc_last_day.loc[soc_last_day.loc[: self.pv_system.static_flows.index[0]].index[-1] :]}"
+        #         )
 
-            soc_last_day = pd.concat(
-                [
-                    soc_last_day,
-                    pd.Series(
-                        data=[soc_now, nan],
-                        index=[self.time_now, self.pv_system.static_flows.index[0]],
-                    ),
-                ]
-            ).sort_index()
-            self.pv_system.initial_soc = soc_last_day.interpolate().loc[self.pv_system.static_flows.index[0]]
-        except:
-            self.pv_system.initial_soc = None
+        #     soc_last_day = pd.concat(
+        #         [
+        #             soc_last_day,
+        #             pd.Series(
+        #                 data=[soc_now, nan],
+        #                 index=[self.time_now, self.pv_system.static_flows.index[0]],
+        #             ),
+        #         ]
+        #     ).sort_index()
+        #     self.pv_system.initial_soc = soc_last_day.interpolate().loc[self.pv_system.static_flows.index[0]]
+        # except:
+        #     self.pv_system.initial_soc = None
 
-        if not isinstance(self.pv_system.initial_soc, float):
-            self.log("")
-            self.log(
-                "Unable to retrieve initial SOC - assuming it is the same as current SOC",
-                level="WARNING",
-            )
-            self.pv_system.initial_soc = soc_now
+        # if not isinstance(self.pv_system.initial_soc, float):
+        #     self.log("")
+        #     self.log(
+        #         "Unable to retrieve initial SOC - assuming it is the same as current SOC",
+        #         level="WARNING",
+        #     )
+        #     self.pv_system.initial_soc = soc_now
 
-        self.pv_system.soc_now = (self.time_now, soc_now)
+        # self.pv_system.soc_now = (self.time_now, soc_now)
 
-        self.log("")
-        self.log(f"Initial SOC: {self.pv_system.initial_soc}")
-        self.log(f"Current SOC: {self.pv_system.soc_now}")
+        # self.log("")
+        # self.log(f"Initial SOC: {self.pv_system.initial_soc}")
+        # self.log(f"Current SOC: {self.pv_system.soc_now}")
 
         self.pv_system.calculate_flows()
         self.flows = {"Base": self.pv_system.flows}
@@ -2507,6 +2513,8 @@ class PVOpt(hass.Hass):
 
         self.opt = self.flows[self.selected_case]
 
+        self.base = self.flows["Base"]
+
         # SVB debug logging
         # self.log("")
         # self.log("Returned from .flows. self.opt is........")
@@ -2518,7 +2526,16 @@ class PVOpt(hass.Hass):
         y = self.opt.loc[:, ["import", "forced"]].copy()
 
         y["start"] = self.opt.index.tz_convert(self.tz).copy()
-        y["end"] = self.opt.index.tz_convert(self.tz).copy() + pd.Timedelta(30, "minutes")
+
+        # y["end"] = self.opt.index.tz_convert(self.tz).copy() + pd.Timedelta(30, "minutes")
+
+        # end times are start times from one row down (deals with partial first slots)
+        y["end"] = y["start"]
+        y["end"] = y["end"].shift(-1)
+
+        # Set last end time to be 30 mins greater than last start time.
+
+        (y.at[y.index[-1], "end"]) = (y.at[y.index[-1], "start"]) + pd.Timedelta(30, "minutes")
 
         # self.log("")
         # self.log("Y is........")
@@ -2538,6 +2555,11 @@ class PVOpt(hass.Hass):
             self.car_slots = car_slots
             self.car_slots_last_loaded = pd.Timestamp.now(tz="UTC")
 
+            if not self.car_slots.empty:
+                self.ev_total_charge = self.car_slots["charge_in_kwh"].sum()
+                self.ev_total_cost = self.car_slots["import"].sum()
+                self.ev_percent_to_add = (self.ev_total_charge / self.ev_capacity) * 100
+
         # If on Agile tariff, (re)calculate car slots now.
 
         if self.agile and self.ev and self.car_charging:
@@ -2552,13 +2574,13 @@ class PVOpt(hass.Hass):
 
         if self.debug and "E" in self.debug_cat:
             self.log("Self.candidate_car_slots is")
-            self.log(self.candidate_car_slots.to_string())
+            self.log(f"\n{self.candidate_car_slots.to_string()}")
 
             self.log("self.car_slots is")
-            self.log(self.car_slots.to_string())
+            self.log(f"\n{self.car_slots.to_string()}")
 
             self.log("y is")
-            self.log(y.to_string())
+            self.log(f"\n{y.to_string()}")
 
         # For each time range in the IOG Charging Schedule/Agile Car Charge Plan, set 1/2 hour Car slot flag to "1"
         # Problem: If the car is plugged in and starts to charge, car slot flag is not being set.
@@ -2730,8 +2752,8 @@ class PVOpt(hass.Hass):
 
             # Set the EV charger entity, even if in ReadOnly
             ### For code development only - allows test of EV charger whilst not interferring with inverter. Remove when code development complete.
-            self._control_EV_charger()
-            self.log("")
+            # self._control_EV_charger()
+            # self.log("")
 
         else:
 
@@ -3987,10 +4009,19 @@ class PVOpt(hass.Hass):
             return
 
         consumption = self.load_consumption(start, end)
-        static = pd.concat([solar, consumption], axis=1).set_axis(["solar", "consumption"], axis=1)
+        self.pv_system.static_flows = pd.concat([solar, consumption], axis=1).set_axis(
+            ["solar", "consumption"], axis=1
+        )
 
         initial_soc_df = self.hass2df(self.config["id_battery_soc"], days=2, freq="30min")
-        initial_soc = initial_soc_df.loc[start]
+        self.pv_system.initial_soc = initial_soc_df.loc[start]
+
+        # Not sure about the next lines, but calculate_flows requires soc_now
+        soc_now = self.get_config("id_battery_soc")
+        self.time_now = pd.Timestamp.utcnow()
+        self.pv_system.soc_now = (self.time_now, soc_now)
+
+        # self.pv_system.soc_now = initial_soc_df.loc[start]
 
         self.pv_system.calculate_flows()
         base = self.pv_system.flows
@@ -4000,12 +4031,12 @@ class PVOpt(hass.Hass):
         self.log("")
         self.log(f"Start:       {start.strftime(DATE_TIME_FORMAT_SHORT):>15s}")
         self.log(f"End:         {end.strftime(DATE_TIME_FORMAT_SHORT):>15s}")
-        self.log(f"Initial SOC: {initial_soc:>15.1f}%")
-        self.log(f"Consumption: {static['consumption'].sum()/2000:15.1f} kWh")
-        self.log(f"Solar:       {static['solar'].sum()/2000:15.1f} kWh")
+        self.log(f"Initial SOC: {self.pv_system.initial_soc:>15.1f}%")
+        self.log(f"Consumption: {self.pv_system.static_flows['consumption'].sum()/2000:15.1f} kWh")
+        self.log(f"Solar:       {self.pv_system.static_flows['solar'].sum()/2000:15.1f} kWh")
 
         if self.debug and "T" in self.debug_cat:
-            self.log(f">>> Yesterday's data:\n{static.to_string()}")
+            self.log(f">>> Yesterday's data:\n{self.pv_system.static_flows.to_string()}")
 
         for tariff_set in self.config["alt_tariffs"]:
             code = {}
@@ -4025,7 +4056,9 @@ class PVOpt(hass.Hass):
             )
 
         actual = self._cost_actual(start=start, end=end - pd.Timedelta(30, "minutes"))
-        static["period_start"] = static.index.tz_convert(self.tz).strftime("%Y-%m-%dT%H:%M:%S%z").str[:-2] + ":00"
+        self.pv_system.static_flows["period_start"] = (
+            self.pv_system.static_flows.index.tz_convert(self.tz).strftime("%Y-%m-%dT%H:%M:%S%z").str[:-2] + ":00"
+        )
         entity_id = f"sensor.{self.prefix}_opt_cost_actual"
         self.set_state(
             state=round(actual.sum() / 100, 2),
@@ -4036,7 +4069,10 @@ class PVOpt(hass.Hass):
                 "unit_of_measurement": "GBP",
                 "friendly_name": f"PV Opt Comparison Actual",
             }
-            | {col: static[["period_start", col]].to_dict("records") for col in ["solar", "consumption"]},
+            | {
+                col: self.pv_system.static_flows[["period_start", col]].to_dict("records")
+                for col in ["solar", "consumption"]
+            },
         )
 
         self.ulog("Net Cost comparison:", underline=None)
@@ -4249,31 +4285,50 @@ class PVOpt(hass.Hass):
         return df
 
     def write_and_poll_time(self, entity_id, time: str | pd.Timestamp, verbose=False):
+
+        # self.log("write and poll time entered.")
+        # var_type = type(time)
+        # self.log(f"'time' = {time}")
+        # self.log(f"type of 'time' = {var_type}")
         changed = False
         written = False
         if isinstance(time, pd.Timestamp):
-            time = time.strftime("%H:%M")
+            time = time.strftime("%X")  # HH:MM:SS is needed as get_state_retry returns SS.
+            # self.log("write and poll time - time detected. Trimming time to hours and minutes")
         state = self.get_state_retry(entity_id=entity_id)
+
+        # self.log(f"Write_and_poll_time: time = {time}, old_time = {state}")
+
         if state != time:
             changed = True
+            # self.log(f"Write_and_poll_time: Changed = true")
+
             try:
                 self.call_service("time/set_value", entity_id=entity_id, time=time)
 
                 written = False
                 retries = 0
                 while not written and retries < WRITE_POLL_RETRIES:
+
+                    # SVB debugging
+                    # self.log("Write_and_poll_time: Entered while loop")
+
                     retries += 1
                     time.sleep(WRITE_POLL_SLEEP)
                     new_state = self.get_state_retry(entity_id=entity_id)
                     written = new_state == time
 
+                    # SVB debugging
+                    # self.log(f"Write_and_poll_time:  while loop, new_time = {new_state}")
+
             except:
                 written = False
 
-            if verbose:
-                str_log = f"Entity: {entity_id:30s} Time: {time}  Old State: {state} "
-                str_log += f"New state: {new_state}"
-                self.log(str_log)
+            # commented out, as causes an error (new state not defined) if routine above fails, negating the use of "try/except"
+            # if verbose:
+            #    str_log = f"Entity: {entity_id:30s} Time: {time}  Old State: {state} "
+            #    str_log += f"New state: {new_state}"
+            #    self.log(str_log)
 
         return (changed, written)
 
@@ -4312,51 +4367,6 @@ class PVOpt(hass.Hass):
         if verbose:
             str_log = f"Entity: {entity_id:30s} Value: {float(value):4.1f}  Old State: {float(state):4.1f} "
             str_log += f"New state: {new_state} Diff: {diff:4.1f} Tol: {tolerance:4.1f}"
-            self.log(str_log)
-
-        return (changed, written)
-
-    def write_and_poll_time(self, entity_id, value):
-        changed = False
-        written = False
-
-        # Set consistent date for all comparisons
-        value = value.replace(year=2024, month=1, day=1)
-
-        old_time = pd.to_datetime("2024/01/01 " + self.get_state_retry(entity_id=entity_id))
-        new_time = None
-
-        # self.log(f"Write_and_poll_time: time = {value}, old_time = {old_time}")
-
-        # Convert time to string of HH:MM:SS for call_service routine
-        value_str = value.strftime("%X")
-
-        if old_time != value:
-            changed = True
-            # self.log(f"Write_and_poll_time: Changed = true")
-
-            try:
-                # self.call_service("number/set_value", entity_id=entity_id, value=value)
-                self.call_service("time/set_value", entity_id=entity_id, time=value_str)
-
-                written = False
-                retries = 0
-                while not written and retries < WRITE_POLL_RETRIES:
-                    # self.log("Write_and_poll_time: Entered while loop")
-                    retries += 1
-                    time.sleep(WRITE_POLL_TIME_SLEEP)
-
-                    new_time = pd.to_datetime("2024/01/01 " + self.get_state_retry(entity_id=entity_id))
-
-                    # self.log(f"Write_and_poll_time:  while loop, new_time = {new_time}")
-
-                    written = new_time == value
-
-            except:
-                written = False
-                # self.log("Write_and_poll_time: Exception logged")
-
-            str_log = f"Entity: {entity_id} Time: {value}  Value_str: {value_str}  Old Time: {old_time} New time: {(new_time)} "
             self.log(str_log)
 
         return (changed, written)

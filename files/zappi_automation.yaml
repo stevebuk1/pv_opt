@@ -1,0 +1,30 @@
+- id: '1728333877817'
+  alias: Pvopt Zappi Car charging
+  description: Start/stop car charging based on PV_opt determined slots
+  trigger:
+  - platform: state
+    entity_id:
+    - binary_sensor.pvopt_car_charging_slot
+  action:
+  - choose:
+    - conditions:
+      - condition: state
+        entity_id: binary_sensor.pvopt_car_charging_slot
+        state: 'on'
+      sequence:
+      - service: select.select_option
+        data:
+          option: Fast
+        target:
+          entity_id: select.myenergi_zappi_12345678_charge_mode
+    - conditions:
+      - condition: state
+        entity_id: binary_sensor.pvopt_car_charging_slot
+        state: 'off'
+      sequence:
+      - service: select.select_option
+        data:
+          option: Eco+
+        target:
+          entity_id: select.myenergi_zappi_12345678_charge_mode
+  mode: single

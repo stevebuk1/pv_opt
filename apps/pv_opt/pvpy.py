@@ -60,6 +60,12 @@ BOTTLECAP_DAVE = {
 # outputs self.unit.
 
 
+def get_dt_hours(df: pd.DataFrame | pd.Series) -> pd.Series:
+    df = pd.DataFrame(df)
+    df["dt_hours"] = -df.index.diff(-1) / pd.Timedelta("60min")
+    return df["dt_hours"].ffill()
+
+
 class Tariff:
     def __init__(
         self,
@@ -288,64 +294,9 @@ class Tariff:
             df = pd.DataFrame(self.unit).set_index("valid_from")["value_inc_vat"]
             df.index = pd.to_datetime(df.index)
             df = df.sort_index()
-
-            # df at this point is a series of start and end times and not a series of 1/2 hour slots
-
-            # SVB logging
-            # self.log("Df loaded from self.unit")
-            # self.log(df)
-            # self.log("")
-            # self.log("Printing Df")
-            # self.log(df.to_string())
-
             if "AGILE" in self.name and use_day_ahead:
-                # if self.day_ahead is not None and df.index[-1].day == end.day:
-                #     # reset the day ahead forecasts if we've got a forecast going into tomorrow
-                #     self.agile_predict = None
-                #     self.day_ahead = None
-                #     self.log("")
-                #     self.log(f"Cleared day ahead forecast for tariff {self.name}")
-
-                # if pd.Timestamp.now(tz=self.tz).hour > 11 and df.index[-1].day != end.day:
-                #     # if it is after 11 but we don't have new Agile prices yet, check for a day-ahead forecast
-                #     if self.day_ahead is None:
-                #         self.day_ahead = self.get_day_ahead(df.index[0])
-                #         if self.day_ahead is not None:
-                #             self.day_ahead = self.day_ahead.sort_index()
-                #             self.log("")
-                #             self.log(
-                #                 f"Retrieved day ahead forecast for period {self.day_ahead.index[0].strftime(TIME_FORMAT)} - {self.day_ahead.index[-1].strftime(TIME_FORMAT)} for tariff {self.name}"
-                #             )
-
-                #     if self.day_ahead is not None:
-                #         if self.export:
-                #             factors = AGILE_FACTORS["export"][self.area]
-                #         else:
-                #             factors = AGILE_FACTORS["import"][self.area]
-
-                #         mask = (self.day_ahead.index.tz_convert("GB").hour >= 16) & (
-                #             self.day_ahead.index.tz_convert("GB").hour < 19
-                #         )
-
-                #         agile = (
-                #             pd.concat(
-                #                 [
-                #                     (self.day_ahead[mask] * factors[0] + factors[1] + factors[2]),
-                #                     (self.day_ahead[~mask] * factors[0] + factors[1]),
-                #                 ]
-                #             )
-                #             .sort_index()
-                #             .loc[df.index[-1] :]
-                #             .iloc[1:]
-                #         )
-
-                #         df = pd.concat([df, agile])
-                # else:
-                # Otherwise download the latest forecast from AgilePredict
                 if self.agile_predict is None:
                     self.agile_predict = self._get_agile_predict()
-                    # self.log("Agile_predict is")
-                    # self.log(f"\n{self.agile_predict}")
 
                 if self.agile_predict is not None:
                     df = pd.concat(
@@ -387,9 +338,6 @@ class Tariff:
             if len(self.host.io_prices) > 0:
                 # Add IO slot prices as a column to dataframe.
                 df = pd.concat([df, self.host.io_prices], axis=1).set_axis(["unit", "io_unit"], axis=1)
-
-                # self.log("To_df, Printing concat")
-                # self.log(df.to_string())
 
                 df = df.dropna(subset=["unit"])  # Drop Nans
                 mask = df["io_unit"] < df["unit"]  # Mask is true if an IOslot
@@ -433,7 +381,7 @@ class Tariff:
                 if event_start <= end or event_end > start and event_value > 0:
                     event_start = max(event_start, start)
                     event_end = min(event_end - pd.Timedelta(30, "minutes"), end)
-                    df["unit"].loc[event_start:event_end] += event_value
+                    df.loc[event_start:event_end, "unit"] += event_value
 
         return df
 
@@ -698,15 +646,17 @@ class Contract:
             grid_imp = grid_flow.clip(0)
             grid_exp = grid_flow.clip(upper=0)
 
+        dt = get_dt_hours(grid_flow)
+
         imp_df = self.tariffs["import"].to_df(start, end, **kwargs)
         nc = imp_df["fixed"]
         if kwargs.get("log") and (self.host.debug and "F" in self.host.debug_cat):
             self.rlog(f">>> Import{self.tariffs['import'].to_df(start,end).to_string()}")
-        nc += imp_df["unit"] * grid_imp / 2000
+        nc += imp_df["unit"] * grid_imp / 1000 * dt
         if kwargs.get("log") and (self.host.debug and "F" in self.host.debug_cat):
             self.rlog(f">>> Export{self.tariffs['export'].to_df(start,end).to_string()}")
         if self.tariffs["export"] is not None:
-            nc += self.tariffs["export"].to_df(start, end, **kwargs)["unit"] * grid_exp / 2000
+            nc += self.tariffs["export"].to_df(start, end, **kwargs)["unit"] * grid_exp / 1000 * dt
 
         if self.host.debug and "V" in self.host.debug_cat:
             self.log("")
@@ -721,12 +671,14 @@ class Contract:
     def prices(self, start=None, end=None):
         prices = pd.concat(
             [
-                self.tariffs[direction].to_df(start=start, end=end)["unit"]
+                self.tariffs[direction].to_df(start=start.floor("30min"), end=end)["unit"]
                 for direction in self.tariffs
                 if self.tariffs[direction] is not None
             ],
             axis=1,
         )
+
+        prices.index = [start] + list(prices.index[1:])
         return prices
 
 
@@ -753,13 +705,15 @@ class PVsystemModel:
         pass
 
     def calculate_flows(self, slots=[], solar_id="solar", consumption_id="consumption", **kwargs):
-        solar = self.static_flows[solar_id]
-        consumption = self.static_flows[consumption_id]
+        # solar = self.static_flows[solar_id]
+        # consumption = self.static_flows[consumption_id]
 
-        self.flows = self.static_flows.copy()
-
-        battery_flows = solar - consumption
-        forced_charge = pd.Series(index=self.flows.index, data=0)
+        self.flows = self.static_flows.copy()[[solar_id, consumption_id]].set_axis(["solar", "consumption"], axis=1)
+        self.flows["dt_hours"] = get_dt_hours(self.flows)
+        self.flows["battery_grid_requirement"] = self.flows["consumption"] - self.flows["solar"]
+        self.flows["forced"] = 0
+        self.flows["battery_temp"] = self.flows["consumption"] - self.flows["solar"]
+        # forced_charge = pd.Series(index=self.flows.index, data=0)
 
         if len(slots) > 0:
             timed_slot_flows = pd.Series(index=self.flows.index, data=0)
@@ -769,19 +723,19 @@ class PVsystemModel:
                     timed_slot_flows.loc[t] += int(c)
 
             chg_mask = timed_slot_flows != 0
-            battery_flows[chg_mask] = timed_slot_flows[chg_mask]
-            forced_charge[chg_mask] = timed_slot_flows[chg_mask]
+            # self.flows["battery_temp"][chg_mask] = -timed_slot_flows[chg_mask]
+            # self.flows["forced"][chg_mask] = timed_slot_flows[chg_mask]
 
-        if self.soc_now is None:
-            chg = [self.initial_soc / 100 * self.battery.capacity]
-            freq = pd.infer_freq(self.static_flows.index) / pd.Timedelta(60, "minutes")
+            self.flows.loc[chg_mask, "battery_temp"] = -timed_slot_flows[chg_mask]
+            self.flows.loc[chg_mask, "forced"] = timed_slot_flows[chg_mask]
 
-        else:
-            chg = [self.soc_now[1] / 100 * self.battery.capacity]
-            freq = (self.soc_now[0] - self.flows.index[0]) / pd.Timedelta(60, "minutes")
+        chg = [self.initial_soc / 100 * self.battery.capacity]
 
-        for i, flow in enumerate(battery_flows):
-            if flow < 0:
+        for idx in self.flows.index:
+            flow = self.flows["battery_temp"].loc[idx]
+            dt_hours = self.flows["dt_hours"].loc[idx]
+
+            if flow > 0:
                 flow = flow / self.inverter.inverter_efficiency
             else:
                 flow = flow * self.inverter.charger_efficiency
@@ -792,7 +746,7 @@ class PVsystemModel:
                         [
                             min(
                                 [
-                                    chg[-1] + flow * freq,
+                                    chg[-1] - flow * dt_hours,
                                     self.battery.capacity,
                                 ]
                             ),
@@ -802,31 +756,24 @@ class PVsystemModel:
                     1,
                 )
             )
-            if (self.soc_now is not None) and (i == 0):
-                freq = pd.infer_freq(self.static_flows.index) / pd.Timedelta(60, "minutes")
-
-        if self.soc_now is not None:
-            chg[0] = self.initial_soc / 100 * self.battery.capacity
 
         self.flows["chg"] = chg[:-1]
         self.flows["chg"] = self.flows["chg"].ffill()
         self.flows["chg_end"] = chg[1:]
         self.flows["chg_end"] = self.flows["chg_end"].bfill()
-        self.flows["battery"] = (pd.Series(chg).diff(-1) / freq)[:-1].to_list()
+        self.flows["battery"] = pd.Series(chg).diff(-1)[:-1].to_list()
+        self.flows["battery"] /= self.flows["dt_hours"]
         self.flows.loc[self.flows["battery"] > 0, "battery"] = (
             self.flows["battery"] * self.inverter.inverter_efficiency
         )
         self.flows.loc[self.flows["battery"] < 0, "battery"] = self.flows["battery"] / self.inverter.charger_efficiency
-        self.flows["grid"] = -(solar - consumption + self.flows["battery"]).round(0)
-        self.flows["forced"] = forced_charge
+        self.flows["grid"] = (self.flows["battery_grid_requirement"] - self.flows["battery"]).round(0)
         self.flows["soc"] = (self.flows["chg"] / self.battery.capacity) * 100
         self.flows["soc_end"] = (self.flows["chg_end"] / self.battery.capacity) * 100
 
-        # self.log(f">>>\n{self.flows.iloc[:3].to_string()}")
-
         if self.prices is not None:
             self.flows = pd.concat(
-                [self.prices, consumption, self.flows],
+                [self.flows, self.prices],
                 axis=1,
             )
 
@@ -947,7 +894,8 @@ class PVsystemModel:
         return self.flows
 
     def _search_window(self, df: pd.DataFrame, available: pd.Series, max_slot):
-        x = df.loc[: max_slot - pd.Timedelta("30min")].copy().iloc[:-1]
+        # Need to check why this .iloc[:-1] is here....
+        x = df.loc[: max_slot - pd.Timedelta("30min")].copy()
         if len(x) > 0:
             x = x[available.loc[: max_slot - pd.Timedelta("30min")]]
             x["countback"] = (x["soc_end"] >= 97).sum() - (x["soc_end"] >= 97).cumsum()
@@ -986,13 +934,17 @@ class PVsystemModel:
             if (i > 96) or (available.sum() == 0):
                 done = True
 
-            import_cost = ((self.flows["import"] * self.flows["grid"]).clip(0) / 2000)[~tested]
+            import_cost = ((self.flows["import"] * self.flows["grid"]).clip(0) * self.flows["dt_hours"] / 1000)[
+                ~tested
+            ]
 
             if len(import_cost[self.flows["forced"] == 0]) > 0:
                 max_import_cost = import_cost[self.flows["forced"] == 0].max()
                 if len(import_cost[import_cost == max_import_cost]) > 0:
                     max_slot = import_cost[import_cost == max_import_cost].index[0]
-                    max_slot_energy = round(self.flows["grid"].loc[max_slot] / 2000, 2)  # kWh
+                    max_slot_energy = round(
+                        self.flows["grid"].loc[max_slot] / 1000 * self.flows["dt_hours"].loc[max_slot], 2
+                    )  # kWh
                     str_log = f"{i:3d} {available.sum():3d} {max_slot.tz_convert(self.tz).strftime(TIME_FORMAT)}:"
 
                     if max_slot_energy > 0:
@@ -1008,6 +960,7 @@ class PVsystemModel:
 
                             window = search_window[search_window["import"] == min_price].index
                             start_window = window[0]
+                            end_window = window[-1]
 
                             cost_at_min_price = round_trip_energy_required * min_price
 
@@ -1067,7 +1020,7 @@ class PVsystemModel:
 
                                 slot_count.append(len(factors))
 
-                                str_log += f"New SOC: {self.flows.loc[start_window]['soc']:5.1f}%->{self.flows.loc[start_window]['soc_end']:5.1f}% "
+                                str_log += f"New SOC: {self.flows.loc[start_window]['soc']:5.1f}%->{self.flows.loc[end_window]['soc_end']:5.1f}% "
                                 best_cost = self.net_costs[-1]
                                 str_log += f"Net: {best_cost:6.1f}"
 
