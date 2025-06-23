@@ -839,6 +839,7 @@ class PVsystemModel:
         discharge=False,
         use_export=True,
         max_iters=MAX_ITERS,
+        sub_solar=True,
     ):
 
         if log and (self.host.debug and "B" in self.host.debug_cat):
@@ -895,7 +896,7 @@ class PVsystemModel:
             if not discharge:
                 j += max_iters
 
-            self._low_cost_charging(log=log)
+            self._low_cost_charging(log=log,sub_solar=sub_solar)
 
             if log:
                 self.log(f"Iteration {j:2d}: Slots added: {self.slots_added:3d}")
@@ -1108,7 +1109,7 @@ class PVsystemModel:
 
         self.slots = slots
 
-    def _low_cost_charging(self, log=True):
+    def _low_cost_charging(self, log=True, sub_solar=True):
         slots = [slot for slot in self.slots]
         best_cost = self.best_cost
         slots_added = 0
@@ -1177,10 +1178,16 @@ class PVsystemModel:
                         f"SOC (before modelling Forced Charge): {x.loc[start_window]['soc']:5.1f}%->{x.loc[start_window]['soc_end']:5.1f}% "
                     )
 
-                forced_charge = min(
-                    min(self.battery.max_charge_power, self.inverter.charger_power)- x["forced"].loc[start_window] - x["solar"].loc[start_window],
-                    ((100 - x["soc_end"].loc[start_window]) / 100 * self.battery.capacity) / x["dt_hours"].loc[start_window],
-                )
+                if sub_solar:   #substact solar from available charge capacity
+                    forced_charge = min(
+                        min(self.battery.max_charge_power, self.inverter.charger_power)- x["forced"].loc[start_window] - x["solar"].loc[start_window],
+                        ((100 - x["soc_end"].loc[start_window]) / 100 * self.battery.capacity) / x["dt_hours"].loc[start_window],
+                    )
+                else:
+                    forced_charge = min(
+                        min(self.battery.max_charge_power, self.inverter.charger_power)- x["forced"].loc[start_window],
+                        ((100 - x["soc_end"].loc[start_window]) / 100 * self.battery.capacity) / x["dt_hours"].loc[start_window],
+                    )
 
                 if self.host.debug and "C" in self.host.debug_cat:
                     value1 = min(self.battery.max_charge_power, self.inverter.charger_power)- x["forced"].loc[start_window] - x["solar"].loc[start_window]

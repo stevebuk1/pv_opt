@@ -14,7 +14,7 @@ import pvpy as pv
 from numpy import nan
 
 
-VERSION = "4.0.11-Beta-1"
+VERSION = "4.0.11-Beta-2"
 
 UNITS = {
     "current": "A",
@@ -2553,14 +2553,22 @@ class PVOpt(hass.Hass):
             "Optimised Charging": {
                 "export": False,
                 "discharge": False,
+                "sub_solar": True,
             },
             "Optimised PV Export": {
                 "export": True,
                 "discharge": False,
+                "sub_solar": True,
+            },
+            "Optimised PV Export (alt)": {
+                "export": True,
+                "discharge": False,
+                "sub_solar": False,
             },
             "Forced Discharge": {
                 "export": True,
                 "discharge": True,
+                "sub_solar": True,
             },
         }
 
@@ -2587,6 +2595,7 @@ class PVOpt(hass.Hass):
                     log=True,
                     use_export=cases[case]["export"],
                     discharge=cases[case]["discharge"],
+                    sub_solar=cases[case]["sub_solar"],
                 )
 
                 self.optimised_cost[case] = self.contract.net_cost(self.flows[case], sum=False)
@@ -2601,6 +2610,7 @@ class PVOpt(hass.Hass):
                     log=(case == self.selected_case),
                     use_export=cases[case]["export"],
                     discharge=cases[case]["discharge"],
+                    sub_solar=cases[case]["sub_solar"],
                 )
 
                 self.optimised_cost[case] = self.contract.net_cost(self.flows[case], sum=False)
