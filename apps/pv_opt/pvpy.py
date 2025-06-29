@@ -1175,7 +1175,7 @@ class PVsystemModel:
 
                 if self.host.debug and "C" in self.host.debug_cat:
                     self.log(
-                        f"SOC (before modelling Forced Charge): {x.loc[start_window]['soc']:5.1f}%->{x.loc[start_window]['soc_end']:5.1f}% "
+                        f" {start_window}:   SOC (before modelling Forced Charge): {x.loc[start_window]['soc']:5.1f}%->{x.loc[start_window]['soc_end']:5.1f}%"
                     )
 
                 if sub_solar:   #substact solar from available charge capacity
@@ -1189,14 +1189,14 @@ class PVsystemModel:
                         ((100 - x["soc_end"].loc[start_window]) / 100 * self.battery.capacity) / x["dt_hours"].loc[start_window],
                     )
 
-                if self.host.debug and "C" in self.host.debug_cat:
-                    value1 = min(self.battery.max_charge_power, self.inverter.charger_power)- x["forced"].loc[start_window] - x["solar"].loc[start_window]
-                    value2 = ((100 - x["soc_end"].loc[start_window]) / 100 * self.battery.capacity) 
-                    value3 = x["dt_hours"].loc[start_window]
-                    value4 = ((100 - x["soc_end"].loc[start_window]) / 100 * self.battery.capacity) / x["dt_hours"].loc[start_window]
-                    self.log(f"Start window = {start_window}")
-                    self.log(f"Value 1 = {value1:6.1f}, Value2 = {value2:6.1f}, Value3 = {value3:6.1f}, Value4 = {value4:6.1f}")
-                    self.log(f"Forced Charge = {forced_charge}")
+                #if self.host.debug and "C" in self.host.debug_cat:
+                #    value1 = min(self.battery.max_charge_power, self.inverter.charger_power)- x["forced"].loc[start_window] - x["solar"].loc[start_window]
+                #    value2 = ((100 - x["soc_end"].loc[start_window]) / 100 * self.battery.capacity) 
+                #    value3 = x["dt_hours"].loc[start_window]
+                #    value4 = ((100 - x["soc_end"].loc[start_window]) / 100 * self.battery.capacity) / x["dt_hours"].loc[start_window]
+                #    self.log(f"Start window = {start_window}")
+                #    self.log(f"Value 1 = {value1:6.1f}, Value2 = {value2:6.1f}, Value3 = {value3:6.1f}, Value4 = {value4:6.1f}")
+                #    self.log(f"Forced Charge = {forced_charge}")
                 slot = (
                     start_window,
                     forced_charge,
@@ -1215,8 +1215,8 @@ class PVsystemModel:
 
                 if self.host.debug and "C" in self.host.debug_cat:
                     self.log(f"Cost = {net_cost:5.1f}")
-                    if net_cost < best_cost:
-                        self.log("Cost reduction found - printing flows")
+                    if net_cost < best_cost - self.host.get_config("slot_threshold_p"):
+                        self.log("Cost reduction > slot threshold: Printing flows")
                         self.log(f"\n{self.flows.to_string()}")
 
 
