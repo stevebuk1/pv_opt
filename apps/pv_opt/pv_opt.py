@@ -14,7 +14,7 @@ import pvpy as pv
 from numpy import nan
 
 
-VERSION = "4.0.10"
+VERSION = "4.0.11"
 
 UNITS = {
     "current": "A",

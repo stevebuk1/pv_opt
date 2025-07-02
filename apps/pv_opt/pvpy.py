@@ -375,26 +375,26 @@ class Tariff:
         if (self.host is not None) and ("unit" in df.columns):
             events = self.host.saving_events
             for id in events:
-                event_start = pd.Timestamp(events[id]["start"]).floor("30min")
-                event_end = pd.Timestamp(events[id]["end"]).ceil("30min")
+                event_start = pd.Timestamp(events[id]["start"], tz="UTC").floor("30min")
+                event_end = pd.Timestamp(events[id]["end"], tz="UTC").ceil("30min")
                 event_value = int(events[id]["octopoints_per_kwh"]) / 8
 
-                self.log("Savings Events debugging")
-                self.log("")
-                self.log(f"start = {start}")
-                self.log(f"end = {end}")
-                self.log(f"event_start = {event_start}")
-                self.log(f"event_end = {event_end}")
+                # self.log("Savings Events debugging")
+                # self.log("")
+                # self.log(f"start = {start}")
+                # self.log(f"end = {end}")
+                # self.log(f"event_start = {event_start}")
+                # self.log(f"event_end = {event_end}")
 
                 if event_start <= end or event_end > start and event_value > 0:
                     event_start = max(event_start, start)
                     event_end = min(event_end - pd.Timedelta(30, "minutes"), end)
 
-                    self.log("Recalculating event_start and event_end")
-                    self.log("")
-                    self.log(f"event_start = {event_start}")
-                    self.log(f"event_end = {event_end}")
-                    self.log(f"event_value = {event_value}")
+                    # self.log("Recalculating event_start and event_end")
+                    # self.log("")
+                    # self.log(f"event_start = {event_start}")
+                    # self.log(f"event_end = {event_end}")
+                    # self.log(f"event_value = {event_value}")
 
                     df.loc[event_start:event_end, "unit"] += event_value
 
