@@ -49,6 +49,7 @@ jobs:
             exit 0
           fi
           git commit -m "Auto-format code with Black and isort"
+          git pull
 
           # Push changes
           git push origin $GITHUB_HEAD_REF
