@@ -25,35 +25,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install black isort
 
-      # Step 4: Run black and isort to format the code
-      - name: Format Code with Black and isort
-        run: |
-          black --line-length=119 .
-          isort --profile="black" .
 
-      # Step 5: Commit Formatting Changes
-      - name: Commit Formatting Changes
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          # Ensure you are on the correct branch
-          git checkout -B $GITHUB_HEAD_REF || git checkout -b new-branch-name
-
-          # Stage and commit changes
-          git add .
-          if git diff --cached --quiet; then
-            echo "No formatting changes to commit."
-            exit 0
-          fi
-          git commit -m "Auto-format code with Black and isort"
-          git config pull.rebase false
-          git pull origin $GITHUB_HEAD_REF
-
-          # Push changes
-          git push origin $GITHUB_HEAD_REF
 
 
 
