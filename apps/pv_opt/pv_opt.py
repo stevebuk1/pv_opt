@@ -3842,6 +3842,7 @@ class PVOpt(hass.Hass):
         return df
 
     def load_consumption(self, start, end):
+        ev_power = pd.DataFrame()
         self.log(
             f"Getting expected consumption data for {start.strftime(DATE_TIME_FORMAT_LONG)} to {end.strftime(DATE_TIME_FORMAT_LONG)}:"
         )
@@ -4384,6 +4385,10 @@ class PVOpt(hass.Hass):
         if (hist is not None) and (len(hist) > 0):
             df = pd.DataFrame(hist[0]).set_index("last_updated")["state"]
             df.index = pd.to_datetime(df.index, format="ISO8601")
+
+            #get_history has changed in Appdaemon v4.5.X, it now reports local time, rather than the timezone of "days" (or a default of UTC, not sure which)
+            #all use of hass2df seems to pass UTC time, to convert results to UTC. 
+            df.index = pd.to_datetime(df.index, utc=True)
 
             df = df.sort_index()
             df = df[df != "unavailable"]
