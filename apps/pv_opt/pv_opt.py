@@ -3946,7 +3946,7 @@ class PVOpt(hass.Hass):
                     df_EV_Total = None  # To store EV consumption and Total consumption
                     dfx = None
 
-                    if self.get_config("ev_part_of_house_load"):
+                    if self.get_config("ev_part_of_house_load") and len(ev_power) > 0:
                         self.log(
                             "    EV charger is seen as house load, so subtracting EV charging from Total consumption"
                         )
