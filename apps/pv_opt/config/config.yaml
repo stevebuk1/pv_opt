@@ -1,20 +1,4 @@
 # Internal configuration --- DO NOT EDIT ---
-pvpy:
-  module: pvpy
-  global: true
-
-solis:
-  module: solis
-  global: true
-
-# sunsynk:
-#  module: sunsynk
-#  global: true
-
-#solax:
-#  module: solax
-#  global: true
-
 pv_opt:
   module: pv_opt
   class: PVOpt
