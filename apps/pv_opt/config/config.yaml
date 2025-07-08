@@ -1,4 +1,12 @@
 # Internal configuration --- DO NOT EDIT ---
+pvpy:
+  module: pvpy
+  global: true
+
+solis:
+  module: solis
+  global: true
+
 pv_opt:
   module: pv_opt
   class: PVOpt
