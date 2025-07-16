@@ -14,7 +14,7 @@ import pvpy as pv
 from numpy import nan
 
 
-VERSION = "5.0.0-Beta-1"
+VERSION = "5.0.0-Beta-2"
 
 UNITS = {
     "current": "A",
@@ -878,10 +878,21 @@ class PVOpt(hass.Hass):
         # self.log(df.dtypes)
         # self.log(df.info)
 
-        for window in df.iterrows():
-            self.log(
-                f"    {window[1]['start_dt'].tz_convert(self.tz).strftime('%H:%M'):>7s} to {window[1]['end_dt'].tz_convert(self.tz).strftime('%H:%M'):<7s}  Charge: {window[1]['charge_in_kwh']:7.2f}kWh"
-            )
+        # v16.0.0 of the Octopus Energy Integration randomly doesnt generate charge_in_kwh. Check it exists before logging it. 
+
+        if "charge_in_kwh" in df.columns:
+
+            for window in df.iterrows():
+                self.log(
+                    f"    {window[1]['start_dt'].tz_convert(self.tz).strftime('%H:%M'):>7s} to {window[1]['end_dt'].tz_convert(self.tz).strftime('%H:%M'):<7s}  Charge: {window[1]['charge_in_kwh']:7.2f}kWh"
+                )
+        else:
+            for window in df.iterrows():
+                self.log(
+                    f"    {window[1]['start_dt'].tz_convert(self.tz).strftime('%H:%M'):>7s} to {window[1]['end_dt'].tz_convert(self.tz).strftime('%H:%M'):<7s}  "
+                )
+
+       
 
         if len(df) == 0:
             self.log("    No IOG Smart Charging Schedule found.")
@@ -1548,6 +1559,20 @@ class PVOpt(hass.Hass):
                         # Set import import price to 0 for slots (isnt used/displayed if using IOG, but is in Agile)
 
                         car_slots["import"] = 0
+     
+
+                        if self.debug and "E" in self.debug_cat:
+                            self.log("")
+                            self.log("Car_slots = ")
+                            self.log(car_slots.to_string())
+
+                        # SVB for testing - delete when done
+                        # if "charge_in_kwh" in car_slots.columns:
+                        #     car_slots.drop('charge_in_kwh', axis=1)
+
+                        if "charge_in_kwh" not in car_slots.columns:
+                            car_slots["charge_in_kwh"] = 0
+                            self.log("charge_in_kwh info not received from Octopus Energy Integration, setting to zero")
 
                         if self.debug and "E" in self.debug_cat:
                             self.log("")
@@ -2669,11 +2694,18 @@ class PVOpt(hass.Hass):
         if self.intelligent:
             car_slots = self._get_io_car_slots()  # Load the car charging slots
             car_slots["import"] = 0
+
+            if "charge_in_kwh" not in car_slots.columns:
+                car_slots["charge_in_kwh"] = 0
+                self.log("charge_in_kwh info not received from Octopus Energy Integration, setting to zero")
+
             self.car_slots = car_slots
             self.car_slots_last_loaded = pd.Timestamp.now(tz="UTC")
 
             if not self.car_slots.empty:
-                self.ev_total_charge = self.car_slots["charge_in_kwh"].sum()
+
+                if "charge_in_kwh" in self.car_slots.columns:
+                    self.ev_total_charge = self.car_slots["charge_in_kwh"].sum()
                 self.ev_total_cost = self.car_slots["import"].sum()
 
                 # self.log(f"self.ev_total_charge = {self.ev_total_charge}")
