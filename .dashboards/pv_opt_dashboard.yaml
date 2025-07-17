@@ -132,15 +132,15 @@ views:
                 <h3><u>IOG Car Charging Schedule</u></h3>
 
 
-                | Start | | | End |||       Energy  |
+                | Start | | | End |
 
-                |:--------|--|--|:-----------|--|--|:------------------:|{% for
-                a in state_attr('sensor.pvopt_car_slots', 'windows') %}
+                |:--------|--|--|:-----------|{% for a in
+                state_attr('sensor.pvopt_car_slots', 'windows') %}
 
                 {% set tf = '%H:%M'%} | 
                 {{as_local(as_datetime(a['start_local'])).strftime(tf)}}    |||
-                {{as_local(as_datetime(a['end_local'])).strftime(tf)}} |||
-                {{a['charge_in_kwh'] | float | round(2)}}kWh |{%endfor%}
+                {{as_local(as_datetime(a['end_local'])).strftime(tf)}}
+                |{%endfor%}
               title: Car Charging
           - type: conditional
             conditions:
@@ -191,6 +191,11 @@ views:
                 {{as_local(as_datetime(a['end_local'])).strftime(tf)}} |||
                 {{a['charge_in_kwh'] | float | round(2)}}kWh ||| {{a['import'] |
                 float | round(2)}}p |{%endfor%}
+
+
+                Total Charge to add =
+                {{'%8.2f'|format(state_attr('sensor.pvopt_car_slots','ev_total_charge')
+                | float)}} kWh
               title: Car Charging
       - type: custom:stack-in-card
         title: Optimised Charging
@@ -599,7 +604,7 @@ views:
                      return [new Date(entry.period_start), entry.forced];
                    });
               - entity: >-
-                  event.octopus_energy_electricity_22j010XXXX_18000XXXXXXXX_current_day_rates
+                  event.octopus_energy_electricity_22j010XXXX_XXXXXXXXXXXXX_current_day_rates
                 yaxis_id: price
                 name: Historic Import Price
                 color: yellow
@@ -656,9 +661,9 @@ views:
                 yaxis_id: price
       - type: custom:octopus-energy-rates-card
         currentEntity: >-
-          event.octopus_energy_electricity_22j010XXXX_18000XXXXXXXX_current_day_rates
+          event.octopus_energy_electricity_22j010XXXX_XXXXXXXXXXXXX_current_day_rates
         futureEntity: >-
-          event.octopus_energy_electricity_22j010XXXX_18000XXXXXXXX_next_day_rates
+          event.octopus_energy_electricity_22j010XXXX_XXXXXXXXXXXXX_next_day_rates
         cols: 2
         hour12: false
         showday: true
