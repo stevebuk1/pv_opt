@@ -174,7 +174,7 @@ pv_opt:
   # from house charging calculations.
   # If your Zappi is not seen as part of the house load, uncomment next line to set to False.
   #
-  # ev_part_of_house_load = False     # Default = True
+  # ev_part_of_house_load: False     # Default = True
   #
   #
   # EV charge plan input values for Agile and IOG. On IOG, these parameters are passed to the Octopus API and will be
