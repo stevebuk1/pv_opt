@@ -1,4 +1,4 @@
-# PV Opt: Home Assistant Solar/Battery Optimiser v5.0.0-Beta-2
+# PV Opt: Home Assistant Solar/Battery Optimiser v5.0.0-Beta-3
 
 Solar / Battery Charging Optimisation for Home Assistant. This appDaemon application attempts to optimise charging and discharging of a home solar/battery system to minimise cost electricity cost on a daily basis using freely available solar forecast data from SolCast. This is particularly beneficial for Octopus Agile but is also benefeficial for other time-of-use tariffs such as Octopus Flux or simple Economy 7.
 
@@ -6,10 +6,12 @@ The application will integrate fully with Solis inverters which are controlled u
 
 -   [Home Assistant Solax Modbus Integration](https://github.com/wills106/homeassistant-solax-modbus)
 -   [Home Assistant Core Modbus Integration](https://github.com/fboundy/ha_solis_modbus)
--   [Home Assistant Solis Sensor Integration](https://github.com/hultenvp/solis-sensor)
--   [Home Assistant Solarman Integration](https://github.com/davidrapan/ha-solarman) (1)
+-   [Home Assistant SolisCloud Solis Sensor Integration](https://github.com/hultenvp/solis-sensor)
+-   [Home Assistant SolisCloud Solis Control Integration](https://github.com/mkuthan/solis-cloud-control) (1)
+-   [Home Assistant Solarman Integration](https://github.com/davidrapan/ha-solarman) (2)
 
-(1) https://github.com/StephanJoubert/home_assistant_solarman appears to be no longer maintained so has been replaced with
+(1) An alternative to SolisCloud control via the Solis Sensor integration
+(2) https://github.com/StephanJoubert/home_assistant_solarman appears to be no longer maintained so has been replaced with
 https://github.com/davidrapan/ha-solarman. This should be used for new installs for PvOpt v4.0.0 onwards.
 
 Once installed it should require miminal configuration. Other inverters/integrations can be added if required or can be controlled indirectly using automations.
