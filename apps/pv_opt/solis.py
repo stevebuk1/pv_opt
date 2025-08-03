@@ -295,6 +295,31 @@ INVERTER_DEFS = {
             "id_timed_charge_discharge_button": "button.{device_name}_update_timed_charge_discharge_1",
         },
     },
+    "SOLIS_CLOUD_SENSOR_CONTROL": {
+        "online": "sensor.{device_name}_state",
+        "codes": SOLIS_DEFAULT_CODES,
+        "default_config": {
+            "maximum_dod_percent": "sensor.{device_name}_force_discharge_soc",
+            "id_consumption_today": "sensor.{device_name}_daily_grid_energy_used",
+            "id_grid_import_today": "sensor.{device_name}_daily_grid_energy_purchased",
+            "id_grid_export_today": "sensor.{device_name}_daily_on_grid_energy",
+            "id_battery_soc": "sensor.{device_name}_remaining_battery_capacity",
+            "supports_hold_soc": True,
+            "supports_forced_discharge": True,
+            "update_cycle_seconds": 0,
+        },
+        "brand_config": {
+            "battery_voltage": "sensor.{device_name}_battery_voltage",
+            "id_inverter_mode": "select.{device_name}_energy_storage_control_switch",
+            "id_timed_charge_time": "time.{device_name}_timed_charge_start_1",
+            "id_timed_charge_current": "number.{device_name}_timed_charge_current_1",
+            "id_timed_charge_soc": "number.{device_name}_timed_charge_soc_1",
+            "id_timed_discharge_tine": "time.{device_name}_timed_discharge_start_1",
+            "id_timed_discharge_current": "number.{device_name}_timed_discharge_current_1",
+            "id_timed_discharge_soc": "number.{device_name}_timed_discharge_soc_1",
+        },
+    },
+
 }
 
 
@@ -310,6 +335,12 @@ def create_inverter_controller(inverter_type: str, host):
             inverter_type=inverter_type,
             host=host,
         )
+    
+    elif inverter_type == "SOLIS_CLOUD_SENSOR_CONTROL":
+        return SolisCloudSensorControlInverter(
+            inverter_type=inverter_type,
+            host=host,
+        )    
 
     elif inverter_type == "SOLIS_SOLAX_MODBUS":
         return SolisSolaxModbusInverter(
@@ -682,9 +713,6 @@ class SolisInverter(BaseInverterController):
         power_tolerance = float(self.get_config(f"forced_power_group_tolerance", 0.1))
         current_tolerance = round(power_tolerance / self.voltage, 2)
         
-        # SVB debugging
-        # self.log(f"Current tolerance is {current_tolerance}A")
-
         if entity_id is not None:
             changed, written = self.write_to_hass(entity_id=entity_id, value=current, tolerance=current_tolerance, verbose=True)
 
@@ -726,6 +754,82 @@ class SolisInverter(BaseInverterController):
 class SolisCloudInverter(SolisInverter):
     def __init__(self, inverter_type: str, host):
         super().__init__(inverter_type, host)
+
+
+class SolisCloudSensorControlInverter(SolisInverter):
+    def __init__(self, inverter_type: str, host):
+        super().__init__(inverter_type, host)
+        self._requires_button_press = False
+
+    def _get_times_current(self, direction):
+        times = {}
+
+        # times_string = pd.Timestamp(self.get_config(f"id_timed_{direction}_time", "0:00"), tz=self._tz)
+
+        times_string = self.get_config(f"id_timed_{direction}_time", "0:00")
+        self.log(f"Time_string = {times_string}")
+
+        time_start = times_string[0:5]
+        time_end = times_string[6:11]
+
+        self.log(f"Time_start = {time_start}")
+        self.log(f"Time_end = {time_end}")
+
+        times["start"] = pd.Timestamp(time_start, tz=self._tz)
+        times["end"] = pd.Timestamp(time_end, tz=self._tz)
+        
+        # times["start"] = pd.to_datetime(time_start, errors="coerce", format="%H:%M", utc=True).tz_convert(self._tz)
+        # times["end"] = pd.to_datetime(time_end, errors="coerce", format="%H:%M", utc=True).tz_convert(self._tz)
+
+        self.log(f"Time_start = {times["start"]}")
+        self.log(f"Time_end = {times["end"]}")
+
+        current = {"current": self.get_config(f"id_timed_{direction}_current", 0)}
+        if self._hmi_fb00:
+            target_soc = {"target_soc": self.get_config(f"id_timed_{direction}_soc", 0)}
+        else:
+            target_soc = {}
+        return times | current | target_soc
+
+    def _set_times(self, direction, **times) -> bool:
+        value_changed = False
+        # Solis inverters can't cope with time slots spanning midnight so if the end is a different day
+        # crop it to 23:59
+
+        if times["end"] is not None:
+            if times["start"] is None:
+                start_day = pd.Timestamp.now().day
+            else:
+                start_day = times["start"].day
+
+            # if times["end"].day != times["start"].day:
+            if start_day != times["end"].day:
+                times["end"] = times["end"].floor("1D") - pd.Timedelta("1min")
+
+        self.log(f"Times =  {times}")
+
+        # If start time is None then the construction of time_string will fail. We need to set this to whatever the
+        # inverter is currently set to. I think its stored by self.status[direction]["start"] which is obtained via "get_times_current"
+        # just above
+
+        self.log(f"Stored value of charge start is {self.status["charge"]["start"]}")
+        self.log(f"Stored value of discharge start is {self.status["discharge"]["start"]}")
+
+
+        if times is not None:
+            entity_id = self._host.config.get(f"id_timed_{direction}_time", None)
+            if entity_id is not None:
+
+                # https://github.com/mkuthan/solis-cloud-control uses a text string that combines st and end time
+                time_string = f'{times["start"].strftime("%H:%M")}-{times["end"].strftime("%H:%M")}'
+                self.log(f"About to write time value of {time_string} to HA entity {entity_id}")
+                
+                ## Not working, try a service call instead? 
+                changed, written = self.write_to_hass(entity_id=entity_id, value=str(time_string), verbose=True)
+                self._host.call_service("text/set_value", entity_id=entity_id, value=str(time_string))
+                value_changed = value_changed or written
+
+        return value_changed
 
 
 class SolisSolarmanV2Inverter(SolisInverter):
