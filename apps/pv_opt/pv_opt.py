@@ -2905,10 +2905,11 @@ class PVOpt(hass.Hass):
             self.log("Read only mode enabled. Not querying inverter.")
             self.status("Idle (Read Only)")
 
-            # Set the EV charger entity, even if in ReadOnly
-            ### For code development only - allows test of EV charger whilst not interferring with inverter. Remove when code development complete.
-            # self._control_EV_charger()
-            # self.log("")
+            #SVB logging
+            self.log("")
+            entity_id = self.config[f"id_battery_current"]
+            self.log(f"Battery current is {self.get_state_retry(entity_id)}")
+            ##End logging
 
         else:
 
@@ -2916,9 +2917,10 @@ class PVOpt(hass.Hass):
             did_something = True
             self.status("Updating Inverter")
 
-            # self.log("")
-            # entity_id = self.config[f"id_timed_charge_current"]
-            # self.log(self.get_state_retry(entity_id))
+            #SVB logging
+            self.log("")
+            entity_id = self.config[f"id_battery_current"]
+            self.log(f"Battery current is {self.get_state_retry(entity_id)}")
             ##End logging
 
             inverter_update_count = 0

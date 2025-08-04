@@ -474,6 +474,7 @@ pv_opt:
   
   # battery_voltage: sensor.{device_name}_battery_voltage_2
   # maximum_dod_percent: sensor.{device_name}_force_discharge_soc
+  id_battery_current: sensor.solis_battery_current_2  # Debug purposes only
   # id_consumption_today: sensor.{device_name}_daily_grid_energy_used
   # # id_consumption:
   # #   - sensor.{device_name}_total_consumption_power

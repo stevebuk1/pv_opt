@@ -297,7 +297,14 @@ INVERTER_DEFS = {
     },
     "SOLIS_CLOUD_SENSOR_CONTROL": {
         "online": "sensor.{device_name}_state",
-        "codes": SOLIS_DEFAULT_CODES,
+        "codes": {
+            True: SOLIS_DEFAULT_CODES[True],
+            False: {
+                "Self-Use": 35,
+                "Off-Grid": 36,
+                "Feed-In Priority": 96,
+            },
+        },
         "default_config": {
             "maximum_dod_percent": "sensor.{device_name}_force_discharge_soc",
             "id_consumption_today": "sensor.{device_name}_daily_grid_energy_used",

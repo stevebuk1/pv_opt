@@ -111,7 +111,7 @@ Either enable Control via this integration (mnote this is Experimental/Beta), or
 
 Follow the Github instruction here: https://github.com/mkuthan/solis-cloud-control
 
-Note: install with device name of "solis" rather than the default of "inverter_control_XXXXXXXXXXX" where X is the inverter S/N
+Note: install with device name of "solis" rather than the default of "inverter_control_XXXXXXXXXXX" (where X is the inverter S/N)
 
 
 <h4>Solarman</h4>
