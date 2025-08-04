@@ -9,7 +9,7 @@ The application will integrate fully with Solis inverters which are controlled u
 -   [Home Assistant SolisCloud via Solis Sensor Integration](https://github.com/hultenvp/solis-sensor) (1)
 -   [Home Assistant Solarman Integration](https://github.com/davidrapan/ha-solarman) (2)
 
-(1) Control of inverter via this integration is Experimental/Beta. An alternative is to also install [Solis Control Integration]((https://github.com/mkuthan/solis-cloud-control))
+(1) Control of inverter via this integration is Experimental/Beta. An alternative is to also install [Solis Control Integration](https://github.com/mkuthan/solis-cloud-control)
 (2) https://github.com/StephanJoubert/home_assistant_solarman appears to be no longer maintained so has been replaced with
 https://github.com/davidrapan/ha-solarman. This should be used for new installs for PvOpt v4.0.0 onwards.
 
