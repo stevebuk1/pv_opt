@@ -309,14 +309,14 @@ INVERTER_DEFS = {
             "update_cycle_seconds": 0,
         },
         "brand_config": {
-            "battery_voltage": "sensor.{device_name}_battery_voltage",
-            "id_inverter_mode": "select.{device_name}_energy_storage_control_switch",
-            "id_timed_charge_time": "time.{device_name}_timed_charge_start_1",
-            "id_timed_charge_current": "number.{device_name}_timed_charge_current_1",
-            "id_timed_charge_soc": "number.{device_name}_timed_charge_soc_1",
-            "id_timed_discharge_tine": "time.{device_name}_timed_discharge_start_1",
-            "id_timed_discharge_current": "number.{device_name}_timed_discharge_current_1",
-            "id_timed_discharge_soc": "number.{device_name}_timed_discharge_soc_1",
+            "battery_voltage": "sensor.{device_name}_battery_voltage_2",
+            "id_inverter_mode": "select.{device_name}_storage_mode",
+            "id_timed_charge_time": "text.{device_name}_slot1_charge_time",
+            "id_timed_charge_current": "number.{device_name}_slot1_charge_current",
+            "id_timed_charge_soc": "number.{device_name}_slot1_charge_soc",
+            "id_timed_discharge_time": "text.{device_name}_slot1_discharge_time",
+            "id_timed_discharge_current": "number.{device_name}_slot1_discharge_current",
+            "id_timed_discharge_soc": "number.{device_name}_slot1_discharge_soc",
         },
     },
 
@@ -602,6 +602,7 @@ class SolisInverter(BaseInverterController):
             target_soc = None
 
         if target_soc is None and self._hmi_fb00:
+            self.log ("Pv opt is configured for 6 slot firmware, setting initial value of target_soc")
             if direction == "charge":
                 target_soc = 100
             else:
@@ -625,6 +626,7 @@ class SolisInverter(BaseInverterController):
 
         if changed and self._requires_button_press:
             if self._hmi_fb00:
+                self.log ("Pv opt is configured for 6 slot firmware")
                 self.log("Something changed - need to press the appropriate Button")
                 entity_id = self.brand_config.get(f"id_timed_{direction}_button", None)
                 if entity_id is not None:
@@ -643,13 +645,13 @@ class SolisInverter(BaseInverterController):
             There seems to be a bug where with the FB00+ firmware the changes aren't saved unless
             the target SOC is also set
             """
+            self.log("6 slot firmware configured, about to write target_soc")
             if changed or (self.status[direction].get("soc", 0) != target_soc):
                 self._set_target_soc(direction, target_soc, forced=True)
 
     def hold_soc(self, enable, target_soc=0, **kwargs):
         start = kwargs.get("start", pd.Timestamp.now(tz=self._tz).floor("1min"))
         end = kwargs.get("end", pd.Timestamp.now(tz=self._tz).ceil("30min"))
-        self._hold_soc = {"active": enable, "soc": target_soc}
 
         if self._hmi_fb00:
             self._control_charge_discharge(
@@ -796,9 +798,20 @@ class SolisCloudSensorControlInverter(SolisInverter):
         # Solis inverters can't cope with time slots spanning midnight so if the end is a different day
         # crop it to 23:59
 
+        self.log(f"Times (1) =  {times}")
+        self.log("")
+        self.log(f"Stored value of charge start is {self.status["charge"]["start"]}")
+        self.log(f"Stored value of discharge start is {self.status["discharge"]["start"]}")
+
         if times["end"] is not None:
             if times["start"] is None:
                 start_day = pd.Timestamp.now().day
+
+                # If start time is None then the construction of time_string will fail. We need to set this to whatever the
+                # inverter is currently set to. 
+                self.log(f"Start time is blank, updating start time to be written to last read start time of {self.status[direction]["start"]}")
+                times["start"] = self.status[direction]["start"]
+
             else:
                 start_day = times["start"].day
 
@@ -806,15 +819,10 @@ class SolisCloudSensorControlInverter(SolisInverter):
             if start_day != times["end"].day:
                 times["end"] = times["end"].floor("1D") - pd.Timedelta("1min")
 
-        self.log(f"Times =  {times}")
+        self.log(f"Times (2) =  {times}")
 
         # If start time is None then the construction of time_string will fail. We need to set this to whatever the
-        # inverter is currently set to. I think its stored by self.status[direction]["start"] which is obtained via "get_times_current"
-        # just above
-
-        self.log(f"Stored value of charge start is {self.status["charge"]["start"]}")
-        self.log(f"Stored value of discharge start is {self.status["discharge"]["start"]}")
-
+        # inverter is currently set to. 
 
         if times is not None:
             entity_id = self._host.config.get(f"id_timed_{direction}_time", None)
@@ -825,9 +833,9 @@ class SolisCloudSensorControlInverter(SolisInverter):
                 self.log(f"About to write time value of {time_string} to HA entity {entity_id}")
                 
                 ## Not working, try a service call instead? 
-                changed, written = self.write_to_hass(entity_id=entity_id, value=str(time_string), verbose=True)
+                # changed, written = self.write_to_hass(entity_id=entity_id, value=str(time_string), verbose=True)
                 self._host.call_service("text/set_value", entity_id=entity_id, value=str(time_string))
-                value_changed = value_changed or written
+                value_changed = True
 
         return value_changed
 
@@ -878,6 +886,7 @@ class SolisSolaxModbusInverter(SolisInverter):
 
         current = {"current": self.get_config(f"id_timed_{direction}_current", 0)}
         if self._hmi_fb00:
+            self.log ("Pv opt is configured for 6 slot firmware, setting target SOC")
             target_soc = {"target_soc": self.get_config(f"id_timed_{direction}_soc", 0)}
         else:
             target_soc = {}
@@ -992,6 +1001,7 @@ class SolisCoreModbusInverter(SolisInverter):
 
         current = {"current": self.get_config(f"id_timed_{direction}_current", 0)}
         if self._hmi_fb00:
+            self.log ("Pv opt is configured for 6 slot firmware, getting target SOC")
             target_soc = {"target_soc": self.get_config(f"id_timed_{direction}_soc", 0)}
         else:
             target_soc = {}

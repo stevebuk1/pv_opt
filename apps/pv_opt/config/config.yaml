@@ -454,20 +454,24 @@ pv_opt:
   # id_timed_discharge_button: button.{device_name}_update_timed_discharge_1
   # id_timed_charge_discharge_button: button.{device_name}_update_timed_charge_discharge_1
 
+  # Required for Tariff Comparison, see end of file. Can be commented out if not using. 
+  #  id_solar_power:
+  #  - sensor.{device_name}_dc_power_pv1
+  #  - sensor.{device_name}_dc_power_pv2
+
   # ===============================================================================================================
   # Brand / Integration Specific Config: SOLIS_CLOUD_SENSOR_CONTROL
-  # https://github.com/hultenvp/solis-sensor and https://github.com/mkuthan/solis-cloud-control
+  # https://github.com/hultenvp/solis-sensor (for read only sensors) 
+  # https://github.com/mkuthan/solis-cloud-control (for controlling the inverter)
   # ===============================================================================================================
-  #
-  # These are the default entities used with the Solis Sensor Integration (with Control Switched off) 
-  # and the Solis Cloud Control Integration. 
-  # You can change them here and over-ride the defaults, which is necessary for the entities used for Solis Cloud Control
-  # as they include your Inverter S/N. 
-
+  
   # inverter_type: SOLIS_CLOUD_SENSOR_CONTROL
   # device_name: solis
   # update_cycle_seconds: 0
-
+  
+  # These are the default entities used with the Solis Sensor Integration (with Control Switched off) 
+  # You can change them here and over-ride the defaults.
+  
   # battery_voltage: sensor.{device_name}_battery_voltage_2
   # maximum_dod_percent: sensor.{device_name}_force_discharge_soc
   # id_consumption_today: sensor.{device_name}_daily_grid_energy_used
@@ -476,27 +480,32 @@ pv_opt:
   # id_grid_import_today: sensor.{device_name}_daily_grid_energy_purchased
   # id_grid_export_today: sensor.{device_name}_daily_on_grid_energy
   # id_battery_soc: sensor.{device_name}_remaining_battery_capacity
+  
+  # These are the default entities used with the the Solis Cloud Control Integration.
+  # You can change them here and over-ride the defaults.
+    
+  # id_inverter_mode: select.{device_name}_storage_mode
 
-  id_inverter_mode: select.inverter_control_6031020225290101_storage_mode
+  # id_timed_charge_time: text.{device_name}_slot1_charge_time
+  # id_timed_charge_current: number.{device_name_slot1_charge_current
+  # id_timed_charge_soc: number.{device_name}_slot1_charge_soc
 
-  id_timed_charge_time: text.inverter_control_6031020225290101_slot1_charge_time
-  id_timed_charge_current: number.inverter_control_6031020225290101_slot1_charge_current
-  # id_timed_charge_soc: number.{device_name}_timed_charge_soc_1
+  # id_timed_discharge_time: text.{device_name}_slot1_discharge_time
+  # id_timed_discharge_current: number.{device_name}_slot1_discharge_current
+  # id_timed_discharge_soc: number.{device_name}_slot1_discharge_soc
 
-  id_timed_discharge_time: text.inverter_control_6031020225290101_slot1_discharge_time
-  id_timed_discharge_current: number.inverter_control_6031020225290101_slot1_discharge_current
-  # id_timed_discharge_soc: number.{device_name}_timed_discharge_soc_1
-
-  id_solar_power:
-    - sensor.{device_name}_dc_power_pv1
-    - sensor.{device_name}_dc_power_pv2
+  # Required for Tariff Comparison, see end of file. Can be commented out if not using. 
+  #  id_solar_power:
+  #  - sensor.{device_name}_dc_power_pv1
+  #  - sensor.{device_name}_dc_power_pv2
 
 
+  # ===============================================================================================================
   # Tariff comparison
+  # ===============================================================================================================
+
   # id_daily_solar: sensor.{device_name}_power_generation_today
-  # id_solar_power:
-  #  - sensor.{device_name}_pv_power_1
-  #  - sensor.{device_name}_pv_power_2
+ 
   alt_tariffs:
     - name: Agile_Fix
       octopus_import_tariff_code: E-1R-AGILE-23-12-06-G

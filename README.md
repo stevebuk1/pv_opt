@@ -75,7 +75,12 @@ This excellent integration will pull Octopus Price data in to Home Assistant. Pv
 
 <h3>5. Install the Integration to Control Your Inverter</h3>
 
-At present this app only works directly with Solis hybrid inverters using either the Solax Modbus integration (https://github.com/wills106/homeassistant-solax-modbus) or the HA Core Modbus as described here: https://github.com/fboundy/ha_solis_modbus, or combining the [Solis-Senor](https://github.com/hultenvp/solis-sensor) and [Solis-Control](https://github.com/hultenvp/solis_control) integrations. A Solarman integration (https://github.com/davidrapan/ha-solarman) is also supported.
+At present this app works directly with Solis hybrid inverters using one of the following:
+1) the Solax Modbus integration (https://github.com/wills106/homeassistant-solax-modbus)
+2) the HA Core Modbus as described here: (https://github.com/fboundy/ha_solis_modbus)
+3) SolisCloud - via the Solis-Sensor integration (with Control enabled) as described here (https://github.com/hultenvp/solis-sensor)
+4) SolisCloud - Combining the Solis-Sensor (https://github.com/hultenvp/solis-sensor) and Solis-Control (https://github.com/mkuthan/solis-cloud-control) integrations. 
+5) A Solarman integration (https://github.com/davidrapan/ha-solarman)
 
 <h4>Solax Modbus:</h4>
 
@@ -100,10 +105,14 @@ Follow the Github instructions here: https://github.com/fboundy/ha_solis_modbus
 <h5>Solis-Sensor</h5>
 
 Follow the Github instruction here: https://github.com/hultenvp/solis-sensor
+Either enable Control via this integration (mnote this is Experimental/Beta) or leave disabled and install Solis-Control below. 
+
 
 <h5>Solis-Control</h5>
 
-Follow the Github instruction here: https://github.com/hultenvp/solis_control
+Follow the Github instruction here: https://github.com/mkuthan/solis-cloud-control
+Note: install with device name of "solis" rather than the default of "inverter_control_XXXXXXXXXXX" where X is the inverter S/N
+
 
 <h4>Solarman</h4>
 
@@ -498,11 +507,11 @@ The app always produces a Base forecast of future battery SOC and the associated
 
 If `Optimise Charging` is enabled, an optimsised charging plan is calculated and writtemt to `sensor.pvopt_opt_cost`. This will also include a list of forced charge and discharge windows.
 
-The easiest way to control and visualise this is through the `dashboards/pvopt_dashboard.yaml` Lovelace yaml file included in this repo. If you're using the Solis Cloud integration, you can start with the `dashboards/pvopt_dashboard_solis_cloud.yaml`. Note that you will need to manually paste this into a dashboard and edit the charts to use the correct Octopus Energy sensors:
+The easiest way to control and visualise this is through the `dashboards/pvopt_dashboard.yaml` Lovelace yaml file included in this repo. 
 
 ![Alt text](image-1.png)
 
-This dashboards uses a couple of template sensors and time which will need adding to `/homeassistant/configuration.yaml`:
+This dashboard uses a couple of template sensors and time which will need adding to `/homeassistant/configuration.yaml`:
 
 ```
 template:
@@ -532,6 +541,29 @@ sensor:
       - 'date_time_utc'
       - 'date_time_iso'
 ```
+
+If you're using any of the Solis Cloud integrations, you can start with the `dashboards/pvopt_dashboard_solis_cloud.yaml`. Note that you will need to manually paste this into a dashboard and edit the charts to use the correct Octopus Energy sensors. 
+
+You'll also need a couple of extra template sensors which will need adding to `/homeassistant/configuration.yaml`:
+
+```
+    - name: "Solis Battery Charge Power"
+      unique_id: solis_battery_charge_power
+      unit_of_measurement: W
+      device_class: power
+      state_class: measurement
+      state: >-
+        {{max(states('sensor.solis_battery_power_2') | float(0),0)}}    
+
+    - name: "Solis Battery Discharge Power"
+      unique_id: solis_battery_discharge_power
+      unit_of_measurement: W
+      device_class: power
+      state_class: measurement
+      state: >-
+        {{max(-(states('sensor.solis_battery_power_2') | float(0)),0)}}
+```
+
 
 The dashboards also depend on the following Frontend components from HACS:
 

@@ -40,6 +40,15 @@ views:
                 name: Battery Charge/Discharge
                 max: 5000
                 min: -5000
+              - entity: sensor.solis_battery_charge_power
+                name: Battery Charge
+                max: 5000
+                min: 0
+              - entity: sensor.solis_battery_discharge_power
+                name: Battery Discharge
+                max: 5000
+                min: 0
+
           - type: entities
             entities:
               - type: custom:template-entity-row
