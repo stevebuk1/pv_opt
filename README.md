@@ -6,11 +6,10 @@ The application will integrate fully with Solis inverters which are controlled u
 
 -   [Home Assistant Solax Modbus Integration](https://github.com/wills106/homeassistant-solax-modbus)
 -   [Home Assistant Core Modbus Integration](https://github.com/fboundy/ha_solis_modbus)
--   [Home Assistant SolisCloud Solis Sensor Integration](https://github.com/hultenvp/solis-sensor)
--   [Home Assistant SolisCloud Solis Control Integration](https://github.com/mkuthan/solis-cloud-control) (1)
+-   [Home Assistant SolisCloud via Solis Sensor Integration (https://github.com/hultenvp/solis-sensor) (1)
 -   [Home Assistant Solarman Integration](https://github.com/davidrapan/ha-solarman) (2)
 
-(1) An alternative to SolisCloud control via the Solis Sensor integration
+(1) Control of inverter via this integration is Experimental/Beta. An alternative is to also install [Solis Control Integration]((https://github.com/mkuthan/solis-cloud-control))
 (2) https://github.com/StephanJoubert/home_assistant_solarman appears to be no longer maintained so has been replaced with
 https://github.com/davidrapan/ha-solarman. This should be used for new installs for PvOpt v4.0.0 onwards.
 
@@ -105,12 +104,13 @@ Follow the Github instructions here: https://github.com/fboundy/ha_solis_modbus
 <h5>Solis-Sensor</h5>
 
 Follow the Github instruction here: https://github.com/hultenvp/solis-sensor
-Either enable Control via this integration (mnote this is Experimental/Beta) or leave disabled and install Solis-Control below. 
+Either enable Control via this integration (mnote this is Experimental/Beta), or leave disabled and install Solis-Control below. 
 
 
 <h5>Solis-Control</h5>
 
 Follow the Github instruction here: https://github.com/mkuthan/solis-cloud-control
+
 Note: install with device name of "solis" rather than the default of "inverter_control_XXXXXXXXXXX" where X is the inverter S/N
 
 
@@ -544,7 +544,7 @@ sensor:
 
 If you're using any of the Solis Cloud integrations, you can start with the `dashboards/pvopt_dashboard_solis_cloud.yaml`. Note that you will need to manually paste this into a dashboard and edit the charts to use the correct Octopus Energy sensors. 
 
-You'll also need a couple of extra template sensors which will need adding to `/homeassistant/configuration.yaml`:
+For this dashboard you'll also need a couple of extra template sensors which will need adding to `/homeassistant/configuration.yaml`:
 
 ```
     - name: "Solis Battery Charge Power"
