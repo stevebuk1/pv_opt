@@ -447,6 +447,7 @@ class BaseInverterController(ABC):
 
         if isinstance(value, int) or isinstance(value, float):
             return self._host.write_and_poll_value(entity_id=entity_id, value=value, **kwargs)
+        
         else:
             # self.log("write_to_hass - time detected")
             # var_type = type(value)
@@ -460,6 +461,24 @@ class BaseInverterController(ABC):
                     level="ERROR",
                 )
                 return True, False
+            
+    def write_to_hass_text(self, entity_id, value):
+      
+        if isinstance(value, str):
+            
+            return self._host.write_and_poll_text(entity_id=entity_id, text=value)
+
+            #try: 
+            #    return self._host.write_and_poll_text(entity_id=entity_id, value=value)
+            #except:
+            #    self.log(
+            #        f"Unable to write value {value} to entity {entity_id}",
+            #        level="ERROR",
+            #    )
+            #    return True, False
+        else:
+            
+            return True, False
 
     def _press_button(self, entity_id):
         self._host.call_service("button/press", entity_id=entity_id)
@@ -823,7 +842,6 @@ class SolisCloudSensorControlInverter(SolisInverter):
             else:
                 start_day = times["start"].day
 
-            # if times["end"].day != times["start"].day:
             if start_day != times["end"].day:
                 times["end"] = times["end"].floor("1D") - pd.Timedelta("1min")
 
@@ -837,11 +855,11 @@ class SolisCloudSensorControlInverter(SolisInverter):
                 time_string = f'{times["start"].strftime("%H:%M")}-{times["end"].strftime("%H:%M")}'
                 self.log(f"About to write time value of {time_string} to HA entity {entity_id}")
                 
-                ## Not working, try a service call instead? 
-                # changed, written = self.write_to_hass(entity_id=entity_id, value=str(time_string), verbose=True)
-                result = self._host.call_service("text/set_value", entity_id=entity_id, value=str(time_string))
-                self.log(f"Result of call_service is {result}")
-                value_changed = True
+                changed, written = self.write_to_hass_text(entity_id=entity_id, value=str(time_string))
+                # result = self._host.write_and_poll_text(entity_id=entity_id, value=time_string)
+                # result = self._host.call_service("text/set_value", entity_id=entity_id, value=str(time_string))
+                # self.log(f"Result of call_service is {result}")
+                value_changed = changed
 
         return value_changed
 

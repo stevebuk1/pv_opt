@@ -14,7 +14,7 @@ import pvpy as pv
 from numpy import nan
 
 
-VERSION = "5.0.0-Beta-3"
+VERSION = "5.0.0-Beta-4"
 
 UNITS = {
     "current": "A",
@@ -4491,6 +4491,53 @@ class PVOpt(hass.Hass):
             #    self.log(str_log)
 
         return (changed, written)
+
+    def write_and_poll_text(self, entity_id, text: str):
+
+        changed = False
+        written = False
+
+        state = self.get_state_retry(entity_id=entity_id)
+
+        self.log(f"Write_and_poll_text: text = {text}, old_text = {state}")
+
+        if state != text:
+            changed = True
+            self.log(f"Write_and_poll_text: Changed = true")
+
+            try:
+                result = self.call_service("text/set_value", entity_id=entity_id, value=str(text))
+                self.log(f"XResult of call_service is {result}")
+
+                written = False
+                retries = 0
+                while not written and retries < WRITE_POLL_RETRIES:
+
+                    # SVB debugging
+                    self.log("Write_and_poll_text: Entered while loop")
+
+                    retries += 1
+                    time.sleep(WRITE_POLL_SLEEP)
+                    new_state = self.get_state_retry(entity_id=entity_id)
+                    written = new_state == text
+
+                    # SVB debugging
+                    self.log(f"Write_and_poll_text:  while loop, new_text = {new_state}")
+
+            except:
+                written = False
+
+        else:
+            self.log("Inverter already at correct time")
+
+            # commented out, as causes an error (new state not defined) if routine above fails, negating the use of "try/except"
+            # if verbose:
+            #    str_log = f"Entity: {entity_id:30s} Time: {time}  Old State: {state} "
+            #    str_log += f"New state: {new_state}"
+            #    self.log(str_log)
+
+        return (changed, written)
+
 
     def write_and_poll_value(self, entity_id, value: int | float, tolerance=0.0, verbose=True):
         changed = False
