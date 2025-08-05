@@ -657,27 +657,31 @@ class SolisInverter(BaseInverterController):
                 self._set_target_soc(direction, target_soc, forced=True)
 
     def hold_soc(self, enable, target_soc=0, **kwargs):
-        start = kwargs.get("start", pd.Timestamp.now(tz=self._tz).floor("1min"))
-        end = kwargs.get("end", pd.Timestamp.now(tz=self._tz).ceil("30min"))
 
-        if self._hmi_fb00:
-            self._control_charge_discharge(
-                "charge",
-                enable=enable,
-                start=start,
-                end=end,
-                power=3000,
-                target_soc=target_soc,
-            )
+        if enable:
+            start = kwargs.get("start", pd.Timestamp.now(tz=self._tz).floor("1min"))
+            end = kwargs.get("end", pd.Timestamp.now(tz=self._tz).ceil("30min"))
+
+            if self._hmi_fb00:
+                self._control_charge_discharge(
+                    "charge",
+                    enable=enable,
+                    start=start,
+                    end=end,
+                    power=3000,
+                    target_soc=target_soc,
+                )
+            else:
+                self._hold_soc = {"active": True, "soc": {target_soc}}
+                self._control_charge_discharge(
+                    "charge",
+                    enable=enable,
+                    start=start,
+                    end=end,
+                    power=0,
+                )
         else:
-
-            self._control_charge_discharge(
-                "charge",
-                enable=enable,
-                start=start,
-                end=end,
-                power=0,
-            )
+            self._hold_soc = {"active": False, "soc": 0}
 
     def _get_times_current(self, direction):
         times = {
@@ -776,7 +780,7 @@ class SolisCloudSensorControlInverter(SolisInverter):
         # times_string = pd.Timestamp(self.get_config(f"id_timed_{direction}_time", "0:00"), tz=self._tz)
 
         times_string = self.get_config(f"id_timed_{direction}_time", "0:00")
-        self.log(f"Time_string = {times_string}")
+        # self.log(f"Time_string = {times_string}")
 
         time_start = times_string[0:5]
         time_end = times_string[6:11]
@@ -787,8 +791,8 @@ class SolisCloudSensorControlInverter(SolisInverter):
         times["start"] = pd.Timestamp(time_start, tz=self._tz)
         times["end"] = pd.Timestamp(time_end, tz=self._tz)
         
-        self.log(f"Time_start = {times["start"]}")
-        self.log(f"Time_end = {times["end"]}")
+        # self.log(f"Time_start = {times["start"]}")
+        # self.log(f"Time_end = {times["end"]}")
 
         current = {"current": self.get_config(f"id_timed_{direction}_current", 0)}
         if self._hmi_fb00:
@@ -835,7 +839,8 @@ class SolisCloudSensorControlInverter(SolisInverter):
                 
                 ## Not working, try a service call instead? 
                 # changed, written = self.write_to_hass(entity_id=entity_id, value=str(time_string), verbose=True)
-                self._host.call_service("text/set_value", entity_id=entity_id, value=str(time_string))
+                result = self._host.call_service("text/set_value", entity_id=entity_id, value=str(time_string))
+                self.log(f"Result of call_service is {result}")
                 value_changed = True
 
         return value_changed
@@ -847,7 +852,7 @@ class SolisSolarmanV2Inverter(SolisInverter):
         self._requires_button_press = False
 
     def _set_current(self, direction, current: float = 0) -> bool:
-        entity_id = self._host.(f"id_timed_{direction}_current", None)
+        entity_id = self._host.config.get(f"id_timed_{direction}_current", None)
 
         current = round(current, 1)
 
@@ -913,7 +918,7 @@ class SolisSolaxModbusInverter(SolisInverter):
         for limit in LIMITS:
             time = times.get(limit, None)
             if time is not None:
-                entity_id = self._host.(f"id_timed_{direction}_{limit}_hours", None)
+                entity_id = self._host.config.get(f"id_timed_{direction}_{limit}_hours", None)
                 if entity_id is not None:
                     changed, written = self.write_to_hass(entity_id=entity_id, value=time.hour, verbose=True)
                     value_changed = value_changed or (changed and written)

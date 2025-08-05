@@ -3038,7 +3038,8 @@ class PVOpt(hass.Hass):
                     else:  # if already in Car slot, this bit should run
                         self.log(f"Current charge/discharge window ends in {time_to_slot_end:0.1f} minutes.")
 
-                        # Clear off hold status (no longer read from the inverter so needs manually clearing)                       
+                        # Clear off hold status (no longer read from the inverter so needs clearing by command)
+                        self.log("Clearing hold status")                       
                         self.inverter.hold_soc(enable=False)
 
                         if self.charge_power > 0:  # Intentionally 0 (not 1) to ensure Car slots are also encompassed.
@@ -3173,8 +3174,6 @@ class PVOpt(hass.Hass):
                             time.sleep(1)
                             i -= 1
 
-                        # status = self.inverter.status
-                        # self._log_inverterstatus(status)
 
             status_switches = {
                 "charge": "off",
