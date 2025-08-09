@@ -14,7 +14,7 @@ import pvpy as pv
 from numpy import nan
 
 
-VERSION = "5.0.0-Beta-4"
+VERSION = "5.0.0-Beta-5"
 
 UNITS = {
     "current": "A",
@@ -4517,7 +4517,7 @@ class PVOpt(hass.Hass):
                     self.log("Write_and_poll_text: Entered while loop")
 
                     retries += 1
-                    time.sleep(WRITE_POLL_SLEEP)
+                    time.sleep(WRITE_POLL_TIME_SLEEP)  # as WRITE_POLL_SLEEP value not sufficent for SolisCloud writes to charge/discharge current. 
                     new_state = self.get_state_retry(entity_id=entity_id)
                     written = new_state == text
 

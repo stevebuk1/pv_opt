@@ -691,7 +691,7 @@ class SolisInverter(BaseInverterController):
                     target_soc=target_soc,
                 )
             else:
-                self._hold_soc = {"active": True, "soc": {target_soc}}
+                self._hold_soc = {"active": True, "soc": target_soc}
                 self._control_charge_discharge(
                     "charge",
                     enable=enable,
