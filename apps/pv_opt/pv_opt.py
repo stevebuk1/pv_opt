@@ -146,6 +146,7 @@ DEFAULT_CONFIG = {
     "include_export": {"default": True, "domain": "switch"},
     "forced_discharge": {"default": True, "domain": "switch"},
     "allow_cyclic": {"default": False, "domain": "switch"},
+    "fill_first": {"default": False, "domain": "switch"},
     "use_solar": {"default": True, "domain": "switch"},
     "ev_part_of_house_load": {"default": True, "domain": "switch"},
     "prevent_discharge": {"default": False, "domain": "switch"},
@@ -878,7 +879,7 @@ class PVOpt(hass.Hass):
         # self.log(df.dtypes)
         # self.log(df.info)
 
-        # v16.0.0 of the Octopus Energy Integration randomly doesnt generate charge_in_kwh. Check it exists before logging it. 
+        # v16.0.0 of the Octopus Energy Integration randomly doesnt generate charge_in_kwh. Check it exists before logging it.
 
         if "charge_in_kwh" in df.columns:
 
@@ -891,8 +892,6 @@ class PVOpt(hass.Hass):
                 self.log(
                     f"    {window[1]['start_dt'].tz_convert(self.tz).strftime('%H:%M'):>7s} to {window[1]['end_dt'].tz_convert(self.tz).strftime('%H:%M'):<7s}  "
                 )
-
-       
 
         if len(df) == 0:
             self.log("    No IOG Smart Charging Schedule found.")
@@ -1559,7 +1558,6 @@ class PVOpt(hass.Hass):
                         # Set import import price to 0 for slots (isnt used/displayed if using IOG, but is in Agile)
 
                         car_slots["import"] = 0
-     
 
                         if self.debug and "E" in self.debug_cat:
                             self.log("")
@@ -1572,7 +1570,9 @@ class PVOpt(hass.Hass):
 
                         if "charge_in_kwh" not in car_slots.columns:
                             car_slots["charge_in_kwh"] = 0
-                            self.log("charge_in_kwh info not received from Octopus Energy Integration, setting to zero")
+                            self.log(
+                                "charge_in_kwh info not received from Octopus Energy Integration, setting to zero"
+                            )
 
                         if self.debug and "E" in self.debug_cat:
                             self.log("")
@@ -2578,14 +2578,22 @@ class PVOpt(hass.Hass):
             "Optimised Charging": {
                 "export": False,
                 "discharge": False,
+                "fill_first": False,
             },
             "Optimised PV Export": {
                 "export": True,
                 "discharge": False,
+                "fill_first": False,
             },
             "Forced Discharge": {
                 "export": True,
                 "discharge": True,
+                "fill_first": False,
+            },
+            "Forced Discharge (Fill First)": {
+                "export": True,
+                "discharge": True,
+                "fill_first": True,
             },
         }
 
@@ -2594,6 +2602,9 @@ class PVOpt(hass.Hass):
 
         elif not self.get_config("forced_discharge"):
             self.selected_case = "Optimised PV Export"
+
+        elif self.get_config("fill_first"):
+            self.selected_case = "Forced Discharge (Fill First)"
 
         else:
             self.selected_case = "Forced Discharge"
@@ -2612,6 +2623,7 @@ class PVOpt(hass.Hass):
                     log=True,
                     use_export=cases[case]["export"],
                     discharge=cases[case]["discharge"],
+                    fill_first=cases[case]["fill_first"],
                 )
 
                 self.optimised_cost[case] = self.contract.net_cost(self.flows[case], sum=False)
@@ -2626,6 +2638,7 @@ class PVOpt(hass.Hass):
                     log=(case == self.selected_case),
                     use_export=cases[case]["export"],
                     discharge=cases[case]["discharge"],
+                    fill_first=cases[case]["fill_first"],
                 )
 
                 self.optimised_cost[case] = self.contract.net_cost(self.flows[case], sum=False)
@@ -4418,8 +4431,8 @@ class PVOpt(hass.Hass):
             df = pd.DataFrame(hist[0]).set_index("last_updated")["state"]
             df.index = pd.to_datetime(df.index, format="ISO8601")
 
-            #get_history has changed in Appdaemon v4.5.X, it now reports local time, rather than the timezone of "days" (or a default of UTC, not sure which)
-            #all use of hass2df seems to pass UTC time, to convert results to UTC. 
+            # get_history has changed in Appdaemon v4.5.X, it now reports local time, rather than the timezone of "days" (or a default of UTC, not sure which)
+            # all use of hass2df seems to pass UTC time, to convert results to UTC.
             df.index = pd.to_datetime(df.index, utc=True)
 
             df = df.sort_index()

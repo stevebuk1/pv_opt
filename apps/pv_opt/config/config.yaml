@@ -1,12 +1,15 @@
 # Internal configuration --- DO NOT EDIT ---
-
 pv_opt:
   module: pv_opt
   class: PVOpt
+  # dependencies:
+  #   - pvpy
+  #   - solis
+  #   # - inverters
 
   log: pv_opt_log
   prefix: pvopt
-  debug: false
+  debug: true
 
   # User configuration ---  EDIT AWAY! ---
   # ========================================
@@ -14,7 +17,7 @@ pv_opt:
   # ========================================
 
   # If true the current config in HA will be over-written with that in the config.yaml.
-  overwrite_ha_on_restart: false
+  overwrite_ha_on_restart: true
   list_entities: true
 
   # If true the personal data will be redacted from the log files.
@@ -44,7 +47,7 @@ pv_opt:
 
   # Letters can be added to "debug_categories" in any order
 
-  debug_categories: W
+  debug_categories: S
 
   # ========================================
   # Basic parameters
@@ -52,6 +55,7 @@ pv_opt:
   read_only: false # If true the inverter will not be controlled
   forced_discharge: true # Enable forced discharging
   allow_cyclic: false # Enable alternate charge/discharge windows
+  fill_first: true
 
   # ========================================
   # Plant parameters
@@ -108,7 +112,7 @@ pv_opt:
   # ========================================
   # Octopus account parameters
   # ========================================
-  octopus_auto: True # Read tariffs from the Octopus Energy integration. If successful this over-rides the following parameters
+  octopus_auto: true # Read tariffs from the Octopus Energy integration. If successful this over-rides the following parameters
   # octopus_account: !secret octopus_account
   # octopus_api_key: !secret octopus_api_key
 
@@ -144,14 +148,14 @@ pv_opt:
   # octopus_import_tariff_code: E-2R-VAR-22-11-01-G
   # octopus_export_tariff_code: E-1R-AGILE-OUTGOING-19-05-13-G
 
-  # octopus_import_tariff_code: E-1R-AGILE-23-12-06-G
+  octopus_import_tariff_code: E-1R-AGILE-23-12-06-G
   # # octopus_export_tariff_code: E-1R-OUTGOING-LITE-FIX-12M-23-09-12-G
   octopus_export_tariff_code: E-1R-OUTGOING-FIX-12M-19-05-13-G
 
   # octopus_import_tariff_code: E-1R-FLUX-IMPORT-23-02-14-G
   # octopus_export_tariff_code: E-1R-FLUX-EXPORT-23-02-14-G
 
-  octopus_import_tariff_code: E-1R-GO-VAR-22-10-14-N
+  # octopus_import_tariff_code: E-1R-GO-VAR-22-10-14-N
   # octopus_export_tariff_code: E-1R-OUTGOING-LITE-FIX-12M-23-09-12-N
 
   # ========================================
