@@ -9,7 +9,7 @@ pv_opt:
 
   log: pv_opt_log
   prefix: pvopt
-  debug: true
+  debug: false
 
   # User configuration ---  EDIT AWAY! ---
   # ========================================
@@ -47,7 +47,7 @@ pv_opt:
 
   # Letters can be added to "debug_categories" in any order
 
-  debug_categories: S
+  debug_categories: T
 
   # ========================================
   # Basic parameters

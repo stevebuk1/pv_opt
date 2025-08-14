@@ -228,8 +228,7 @@ class Tariff:
             return max([pd.Timestamp(x["valid_to"]) for x in self.unit])
 
     def to_df(self, start=None, end=None, **kwargs):
-
-        if self.host.debug and "V" in self.host.debug_cat:
+        if self.host.debug and "T" in self.host.debug_cat:
             self.log(f">>> {self.name}")
             self.log(f">>> Start: {start.strftime(TIME_FORMAT)} End: {end.strftime(TIME_FORMAT)}")
 
@@ -306,11 +305,15 @@ class Tariff:
                         ]
                     )
 
-            # If the index frequency >30 minutes so we need to just extend it:
-            if (len(df) > 1 and ((df.index[-1] - df.index[-2]).total_seconds() / 60) > 30) or len(df) == 1:
-                newindex = pd.date_range(df.index[0], end, freq="30min")
-                df = df.reindex(index=newindex).ffill().loc[start:]
+            # If the index frequency >30 minutes so we need to just extend it
+            if len(df) > 1:
+                last_dt_hours = (df.index[-1] - df.index[-2]).total_seconds() / 3600
             else:
+                last_dt_hours = np.inf
+
+            self.log(f"{self.name:30s} {last_dt_hours:10.1f}")
+            if last_dt_hours == 0.5:
+                # This is half hourly data like Agile
                 i = 0
                 while df.index[-1] < end and i < 7:
                     i += 1
@@ -323,6 +326,22 @@ class Tariff:
                     df = pd.concat([df, dfx])
                     df = df[df.columns[0]]
                 df = df.loc[start:end]
+
+            elif last_dt_hours > 24:
+                # This isn't a daily tariff so just extend it
+                newindex = pd.date_range(df.index[0], end, freq="30min")
+                df = df.reindex(index=newindex).ffill().loc[start:]
+
+            else:
+                # This is a daiy tariff but doesn't have 30 minute data from Octopus (ie Flux/Go)
+                self.log(df.to_string())
+                dfx = df.loc[df.index[-1] - pd.Timedelta(hours=23, minutes=59) :].copy()
+                dfx.index += pd.Timedelta(hours=24)
+                df2 = pd.concat([df, dfx])
+                newindex = pd.date_range(start - pd.Timedelta(hours=24), end, freq="30min")
+                df = df2.reindex(index=newindex).ffill().loc[start:]
+                self.log(df.to_string())
+
             df.name = "unit"
 
             # SVB logging
@@ -649,7 +668,7 @@ class Contract:
         end = grid_flow.index[-1]
 
         # SVB debugging
-        # self.log(f"Start = {start}, End = {end}")
+        # self.log(f">>>Net Cost: Start = {start}, End = {end}")
 
         if (
             isinstance(grid_flow, pd.DataFrame)
