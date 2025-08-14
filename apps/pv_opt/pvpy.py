@@ -334,13 +334,11 @@ class Tariff:
 
             else:
                 # This is a daiy tariff but doesn't have 30 minute data from Octopus (ie Flux/Go)
-                self.log(df.to_string())
                 dfx = df.loc[df.index[-1] - pd.Timedelta(hours=23, minutes=59) :].copy()
                 dfx.index += pd.Timedelta(hours=24)
                 df2 = pd.concat([df, dfx])
                 newindex = pd.date_range(start - pd.Timedelta(hours=24), end, freq="30min")
                 df = df2.reindex(index=newindex).ffill().loc[start:]
-                self.log(df.to_string())
 
             df.name = "unit"
 
