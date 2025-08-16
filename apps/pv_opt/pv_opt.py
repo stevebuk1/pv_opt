@@ -3546,6 +3546,7 @@ class PVOpt(hass.Hass):
         cost,
         df,
         attributes={},
+        full=True,
     ):
         cost_today = self._cost_actual()
         midnight = pd.Timestamp.now(tz="UTC").normalize() + pd.Timedelta(24, "hours")
@@ -3588,10 +3589,14 @@ class PVOpt(hass.Hass):
                 ),
                 "cost_tomorrow": round((cost["cost"].loc[midnight:].sum()) / 100, 2),
             }
-            | {col: df[["period_start", col]].to_dict("records") for col in cols if col in df.columns}
-            | {"cost": cost[["period_start", "cumulative_cost"]].to_dict("records")}
-            | attributes
-        )
+        ) | attributes
+
+        if full:
+            attributes = (
+                {col: df[["period_start", col]].to_dict("records") for col in cols if col in df.columns}
+                | {"cost": cost[["period_start", "cumulative_cost"]].to_dict("records")}
+                | attributes
+            )
 
         self.write_to_hass(
             entity=entity,
@@ -3634,8 +3639,8 @@ class PVOpt(hass.Hass):
         )
 
         self.write_to_hass(
-            state=np.round(self._cost_actual().sum() / 100, 2),
-            entity=f"sensor.{self.prefix}_cost_today",
+            f"sensor.{self.prefix}_cost_today",
+            np.round(self._cost_actual().sum() / 100, 2),
             attributes={
                 "friendly_name": f"PV_Opt Cost Today",
                 "device_class": "monetary",
@@ -3645,15 +3650,12 @@ class PVOpt(hass.Hass):
         )
 
         for case in self.summary_costs:
-            self.write_to_hass(
-                state=self.summary_costs[case]["cost"],
+            self.write_cost(
+                f"PV_Opt Cost ({case})",
                 entity=f"sensor.{self.prefix}_cost_{case.lower().replace(" ","_")}",
-                attributes={
-                    "friendly_name": f"PV_Opt Cost ({case})",
-                    "device_class": "monetary",
-                    "state_class": "measurement",
-                    "unit_of_measurement": "GBP",
-                },
+                cost=self.optimised_cost[case],
+                df=self.flows[case],
+                full=False,
             )
 
         if len(self.windows) > 0:

@@ -1173,7 +1173,7 @@ class PVsystemModel:
 
             # Add rounding to ensure matching (may not be needed)
             x["import"] = x["import"].round(2)
-            min_price = min_price.round(2)
+            min_price = np.round(min_price, 2)
 
             if len(x[x["import"] == min_price]) > 0:
                 start_window = x[x["import"] == min_price].index[0]
@@ -1286,8 +1286,11 @@ class PVsystemModel:
         min_import_price = self.flows["import"].min()
         if log:
             self.log("")
-            self.log("Forced Discharging")
-            self.log("------------------")
+            str_log = "Forced Discharging"
+            if fill_first:
+                str_log += "(Fill First)"
+            self.log(str_log)
+            self.log("-" * len(str_log))
             self.log("")
 
         i = 0
