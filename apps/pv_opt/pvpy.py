@@ -311,7 +311,7 @@ class Tariff:
             else:
                 last_dt_hours = np.inf
 
-            self.log(f"{self.name:30s} {last_dt_hours:10.1f}")
+            # self.log(f"{self.name:30s} {last_dt_hours:10.1f}")
             if last_dt_hours == 0.5:
                 # This is half hourly data like Agile
                 i = 0
@@ -1281,7 +1281,6 @@ class PVsystemModel:
             # If we are filling first, we first need to find all the slots we could use for filling
             slots += self._charge_slots
             slots_added += len(self._charge_slots)
-            self.log(f">>> {slots}")
 
         # Check how many slots which aren't full are at an export price less than any import price:
         min_import_price = self.flows["import"].min()
@@ -1340,16 +1339,16 @@ class PVsystemModel:
                 str_log += f"New SOC: {self.flows.loc[start_window]['soc']:5.1f}%->{self.flows.loc[start_window]['soc_end']:5.1f}% "
                 str_log += f"Max export: {-self.flows['grid'].min():0.0f}W "
                 if net_cost < best_cost - self.host.get_config("slot_threshold_p"):
-                    str_log += "<==="
+                    if log:
+                        self.log(str_log)
                     best_cost = net_cost
                     slots_added += 1
+
                 else:
                     # done = True
                     slots = slots[:-1]
                     self.calculate_flows(slots=slots)
 
-                if log:
-                    self.log(str_log)
             else:
                 done = True
 

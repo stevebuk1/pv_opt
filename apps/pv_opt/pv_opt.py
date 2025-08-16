@@ -255,7 +255,7 @@ DEFAULT_CONFIG = {
         "default": 5.0,
         "attributes": {
             "min": 0.0,
-            "max": 1000.0,
+            "max": 100.0,
             "step": 5,
             "mode": "box",
         },
@@ -2590,7 +2590,7 @@ class PVOpt(hass.Hass):
                 "discharge": True,
                 "fill_first": False,
             },
-            "Forced Discharge (Fill First)": {
+            "Forced Discharge Fill First": {
                 "export": True,
                 "discharge": True,
                 "fill_first": True,
@@ -2604,7 +2604,7 @@ class PVOpt(hass.Hass):
             self.selected_case = "Optimised PV Export"
 
         elif self.get_config("fill_first"):
-            self.selected_case = "Forced Discharge (Fill First)"
+            self.selected_case = "Forced Discharge Fill First"
 
         else:
             self.selected_case = "Forced Discharge"
@@ -2653,7 +2653,7 @@ class PVOpt(hass.Hass):
         # )
 
         self.ulog("Optimisation Summary")
-        self.log(f"  {'Base cost:':40s} {self.optimised_cost['Base'].sum():6.1f}p")
+        self.log(f"  {'Base cost:':60s} {self.optimised_cost['Base'].sum():6.1f}p")
         cost_today = self._cost_actual().sum()
         self.summary_costs = {
             "Base": {
@@ -2662,7 +2662,7 @@ class PVOpt(hass.Hass):
             }
         }
         for case in cases:
-            str_log = f"  {f'Optimised cost ({case}):':40s} {self.optimised_cost[case].sum():6.1f}p"
+            str_log = f"  {f'Optimised cost ({case}):':60s} {self.optimised_cost[case].sum():6.1f}p"
             self.summary_costs[case] = {"cost": ((self.optimised_cost[case].sum() + cost_today) / 100).round(2)}
             if case == self.selected_case:
                 self.summary_costs[case]["Selected"] = " <=== Current Setup"
@@ -3632,6 +3632,29 @@ class PVOpt(hass.Hass):
             df=self.flows[self.selected_case],
             attributes={"Summary": self.summary_costs},
         )
+
+        self.write_to_hass(
+            state=np.round(self._cost_actual().sum() / 100, 2),
+            entity=f"sensor.{self.prefix}_cost_today",
+            attributes={
+                "friendly_name": f"PV_Opt Cost Today",
+                "device_class": "monetary",
+                "state_class": "measurement",
+                "unit_of_measurement": "GBP",
+            },
+        )
+
+        for case in self.summary_costs:
+            self.write_to_hass(
+                state=self.summary_costs[case]["cost"],
+                entity=f"sensor.{self.prefix}_cost_{case.lower().replace(" ","_")}",
+                attributes={
+                    "friendly_name": f"PV_Opt Cost ({case})",
+                    "device_class": "monetary",
+                    "state_class": "measurement",
+                    "unit_of_measurement": "GBP",
+                },
+            )
 
         if len(self.windows) > 0:
             hass_start = self.charge_start_datetime
