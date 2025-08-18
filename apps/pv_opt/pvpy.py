@@ -1120,8 +1120,12 @@ class PVsystemModel:
 
         self.slots = slots
 
-    def _low_cost_charging(self, log=True):
-        self._charge_slots = []
+    def _low_cost_charging(self, log=True, test=True):
+        """
+        test: If True: test the slots agains the thresholds and save the slots to self._slots
+              If False: don't test the slots, just calculate them and retuen the resulting slots array
+
+        """
         slots = [slot for slot in self.slots]
         best_cost = self.best_cost
         slots_added = 0
@@ -1219,71 +1223,65 @@ class PVsystemModel:
                     forced_charge,
                 )
 
-                self._charge_slots.append(slot)
                 slots.append(slot)
 
                 self.calculate_flows(slots=slots)
 
-                if self.host.debug and "F" in self.host.debug_cat:
-                    self.log("self.flows after flows called = ")
-                    self.log(f"\n{self.flows.to_string()}")
-
-                net_cost = self.net_cost
-
-                if self.host.debug and "C" in self.host.debug_cat:
-                    self.log(f"Cost = {net_cost:5.1f}")
-                    if net_cost < best_cost:
-                        self.log("Cost reduction found - printing flows")
+                if test:
+                    if self.host.debug and "F" in self.host.debug_cat:
+                        self.log("self.flows after flows called = ")
                         self.log(f"\n{self.flows.to_string()}")
 
-                str_log += f"Net: {net_cost:5.1f} "
-                if net_cost < best_cost - self.host.get_config("slot_threshold_p"):
-                    str_log += f"New SOC: {self.flows.loc[start_window]['soc']:5.1f}%->{self.flows.loc[start_window]['soc_end']:5.1f}% "
-                    str_log += f"Max export: {-self.flows['grid'].min():0.0f}W "
-                    best_cost = net_cost
-                    slots_added += 1
-                    if log:
-                        self.log(str_log)
-                else:
-                    # done = True
-                    slots = slots[:-1]
-                    self.calculate_flows(slots=slots)
+                    net_cost = self.net_cost
+
+                    if self.host.debug and "C" in self.host.debug_cat:
+                        self.log(f"Cost = {net_cost:5.1f}")
+                        if net_cost < best_cost:
+                            self.log("Cost reduction found - printing flows")
+                            self.log(f"\n{self.flows.to_string()}")
+
+                    str_log += f"Net: {net_cost:5.1f} "
+                    if net_cost < best_cost - self.host.get_config("slot_threshold_p"):
+                        str_log += f"New SOC: {self.flows.loc[start_window]['soc']:5.1f}%->{self.flows.loc[start_window]['soc_end']:5.1f}% "
+                        str_log += f"Max export: {-self.flows['grid'].min():0.0f}W "
+                        best_cost = net_cost
+                        slots_added += 1
+                        if log:
+                            self.log(str_log)
+                    else:
+                        # We aren't using this slot so take it out of slots and new_slots, and add it to unused_slots
+                        slots = slots[:-1]
+                        self.calculate_flows(slots=slots)
 
                 done = available.sum() == 0
             else:
                 done = True
 
-        cost_delta = best_cost - self.best_cost
-        str_log = f"Charge net cost delta:{(-cost_delta):5.1f}p"
-        if cost_delta >= -self.host.get_config("pass_threshold_p"):
-            self.slots_added = 0
-            str_log += f": < Pass Threshold {self.host.get_config('pass_threshold_p'):0.1f}p => Slots Excluded"
-            self.calculate_flows(slots=self.slots)
-        else:
-            str_log += f": > Pass Threshold {self.host.get_config('pass_threshold_p'):0.1f}p => Slots Included"
-            self.slots = slots
-            self.slots_added = slots_added
-            self.best_cost = best_cost
+        if test:
+            cost_delta = best_cost - self.best_cost
+            str_log = f"Charge net cost delta:{(-cost_delta):5.1f}p"
+            if cost_delta >= -self.host.get_config("pass_threshold_p"):
+                self.slots_added = 0
+                str_log += f": < Pass Threshold {self.host.get_config('pass_threshold_p'):0.1f}p => Slots Excluded"
+                self.calculate_flows(slots=self.slots)
+            else:
+                str_log += f": > Pass Threshold {self.host.get_config('pass_threshold_p'):0.1f}p => Slots Included"
+                # Revert to the original slots and put all the new_slots into unuseded slots, ahead of the ones that failed the slot threshold test
+                self.slots = slots
+                self.slots_added = slots_added
+                self.best_cost = best_cost
 
-        if log:
-            self.log("")
-            self.log(str_log)
+            if log:
+                self.log("")
+                self.log(str_log)
+                self._log_slots()
+        else:
+            return slots
 
     def _discharging(self, log=True, fill_first=False):
         # -----------
         # Discharging
         # -----------
-        slots = [slot for slot in self.slots]
-        best_cost = self.best_cost
-        slots_added = self.slots_added
-
-        if fill_first:
-            # If we are filling first, we first need to find all the slots we could use for filling
-            slots += self._charge_slots
-            slots_added += len(self._charge_slots)
-
-        # Check how many slots which aren't full are at an export price less than any import price:
-        min_import_price = self.flows["import"].min()
         if log:
             self.log("")
             str_log = "Forced Discharging"
@@ -1292,6 +1290,28 @@ class PVsystemModel:
             self.log(str_log)
             self.log("-" * len(str_log))
             self.log("")
+
+        slots = [slot for slot in self.slots]
+        best_cost = self.best_cost
+        slots_added = self.slots_added
+
+        if fill_first:
+            # If we are filling first, we first need to find all the slots we could use for filling
+            # We need to do this iteratively using the same logic as in low cost charging
+
+            slot_length = len(slots)
+            slots = self._low_cost_charging(log=False, test=False)
+            charging_slots_added = len(slots) - slot_length
+            self.calculate_flows(slots=slots)
+            best_cost = self.net_cost
+            if log:
+                self.log(f"Added {charging_slots_added} charging slots. Best cost with charging = {best_cost:6.1f}p")
+
+            self._log_slots(slots=slots)
+            slots_added += charging_slots_added
+
+        # Check how many slots which aren't full are at an export price less than any import price:
+        min_import_price = self.flows["import"].min()
 
         i = 0
         available = (self.flows["export"] > min_import_price) & (self.flows["forced"] == 0)
@@ -1372,6 +1392,18 @@ class PVsystemModel:
         if log:
             self.log("")
             self.log(str_log)
+            self._log_slots()
+
+    def _log_slots(self, slots=None):
+        if slots is None:
+            slots = self.slots
+
+        if len(slots) > 0:
+            df = pd.DataFrame(self.slots).set_axis(["Start", "Power"], axis=1)
+            df = df.set_index("Start")
+            df = df.groupby(level=0).sum()
+            self.log("")
+            self.log(f"Interim Slot Summary:\n{df.to_string()}")
 
 
 # %%
