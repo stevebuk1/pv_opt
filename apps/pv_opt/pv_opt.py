@@ -14,7 +14,7 @@ import pvpy as pv
 from numpy import nan
 
 
-VERSION = "5.0.0-Beta-5"
+VERSION = "5.0.0-Beta-6"
 
 UNITS = {
     "current": "A",
@@ -2906,9 +2906,9 @@ class PVOpt(hass.Hass):
             self.status("Idle (Read Only)")
 
             #SVB logging
-            self.log("")
-            entity_id = self.config[f"id_battery_current"]
-            self.log(f"Battery current is {self.get_state_retry(entity_id)}")
+            #self.log("")
+            #entity_id = self.config[f"id_battery_current"]
+            #self.log(f"Battery current is {self.get_state_retry(entity_id)}")
             ##End logging
 
         else:
@@ -2918,9 +2918,9 @@ class PVOpt(hass.Hass):
             self.status("Updating Inverter")
 
             #SVB logging
-            self.log("")
-            entity_id = self.config[f"id_battery_current"]
-            self.log(f"Battery current is {self.get_state_retry(entity_id)}")
+            #self.log("")
+            #entity_id = self.config[f"id_battery_current"]
+            #self.log(f"Battery current is {self.get_state_retry(entity_id)}")
             ##End logging
 
             inverter_update_count = 0
