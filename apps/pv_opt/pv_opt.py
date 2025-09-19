@@ -14,7 +14,7 @@ import pvpy as pv
 from numpy import nan
 
 
-VERSION = "5.0.0-Beta-6"
+VERSION = "5.0.0-Beta-5"
 
 UNITS = {
     "current": "A",
@@ -3822,6 +3822,13 @@ class PVOpt(hass.Hass):
             df = pd.DataFrame(solar)
             df = df.set_index("period_start")
             df.index = pd.to_datetime(df.index, utc=True)
+
+            self.log(f"Solcast array is = \n{df.to_string()}")
+
+            if 'dampening_factor' in df.columns:
+                self.log("Dampening factor column detected - deleting")
+                df = df.drop(['dampening_factor'], axis=1)
+
             df = df.set_axis(["Solcast", "Solcast_p10", "Solcast_p90"], axis=1)
 
             confidence_level = self.get_config("solcast_confidence_level")
