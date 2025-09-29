@@ -4048,8 +4048,15 @@ class PVOpt(hass.Hass):
                         consumption_mean = consumption_mean.loc[idx]
                         consumption_dow = consumption_dow.loc[idx]
 
+                    if self.debug and "Q" in self.debug_cat:
+                        self.log(">>> Consumption Mean:")
+                        self.log(f">>> {consumption_mean.to_string()}")
+                        self.log(">>> Consumption DoW:")
+                        self.log(f">>> {consumption_dow.to_string()}")
+
+
                     consumption["consumption"] += pd.Series(
-                        consumption_dow.to_numpy()
+                        consumption_dow.to_numpy() 
                         + consumption_mean.to_numpy() * (1 - self.get_config("day_of_week_weighting")),
                         index=consumption_mean.index,
                     )
