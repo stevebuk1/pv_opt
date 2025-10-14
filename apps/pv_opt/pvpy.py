@@ -371,7 +371,7 @@ class Tariff:
         # self.log("Printing final result of to_df.....")
         # self.log(df.to_string())
 
-        # Update for Octopus Savings Events if they exists
+        # Update for Octopus Savings Events if they exist
         if (self.host is not None) and ("unit" in df.columns):
             events = self.host.saving_events
             for id in events:
@@ -379,31 +379,34 @@ class Tariff:
                 event_end = pd.Timestamp(events[id]["end"]).ceil("30min")
                 event_value = int(events[id]["octopoints_per_kwh"]) / 8
 
-                self.log("Savings Events debugging")
-                self.log("")
-                self.log(f"start = {start}")
-                self.log(f"end = {end}")
-                self.log(f"event_start = {event_start}")
-                self.log(f"event_end = {event_end}")
+                if self.host.debug and "Z" in self.host.debug_cat:
+                    self.log("Savings Events debugging")
+                    self.log("")
+                    self.log(f"start = {start}")
+                    self.log(f"end = {end}")
+                    self.log(f"event_start = {event_start}")
+                    self.log(f"event_end = {event_end}")
 
                 # convert event_start and event_end to UTC
                 event_start = event_start.tz_convert("UTC")
                 event_end = event_end.tz_convert("UTC")
 
-                self.log("After UTC conversion")
-                self.log(f"event_start = {event_start}")
-                self.log(f"event_end = {event_end}")
+                if self.host.debug and "Z" in self.host.debug_cat:
+                    self.log("After UTC conversion")
+                    self.log(f"event_start = {event_start}")
+                    self.log(f"event_end = {event_end}")
 
 
                 if event_start <= end or event_end > start and event_value > 0:
                     event_start = max(event_start, start)
                     event_end = min(event_end - pd.Timedelta(30, "minutes"), end)
 
-                    self.log("Recalculating event_start and event_end")
-                    self.log("")
-                    self.log(f"event_start = {event_start}")
-                    self.log(f"event_end = {event_end}")
-                    self.log(f"event_value = {event_value}")
+                    if self.host.debug and "Z" in self.host.debug_cat:
+                        self.log("Recalculating event_start and event_end")
+                        self.log("")
+                        self.log(f"event_start = {event_start}")
+                        self.log(f"event_end = {event_end}")
+                        self.log(f"event_value = {event_value}")
 
                     df.loc[event_start:event_end, "unit"] += event_value
 

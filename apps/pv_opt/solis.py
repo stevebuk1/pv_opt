@@ -825,10 +825,11 @@ class SolisCloudSensorControlInverter(SolisInverter):
         # Solis inverters can't cope with time slots spanning midnight so if the end is a different day
         # crop it to 23:59
 
-        self.log(f"Times (1) =  {times}")
-        self.log("")
-        self.log(f"Stored value of charge start is {self.status["charge"]["start"]}")
-        self.log(f"Stored value of discharge start is {self.status["discharge"]["start"]}")
+        if self._host.debug and "I" in self._host.debug_cat:
+            self.log(f"Times (1) =  {times}")
+            self.log("")
+            self.log(f'Stored value of charge start is {self.status["charge"]["start"]}')
+            self.log(f'Stored value of discharge start is {self.status["discharge"]["start"]}')
 
         if times["end"] is not None:
             if times["start"] is None:
@@ -836,7 +837,7 @@ class SolisCloudSensorControlInverter(SolisInverter):
 
                 # If start time is None then the construction of time_string will fail. We need to set this to whatever the
                 # inverter is currently set to. 
-                self.log(f"Start time is blank, updating start time to be written to last read start time of {self.status[direction]["start"]}")
+                self.log(f'Start time is blank, updating start time to be written to last read start time of {self.status[direction]["start"]}')
                 times["start"] = self.status[direction]["start"]
 
             else:

@@ -41,10 +41,12 @@ pv_opt:
   # V = Power Flows debugging (extra verbose)
   # I = inverter control/commands Logging
   # E = EV debugging
+  # L = Solcast logging
+  # Z = Savings Events logging
 
   # Letters can be added to "debug_categories" in any order
 
-  debug_categories: W
+  debug_categories: OW
 
   # ========================================
   # Basic parameters

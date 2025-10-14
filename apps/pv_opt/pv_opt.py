@@ -14,7 +14,7 @@ import pvpy as pv
 from numpy import nan
 
 
-VERSION = "5.0.0-Beta-6"
+VERSION = "5.0.0-Beta-7"
 
 UNITS = {
     "current": "A",
@@ -44,10 +44,12 @@ DEBUG = False
 # V = Power Flows debugging (verbose)
 # I = inverter control/commands Logging
 # E = EV Logging
+# L = Solcast logging
+# Z = Savings Events logging
 
 # Default is all, include desired string in Config.yaml to enable filtering
 
-DEBUG_CATEGORIES = "STPQCDAWOXFVIE"
+DEBUG_CATEGORIES = "STPQCDAWOXFVIELZ"
 
 DATE_TIME_FORMAT_LONG = "%Y-%m-%d %H:%M:%S%z"
 DATE_TIME_FORMAT_SHORT = "%d-%b %H:%M %Z"
@@ -3823,10 +3825,12 @@ class PVOpt(hass.Hass):
             df = df.set_index("period_start")
             df.index = pd.to_datetime(df.index, utc=True)
 
-            self.log(f"Solcast array is = \n{df.to_string()}")
-
+            if self.debug and "L" in self.debug_cat:
+                self.log(f"Solcast array is = \n{df.to_string()}")
+                    
             if 'dampening_factor' in df.columns:
-                self.log("Dampening factor column detected - deleting")
+                if self.debug and "L" in self.debug_cat:
+                    self.log("Dampening factor column detected - deleting")
                 df = df.drop(['dampening_factor'], axis=1)
 
             df = df.set_axis(["Solcast", "Solcast_p10", "Solcast_p90"], axis=1)
