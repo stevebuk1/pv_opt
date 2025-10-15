@@ -846,7 +846,9 @@ class SolisCloudSensorControlInverter(SolisInverter):
             if start_day != times["end"].day:
                 times["end"] = times["end"].floor("1D") - pd.Timedelta("1min")
 
-        self.log(f"Times (2) =  {times}")
+
+        if self._host.debug and "I" in self._host.debug_cat:
+            self.log(f"Times (2) =  {times}")
 
         if times is not None:
             entity_id = self._host.config.get(f"id_timed_{direction}_time", None)
