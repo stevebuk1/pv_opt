@@ -618,12 +618,20 @@ class SolisInverter(BaseInverterController):
             # self.log(f"Voltage in solis.py = {self.voltage}") 
             # self.log(f"Current in solis.py = {current}")
 
+            # SVB debugging
+            # self.log(f"Entered control_charge_discharge, Enable = True") 
+
+
             target_soc = kwargs.get("target_soc", None)
 
         else:
             # Disable by setting end time = start time:
             times["start"] = self.status["charge"]["start"]
             times["end"] = times["start"]
+
+            # SVB debugging
+            # self.log(f"Entered control_charge_discharge, Enable = False (Setting end time to start time)") 
+
             current = 0
             target_soc = None
 
@@ -701,6 +709,10 @@ class SolisInverter(BaseInverterController):
                 )
         else:
             self._hold_soc = {"active": False, "soc": 0}
+
+    def clear_hold_status(self):
+        self._hold_soc = {"active": False, "soc": 0}
+        
 
     def _get_times_current(self, direction):
         times = {

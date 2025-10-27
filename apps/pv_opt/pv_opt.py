@@ -3001,11 +3001,11 @@ class PVOpt(hass.Hass):
                     and (time_to_slot_start < self.get_config("optimise_frequency_minutes"))
                     and (len(self.windows) > 0)
                 ):
-                    # We are currently in a charge/discharge slot
+                    # We are currently in a charge/discharge/hold slot
                     self.log("Currently in charge/discharge/hold slot")
 
                     # If the current slot is a Hold SOC slot and we aren't holding then we need to
-                    # enable Hold SOC. Uses backup mode instead of charge current = 0 to allow excess solar to charge batteries.
+                    # enable Hold SOC. This is achieved by setting a charge current of zero. 
 
                     if (
                         self.hold and self.hold[0]["active"]
@@ -3041,8 +3041,9 @@ class PVOpt(hass.Hass):
                         self.log(f"Current charge/discharge window ends in {time_to_slot_end:0.1f} minutes.")
 
                         # Clear off hold status (no longer read from the inverter so needs clearing by command)
-                        self.log("Clearing hold status")                       
-                        self.inverter.hold_soc(enable=False)
+                        self.log("Clearing hold status")
+                        self.inverter.clear_hold_status()                       
+                        
 
                         if self.charge_power > 0:  # Intentionally 0 (not 1) to ensure Car slots are also encompassed.
                             if not status["charge"]["active"]:
@@ -4496,11 +4497,18 @@ class PVOpt(hass.Hass):
                     new_state = self.get_state_retry(entity_id=entity_id)
                     written = new_state == time
 
+                    if verbose:
+                        str_log = f"Entity: {entity_id:30s} Time: {time}  Old State: {state} "
+                        str_log += f"New state: {new_state}"
+                        self.log(str_log)
+
                     # SVB debugging
                     # self.log(f"Write_and_poll_time:  while loop, new_time = {new_state}")
 
             except:
                 written = False
+                if verbose:
+                    self.log("write and poll time - failed to write")
 
             # commented out, as causes an error (new state not defined) if routine above fails, negating the use of "try/except"
             # if verbose:
