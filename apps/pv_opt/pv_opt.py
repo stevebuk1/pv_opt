@@ -14,7 +14,7 @@ import pvpy as pv
 from numpy import nan
 
 
-VERSION = "5.0.0-Beta-7"
+VERSION = "5.0.0-Beta-8"
 
 UNITS = {
     "current": "A",
@@ -622,6 +622,7 @@ class PVOpt(hass.Hass):
         self.mpans = []
 
         self.saving_events = {}
+        self.free_electricity_events = {}
         self.contract = None
         self.car_plugin_detected = 0
         self.car_plugin_detected_delayed = 0
@@ -1696,6 +1697,7 @@ class PVOpt(hass.Hass):
                 # self.contract.tariffs["export"] = pv.Tariff("None", export=True, unit=15, octopus=False, host=self)
             self.rlog("")
             self._load_saving_events()
+            self._load_free_electricity_events()
 
         self.log("")
         self.log("Finished loading contract")
@@ -1814,6 +1816,50 @@ class PVOpt(hass.Hass):
                 )
         else:
             self.log("  No upcoming Octopus Saving Events detected or joined:")
+
+
+
+    def _load_free_electricity_events(self):
+        if (
+            len([name for name in self.get_state_retry("event").keys() if ("octoplus_free_electricity_session_events" in name)])
+            > 0
+        ):
+            free_electricity_events_entity = [
+                name for name in self.get_state_retry("event").keys() if ("octoplus_free_electricity_session_events" in name)
+            ][0]
+            self.log("")
+            self.rlog(f"Found Octopus Free Electricity Session Events entity: {free_electricity_events_entity}")
+            octopus_account = self.get_state_retry(entity_id=free_electricity_events_entity, attribute="account_id")
+
+            self.config["octopus_account"] = octopus_account
+            if octopus_account not in self.redact_regex:
+                self.redact_regex.append(octopus_account)
+                self.redact_regex.append(octopus_account.lower().replace("-", "_"))
+
+            free_events = self.get_state_retry(free_electricity_events_entity, attribute="all")["attributes"][
+                "events"
+            ]
+
+            if len(free_events) > 0:
+                self.log("    The following Free Electricty Events have been identified:")
+                
+                for event in free_events:
+                    if event["code"] not in self.free_electricity_events and pd.Timestamp(event["end"], tz="UTC") > pd.Timestamp.now(
+                        tz="UTC"
+                    ):
+                        self.log(f"{event['code']:8s}: {pd.Timestamp(event  ['start']).strftime(DATE_TIME_FORMAT_SHORT)} - {pd.Timestamp(event['end']).strftime(DATE_TIME_FORMAT_SHORT)}")
+                        self.free_electricity_events[event["code"]] = event
+                        
+        self.log("")
+
+        if len(self.free_electricity_events) > 0:
+            self.log("  The following Octopus Free Electricity Events are being applied:")
+            for id in self.free_electricity_events:
+                self.log(
+                    f"{id:8s}: {pd.Timestamp(self.free_electricity_events[id]['start']).strftime(DATE_TIME_FORMAT_SHORT)} - {pd.Timestamp(self.free_electricity_events[id]['end']).strftime(DATE_TIME_FORMAT_SHORT)}"
+                )
+        else:
+            self.log("  No upcoming Octopus Free Electricity Events detected")
 
     def get_ha_value(self, entity_id):
         value = None
@@ -2356,6 +2402,7 @@ class PVOpt(hass.Hass):
 
         self.log("")
         self._load_saving_events()
+        self._load_free_electricity_events()
 
         if self.get_config("forced_discharge") and (self.get_config("supports_forced_discharge", True)):
             discharge_enable = "enabled"
