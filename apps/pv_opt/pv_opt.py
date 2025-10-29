@@ -1840,20 +1840,24 @@ class PVOpt(hass.Hass):
                 "events"
             ]
 
+            # The logging in this if statement should be hidden behind a debugging switch
             if len(free_events) > 0:
-                self.log("    The following Free Electricty Events have been identified:")
-                
+
+                self.log("  The following Free Electricty Events have been identified:")
                 for event in free_events:
-                    if event["code"] not in self.free_electricity_events and pd.Timestamp(event["end"], tz="UTC") > pd.Timestamp.now(
-                        tz="UTC"
-                    ):
+                        self.log(f"{event['code']:8s}: {pd.Timestamp(event  ['start']).strftime(DATE_TIME_FORMAT_SHORT)} - {pd.Timestamp(event['end']).strftime(DATE_TIME_FORMAT_SHORT)}")
+
+                self.log("  The following upcoming Free Electricty Events have been identified:")
+                for event in free_events:
+                    if event["code"] not in self.free_electricity_events and pd.Timestamp(event["end"], tz="UTC") > pd.Timestamp.now(tz="UTC"):
                         self.log(f"{event['code']:8s}: {pd.Timestamp(event  ['start']).strftime(DATE_TIME_FORMAT_SHORT)} - {pd.Timestamp(event['end']).strftime(DATE_TIME_FORMAT_SHORT)}")
                         self.free_electricity_events[event["code"]] = event
                         
         self.log("")
 
+
         if len(self.free_electricity_events) > 0:
-            self.log("  The following Octopus Free Electricity Events are being applied:")
+            self.log("  The following upcoming Octopus Free Electricity Events are being applied:")
             for id in self.free_electricity_events:
                 self.log(
                     f"{id:8s}: {pd.Timestamp(self.free_electricity_events[id]['start']).strftime(DATE_TIME_FORMAT_SHORT)} - {pd.Timestamp(self.free_electricity_events[id]['end']).strftime(DATE_TIME_FORMAT_SHORT)}"
