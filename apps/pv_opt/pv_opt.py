@@ -14,7 +14,7 @@ import pvpy as pv
 from numpy import nan
 
 
-VERSION = "5.0.0-Beta-8"
+VERSION = "5.0.0-Beta-8A"
 
 UNITS = {
     "current": "A",
@@ -4514,42 +4514,51 @@ class PVOpt(hass.Hass):
 
         return df
 
-    def write_and_poll_time(self, entity_id, time: str | pd.Timestamp, verbose=False):
+    def write_and_poll_time(self, entity_id, times: str | pd.Timestamp, verbose=False):
 
+        # SVB debugging
         # self.log("write and poll time entered.")
-        # var_type = type(time)
-        # self.log(f"'time' = {time}")
+        # self.log(f"Entity_id = {entity_id}")
+        # var_type = type(times)
+        # self.log(f"'time' = {times}")
         # self.log(f"type of 'time' = {var_type}")
         changed = False
         written = False
-        if isinstance(time, pd.Timestamp):
-            time = time.strftime("%X")  # HH:MM:SS is needed as get_state_retry returns SS.
+        if isinstance(times, pd.Timestamp):
+            times = times.strftime("%X")  # HH:MM:SS is needed as get_state_retry returns SS.
+            # SVB
             # self.log("write and poll time - time detected. Trimming time to hours and minutes")
         state = self.get_state_retry(entity_id=entity_id)
+        
+        # SVB
+        # self.log(f"Write_and_poll_time: time = {times}, old_time = {state}")
 
-        # self.log(f"Write_and_poll_time: time = {time}, old_time = {state}")
 
-        if state != time:
+        if state != times:
             changed = True
+            # SVB
             # self.log(f"Write_and_poll_time: Changed = true")
 
             try:
-                self.call_service("time/set_value", entity_id=entity_id, time=time)
+                result = self.call_service("time/set_value", entity_id=entity_id, time=times)
+                # SVB
+                # self.log(f"XResult of call_service is {result}")
 
                 written = False
                 retries = 0
                 while not written and retries < WRITE_POLL_RETRIES:
-
                     # SVB debugging
                     # self.log("Write_and_poll_time: Entered while loop")
-
                     retries += 1
+                    # self.log(f"Write_and_poll_time: Value of retries is {retries}")
                     time.sleep(WRITE_POLL_SLEEP)
+                    # self.log(f"Write_and_poll_time: Slept for {WRITE_POLL_SLEEP} seconds")
                     new_state = self.get_state_retry(entity_id=entity_id)
-                    written = new_state == time
+                    # self.log(f"New state: {new_state}")
+                    written = new_state == times
 
                     if verbose:
-                        str_log = f"Entity: {entity_id:30s} Time: {time}  Old State: {state} "
+                        str_log = f"Entity: {entity_id:30s} Time: {times}  Old State: {state} "
                         str_log += f"New state: {new_state}"
                         self.log(str_log)
 
@@ -4558,8 +4567,7 @@ class PVOpt(hass.Hass):
 
             except:
                 written = False
-                if verbose:
-                    self.log("write and poll time - failed to write")
+                self.log("write and poll time - failed to write")
 
             # commented out, as causes an error (new state not defined) if routine above fails, negating the use of "try/except"
             # if verbose:
