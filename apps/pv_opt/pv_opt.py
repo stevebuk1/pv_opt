@@ -14,7 +14,7 @@ import pvpy as pv
 from numpy import nan
 
 
-VERSION = "5.0.0-Beta-8"
+VERSION = "5.0.0-Beta-8H"
 
 UNITS = {
     "current": "A",
@@ -591,8 +591,8 @@ class PVOpt(hass.Hass):
         self.redact = self.args.pop("redact_personal_data_from_log", True)
 
         self.inverter_sn = self.args.pop("inverter_sn", "")
-        if self.inverter_sn != "":
-            self.redact_regex.append(self.inverter_sn)
+        # if self.inverter_sn != "":
+        #    self.redact_regex.append(self.inverter_sn)
 
         self.redact = self.args.pop("redact_personal_data_from_log", True)
         self._load_inverter()
@@ -1939,9 +1939,17 @@ class PVOpt(hass.Hass):
             if not isinstance(self.args[item], list):
                 self.args[item] = [self.args[item]]
 
-            values = [
+            values_temp = [
                 (v.replace("{device_name}", self.device_name) if isinstance(v, str) else v) for v in self.args[item]
             ]
+
+            #self.log(f"values1 = {values_temp}")
+
+            values = [
+                (w.replace("{inverter_sn}", self.inverter_sn) if isinstance(w, str) else w) for w in values_temp
+            ]
+
+            #self.log(f"values2 = {values}")
 
             if values[0] is None:
                 self.config[item] = self.get_default_config(item)
@@ -1950,7 +1958,7 @@ class PVOpt(hass.Hass):
                     level="WARNING",
                 )
 
-            # if the item starts with 'id_' then it must be an entity that exists:
+
             elif item == "alt_tariffs":
                 self.config[item] = values
                 for i, x in enumerate(values):
@@ -1999,7 +2007,9 @@ class PVOpt(hass.Hass):
                     )
                 self.yaml_config[item] = self.config[item]
 
+            # if the item starts with 'id_' then it must be an entity that exists:
             elif "id_" in item:
+                # self.log(f"values3 = {values}")
                 if self.debug:
                     self.log(f">>> Test: {self.entity_exists('update.home_assistant_core_update')}")
                     for v in values:

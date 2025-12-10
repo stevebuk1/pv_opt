@@ -1,5 +1,7 @@
 import json
 import time
+from time import sleep
+from typing import final
 
 import pandas as pd
 
@@ -7,31 +9,7 @@ TIMEFORMAT = "%H:%M"
 INVERTER_DEFS = {
     "SUNSYNK_SOLARSYNK2": {
         "online": "sensor.{device_name}_{inverter_sn}_battery_soc",
-        # "modes": {
-        #     1: "Selfuse - No Grid Charging",
-        #     3: "Timed Charge/Discharge - No Grid Charging",
-        #     17: "Backup/Reserve - No Grid Charging",
-        #     33: "Selfuse",
-        #     35: "Timed Charge/Discharge",
-        #     37: "Off-Grid Mode",
-        #     41: "Battery Awaken",
-        #     43: "Battery Awaken + Timed Charge/Discharge",
-        #     49: "Backup/Reserve - No Timed Charge/Discharge",
-        #     51: "Backup/Reserve",
-        # },
-        # "bits": [
-        #     "SelfUse",
-        #     "Timed",
-        #     "OffGrid",
-        #     "BatteryWake",
-        #     "Backup",
-        #     "GridCharge",
-        #     "FeedInPriority",
-        # ],
-        # Default Configuration: Exposed as inverter.config and provides defaults for this inverter for the
-        # required config. These config items can be over-written by config specified in the config.yaml
-        # file. They are required for the main PV_Opt module and if they cannot be found an ERROR will be
-        # raised
+
         "default_config": {
             "maximum_dod_percent": 20,
             "id_battery_soc": "sensor.{device_name}_{inverter_sn}_battery_soc",
@@ -90,50 +68,74 @@ INVERTER_DEFS = {
 
 
 class InverterController:
-    def __init__(self, inverter_type, host) -> None:
-        self.host = host
-        self.tz = self.host.tz
+    def __init__(self, inverter_type : str, host) -> None:
+        self._host = host
+        self.tz = self._host.tz
         if host is not None:
             self.log = host.log
-            self.tz = self.host.tz
-            self.config = self.host.config
-
-        self.type = inverter_type
-
-        self.brand_config = {}
+        #    self.config = self._host.config
+        self._type = inverter_type
+        self._device_name = self._host.device_name
+        self._inverter_sn = self._host.inverter_sn
+        self._config = {}
+        self._brand_config = {}
+        self._online = INVERTER_DEFS[self._type]["online"].replace("{device_name}", self._device_name)
         for defs, conf in zip(
-            [INVERTER_DEFS[self.type][x] for x in ["default_config", "brand_config"]],
-            [self.config, self.brand_config],
+            [INVERTER_DEFS[self._type][x] for x in ["default_config", "brand_config"]],
+            [self._config, self._brand_config],
         ):
             for item in defs:
                 if isinstance(defs[item], str):
-                    conf[item] = defs[item].replace("{device_name}", self.host.device_name)
-                    conf[item] = defs[item].replace("{inverter_sn}", self.host.inverter_sn)
+                    #conf[item] = defs[item].replace("{device_name}", self._device_name)
+                    temp = defs[item].replace("{device_name}", self._device_name)
+                    conf[item] = temp.replace("{inverter_sn}", self._inverter_sn)
                 elif isinstance(defs[item], list):
-                    conf[item] = [z.replace("{device_name}", self.host.device_name) for z in defs[item]]
-                    conf[item] = [z.replace("{inverter_sn}", self.host.inverter_sn) for z in defs[item]]
+                    #conf[item] = [z.replace("{device_name}", self._device_name) for z in defs[item]]
+                    #conf[item] = [z.replace("{inverter_sn}", self._inverter_sn) for z in defs[item]]
+                    y = [z.replace("{device_name}", self._device_name) for z in defs[item]]
+                    conf[item] = [x.replace("{inverter_sn}", self._inverter_sn) for x in y]
                 else:
                     conf[item] = defs[item]
+        self.log(f"Loading controller for inverter type {self._type}")
 
     @property
+    #def is_online(self):
+    #    entity_id = INVERTER_DEFS[self.type].get("online", (None, None))
+    #    if entity_id is not None:
+    #        entity_id = entity_id.replace("{device_name}", self._device_name)
+    #        return self._host.get_state(entity_id) not in [
+    #            "unknown", "unavailable"]
+    #    else:
+    #        return True
     def is_online(self):
-        entity_id = INVERTER_DEFS[self.type].get("online", (None, None))
+        entity_id = self._online
         if entity_id is not None:
-            entity_id = entity_id.replace("{device_name}", self.host.device_name)
-            return self.host.get_state(entity_id) not in ["unknown", "unavailable"]
+            return self._host.get_state_retry(entity_id) not in [
+                "unknown",
+                "unavailable",
+            ]
         else:
-            return True
+            return False
+
+    @property
+    def config(self):
+        return self._config
+    
+    @property
+    def brand_config(self):
+        return self._brand_config
+    
 
     def _unknown_inverter(self):
         e = f"Unknown inverter type {self.type}"
         self.log(e, level="ERROR")
-        self.host.status(e)
+        self._host.status(e)
         raise Exception(e)
 
     def _solarsynk_set_helper(self, **kwargs):
-        current_json = json.loads(self.host.get_config("id_control_helper"))
+        current_json = json.loads(self._host.get_config("id_control_helper"))
         new_json = json.dumps(current_json | kwargs)
-        entity_id = self.host.config("id_control_helper")
+        entity_id = self._host.config("id_control_helper")
         self.rlog(f"Setting SolarSynk input helper {entity_id} to {new_json}")
         #  self.host.set_state(entity_id=entity_id, state=new_json)
 
@@ -162,8 +164,8 @@ class InverterController:
                         "end", time_now.ceil("30min").strftime(TIMEFORMAT)
                     ),
                     self.config["json_charge_current"]: min(
-                        kwargs.get("power", 0) / self.host.get_config("battery_voltage"),
-                        self.host.get_config("battery_current_limit_amps"),
+                        kwargs.get("power", 0) / self._host.get_config("battery_voltage"),
+                        self._host.get_config("battery_current_limit_amps"),
                     ),
                     self.config["json_timed_charge_enable"]: True,
                     self.config["json_gen_charge_enable"]: False,
@@ -177,7 +179,7 @@ class InverterController:
                     self.config["json_target_soc"]: 100,
                     self.config["json_timed_charge_start"]: "00:00",
                     self.config["json_timed_charge_end"]: "00:00",
-                    self.config["json_charge_current"]: self.host.get_config("battery_current_limit_amps"),
+                    self.config["json_charge_current"]: self._host.get_config("battery_current_limit_amps"),
                     self.config["json_timed_charge_enable"]: False,
                     self.config["json_gen_charge_enable"]: True,
                 } | {x: "00:00" for x in self.config["json_timed_charge_unused"]}
@@ -193,7 +195,7 @@ class InverterController:
                 params = {
                     self.config["json_work_mode"]: 0,
                     self.config["json_timed_discharge_target_soc"]: kwargs.get(
-                        "target_soc", self.host.get_config("maximum_dod_percent")
+                        "target_soc", self._host.get_config("maximum_dod_percent")
                     ),
                     self.config["json_timed_discharge_start"]: kwargs.get("start", time_now.strftime(TIMEFORMAT)),
                     self.config["json_timed_discharge_end"]: kwargs.get(
@@ -232,29 +234,29 @@ class InverterController:
         time_now = pd.Timestamp.now(tz=self.tz)
 
         if self.type == "SUNSYNK_SOLARSYNK2":
-            charge_start = pd.Timestamp(self.host.get_config("id_timed_charge_start"), tz=self.tz)
-            charge_end = pd.Timestamp(self.host.get_config("id_timed_charge_end"), tz=self.tz)
-            discharge_start = pd.Timestamp(self.host.get_config("id_timed_charge_start"), tz=self.tz)
-            discharge_end = pd.Timestamp(self.host.get_config("id_timed_charge_end"), tz=self.tz)
+            charge_start = pd.Timestamp(self._host.get_config("id_timed_charge_start"), tz=self.tz)
+            charge_end = pd.Timestamp(self._host.get_config("id_timed_charge_end"), tz=self.tz)
+            discharge_start = pd.Timestamp(self._host.get_config("id_timed_charge_start"), tz=self.tz)
+            discharge_end = pd.Timestamp(self._host.get_config("id_timed_charge_end"), tz=self.tz)
 
             status = {
-                "timer mode": self.host.get_config("id_use_timer"),
-                "priority load": self.host.get_config("id_priority_load"),
+                "timer mode": self._host.get_config("id_use_timer"),
+                "priority load": self._host.get_config("id_priority_load"),
                 "charge": {
                     "start": charge_start,
                     "end": charge_end,
-                    "active": self.host.get_config("id_timed_charge_enable")
+                    "active": self._host.get_config("id_timed_charge_enable")
                     and (time_now >= charge_start)
                     and (time_now < charge_end),
-                    "target_soc": self.host.get_config("id_timed_charge_target_soc"),
+                    "target_soc": self._host.get_config("id_timed_charge_target_soc"),
                 },
                 "discharge": {
                     "start": discharge_start,
                     "end": discharge_end,
-                    "active": self.host.get_config("id_timed_discharge_enable")
+                    "active": self._host.get_config("id_timed_discharge_enable")
                     and (time_now >= discharge_start)
                     and (time_now < discharge_end),
-                    "target_soc": self.host.get_config("id_timed_discharge_target_soc"),
+                    "target_soc": self._host.get_config("id_timed_discharge_target_soc"),
                 },
                 "hold_soc": {
                     "active": False,
