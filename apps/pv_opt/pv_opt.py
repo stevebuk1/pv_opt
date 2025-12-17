@@ -14,7 +14,7 @@ import pvpy as pv
 from numpy import nan
 
 
-VERSION = "5.0.0-Beta-8H"
+VERSION = "5.0.0-Beta-9"
 
 UNITS = {
     "current": "A",
@@ -1111,7 +1111,7 @@ class PVOpt(hass.Hass):
 
         self.log("")
 
-    def _get_zappi(self, start, end, log=False):
+    def _get_zappi_power(self, start, end, log=False):
         df = pd.DataFrame()
 
         i = 0
@@ -1125,7 +1125,7 @@ class PVOpt(hass.Hass):
                 df_all = pd.concat([df_all, df], axis=1)
 
             if log and (self.debug and "E" in self.debug_cat):
-                self.rlog(f">>> Zappi entity {entity_id}")
+                self.rlog(f">>> Power: Zappi entity {entity_id}")
                 self.log(f">>>\n{df.to_string()}")
                 self.log(f">>> Value of i = {i}")
                 self.rlog(">>> df_all")
@@ -1142,6 +1142,7 @@ class PVOpt(hass.Hass):
             self.log(f">>>\n{df.to_string()}")
 
         return df
+
 
     def calculate_agile_car_slots(self):
 
@@ -3664,7 +3665,12 @@ class PVOpt(hass.Hass):
         else:
             unit_cost_today = 0
 
+        
+        #SVB debuggging
+        self.log(f"Cost_actual today: {self._cost_actual().sum()}")
+
         self.log(f"Average unit cost today: {unit_cost_today:0.2f}p/kWh")
+
         self.write_to_hass(
             entity=f"sensor.{self.prefix}_unit_cost_today",
             state=unit_cost_today,
@@ -3932,17 +3938,36 @@ class PVOpt(hass.Hass):
 
         if df is not None:
 
-            if self.debug and "P" in self.debug_cat:
-                self.log(f"kWh data from {entity_id} is")
+            if self.debug and "Q" in self.debug_cat:
+                self.log(f"power: kWh data from {entity_id} is")
                 self.log(f"\n{df.to_string()}")
 
             df.index = pd.to_datetime(df.index)
-            x = df.diff().clip(0).fillna(0).cumsum() + df.iloc[0]
-            x.index = x.index.round("1s")
-            x = x[~x.index.duplicated()]
-            y = -pd.concat([x.resample("1s").interpolate().resample("30min").asfreq(), x.iloc[-1:]]).diff(-1)
-            dt = y.index.diff().total_seconds() / pd.Timedelta("60min").total_seconds() / 1000
-            df = y[1:-1] / dt[2:]
+            x = df.diff().clip(0).fillna(0).cumsum() + df.iloc[0]   #remove any negative values from series
+            x.index = x.index.round("1s")   # round to nearest second
+            x = x[~x.index.duplicated()]    # remove any duplicates
+
+            if self.debug and "Q" in self.debug_cat:
+                self.log(f"power: Processed kWh data from {entity_id} is")
+                self.log(f"\n{x.to_string()}")
+
+            y = -pd.concat([x.resample("1s").interpolate().resample("30min").asfreq(), x.iloc[-1:]]).diff(-1)  #resample to 1s, interpolate, resammple to 30 mins.
+
+            if self.debug and "Q" in self.debug_cat:
+                self.log(f"power: Processed and resampled kWh data from {entity_id} is")
+                self.log(f"\n{y.to_string()}")
+
+            dt = y.index.diff().total_seconds() / pd.Timedelta("60min").total_seconds() / 1000  
+
+            if self.debug and "Q" in self.debug_cat:
+                self.log(f"power: Final dt is ")
+                self.log(dt)
+
+            df = y[1:-1] / dt[2:]   # remove first and last rows, then calculate rate of change (which is power).
+
+            if self.debug and "Q" in self.debug_cat:
+                self.log(f"power: Final df after calculating rate of change is ")
+                self.log(f"\n{df.to_string()}")
 
             if start is not None:
                 df = df.loc[start:]
@@ -3951,12 +3976,15 @@ class PVOpt(hass.Hass):
 
         return df
 
+ 
+
     def load_consumption(self, start, end):
         ev_power = pd.DataFrame()
         self.log(
             f"Getting expected consumption data for {start.strftime(DATE_TIME_FORMAT_LONG)} to {end.strftime(DATE_TIME_FORMAT_LONG)}:"
         )
         index = pd.date_range(start, end, inclusive="left", freq="30min")
+
         consumption = pd.DataFrame(index=index, data={"consumption": 0})
 
         if self.get_config("use_consumption_history"):
@@ -4002,8 +4030,9 @@ class PVOpt(hass.Hass):
                     days=days,
                     log=self.debug,
                 )
+
                 if self.debug and "P" in self.debug_cat:
-                    self.log("Df after first load is:......")
+                    self.log("Df Power after first load is:......")
                     self.log(df.to_string())
 
             if df is None:
@@ -4034,105 +4063,119 @@ class PVOpt(hass.Hass):
 
             if (len(self.zappi_consumption_entities) > 0) and self.ev:
                 self.log("Getting consumption in kWh from Zappi Charger(s)")
-                ev_power = self._get_zappi(start=df.index[0], end=df.index[-1], log=True)
+                ev_power = self._get_zappi_power(start=df.index[0], end=df.index[-1], log=True) # in W
+
                 if len(ev_power) > 0:
                     self.log("")
                     self.log(
-                        f"    EV consumption from    {ev_power.index[0].strftime(DATE_TIME_FORMAT_SHORT)} to {ev_power.index[-1].strftime(DATE_TIME_FORMAT_SHORT)} is {(ev_power.sum()/2000):0.1f} kWh"
+                        f"    Power: EV consumption from    {ev_power.index[0].strftime(DATE_TIME_FORMAT_SHORT)} to {ev_power.index[-1].strftime(DATE_TIME_FORMAT_SHORT)} is {(ev_power.sum()/2000):0.1f} kWh"
                     )
                     self.log(
-                        f"    Total consumption from {df.index[0].strftime(DATE_TIME_FORMAT_SHORT)} to {df.index[-1].strftime(DATE_TIME_FORMAT_SHORT)} is {(df.sum()/2000):0.1f} kWh"
+                        f"    Power: Total consumption from {df.index[0].strftime(DATE_TIME_FORMAT_SHORT)} to {df.index[-1].strftime(DATE_TIME_FORMAT_SHORT)} is {(df.sum()/2000):0.1f} kWh"
                     )
 
                 else:
                     self.log("")
                     self.log("  No power returned from Zappi(s)")
 
+
             if (start < time_now) and (end < time_now):
                 consumption["consumption"] = df.loc[start:end]
+
             else:
-                if self.ev:
-                    df_EV = None  # To store EV consumption
-                    df_EV_Total = None  # To store EV consumption and Total consumption
-                    dfx = None
-
-                    if self.get_config("ev_part_of_house_load") and len(ev_power) > 0:
-                        self.log(
-                            "    EV charger is seen as house load, so subtracting EV charging from Total consumption"
-                        )
-                        df_EV_Total = pd.concat(
-                            [ev_power, df], axis=1
-                        )  # concatenate total consumption and ev consumption into a single dataframe (as they are different lengths)
-                        df_EV_Total.columns = ["EV", "Total"]  # Set column names
-                        df_EV_Total = df_EV_Total.fillna(0)  # fill any missing values with 0
-
-                        df_EV = df_EV_Total["EV"].squeeze()  # Extract EV consumption to Series
-                        df_Total = df_EV_Total["Total"].squeeze()  # Extract total consumption to Series
-                        df = df_Total - df_EV  # Substract EV consumption from Total Consumption
-
-                        if self.debug and "Q" in self.debug_cat:
-                            self.log("Result of subtraction is")
-                            self.log(df.to_string())
-
-                        if (df < 0).any().any():  # Are there any negative values in the subtraction?
-                            self.log("    Unexpected Negative values after substraction found, setting to zero")
-                            df[df < 0] = 0
-
+                if self.ev and self.get_config("ev_part_of_house_load") and len(ev_power) > 0:
+                    df = self._subtract_zappi_from_grid(ev_power, df)
+                
                 # Add consumption margin
                 df = df * (1 + self.get_config("consumption_margin") / 100)
                 if self.debug and "Q" in self.debug_cat:
                     self.log("Df after adding consumption margin is.......")
                     self.log(df.to_string())
 
-                dfx = pd.Series(index=df.index, data=df.to_list())
+                # SVB midnight trimmer
+                #start_midnight = df.index.min().normalize() + pd.Timedelta(days=1)
+                #end_midnight = df.index.max().normalize()
+                #df_trimmed = df[start_midnight:end_midnight]
+                #dfx = pd.Series(index=df_trimmed.index, data=df_trimmed.to_list())  #Used for dow calcs below
+                #df = df_trimmed.groupby(df_trimmed.index.time).aggregate(self.get_config("consumption_grouping"))  # Group by time and take the mean
 
-                # Group by time and take the mean
-                df = df.groupby(df.index.time).aggregate(self.get_config("consumption_grouping"))
+                dfx = pd.Series(index=df.index, data=df.to_list())  #Used for dow calcs below
+                df = df.groupby(df.index.time).aggregate(self.get_config("consumption_grouping"))  # Group by time and take the mean
+
                 df.name = "consumption"
 
-                if self.debug and "Q" in self.debug_cat:
+                if self.debug and "P" in self.debug_cat:
                     self.log(">>> All consumption:")
                     self.log(f">>> {dfx.to_string()}")
+                #    self.log(">>> Trimmed to midnight consumption:")
+                #    self.log(f">>> {df_trimmed.to_string()}")
                     self.log(">>> Consumption grouped by time:")
                     self.log(f">>> {df}")
 
+
+                #Generate a dataframe 48hours long
                 temp = pd.DataFrame(index=index)
+                #Make the index time only
                 temp["time"] = temp.index.time
-                consumption_mean = temp.merge(df, "left", left_on="time", right_index=True)["consumption"]
+
+                # SVB logging
+                #self.log("temp = ")
+                #self.log(temp.to_string())
+
+                # temp (left) is dataframe of 48 hours long aligned to midnight. Index has time and date. Column "time" is time only. 
+                # df (right) is dataframe 24 hours long, aligned to midnight, average of 7 days. Index is time only. 
+                # thus consumption_mean_s is 48 hours long, starts from midnight. The first 24 hours and second 24 hours contains the same data. 
+
+                #consumption_mean_s = temp.merge(df, how='left', left_on="time", right_index=True)["consumption"]
+                #consumption_mean = consumption_mean_s.to_frame()
+                #consumption_mean.columns = ['consumption_mean']
+
+                consumption_mean = temp.merge(df, how='left', left_on="time", right_index=True)[["consumption"]].rename(columns={'consumption': 'consumption_mean'})
+
+                if self.debug and "P" in self.debug_cat:
+                    self.log(">>> Consumption Mean:")
+                    self.log(f">>> {consumption_mean.to_string()}")
 
                 if days >= 7:
-                    consumption_dow = self.get_config("day_of_week_weighting") * dfx.iloc[: len(temp)]
-                    if len(consumption_dow) != len(consumption_mean):
-                        self.log(">>> Inconsistent lengths in consumption arrays")
-                        self.log(f">>> dow : {len(consumption_dow)}")
-                        self.log(f">>> mean: {len(consumption_mean)}")
-                        idx = consumption_dow.index.intersection(consumption_mean.index)
-                        self.log(
-                            f"Clipping the consumption to the overlap ({len(idx)/24:0.1f} days)",
-                            level="WARNING",
-                        )
-                        consumption_mean = consumption_mean.loc[idx]
-                        consumption_dow = consumption_dow.loc[idx]
 
-                    if self.debug and "Q" in self.debug_cat:
-                        self.log(">>> Consumption Mean:")
-                        self.log(f">>> {consumption_mean.to_string()}")
-                        self.log(">>> Consumption DoW:")
-                        self.log(f">>> {consumption_dow.to_string()}")
+                    # Alternative way of finding data from a week ago, needs test, and will need 8 day loading
+                    # start_last_week = start - timedelta(days=7)
+                    # end_last_week = start_last_week + timedelta(days=2)
+                    # consumption_dow = self.get_config("day_of_week_weighting") * dfx.iloc[start_last_week, end_last_week]
 
+                    # this line is aligned to time now
+                    # dfx is index of time and date, 7 days long. 
+                    # it does not extract the correct day if days >7, as it just selects the first 2 days. 
+                    consumption_dow = pd.DataFrame(self.get_config("day_of_week_weighting") * dfx.iloc[: len(temp)])
+                    consumption_dow.columns = ['consumption_dow']
 
-                    consumption["consumption"] += pd.Series(
-                        consumption_dow.to_numpy() 
-                        + consumption_mean.to_numpy() * (1 - self.get_config("day_of_week_weighting")),
-                        index=consumption_mean.index,
-                    )
+                    #shift it forward by 7 days (only works if days = 7)
+                    consumption_dow.index = consumption_dow.index + pd.Timedelta(days=7)
+                   
+                    # Add extra entries to consumption_dow so it starts at midnight, then remove time column and change Nans to 0
+                    consumption_dow2 = pd.concat([temp, consumption_dow], axis=1).drop(["time"], axis=1).fillna(0)
+ 
+                    # merge consumption_mean and consumption dow, then trim back to 48 hours long
+                    consumption_new = consumption_dow2.merge(consumption_mean, how='outer', left_index=True, right_index=True).head(96)
+
+                    # multiply each value in col consumption_mean by  (1 - self.get_config("day_of_week_weighting"))
+                    consumption_new['consumption_mean'] = consumption_new['consumption_mean'] * (1 - self.get_config("day_of_week_weighting"))
+
+                    # add the dow data to the mean data as a "total" column
+                    consumption_new['total'] = consumption_new['consumption_mean'] + consumption_new['consumption_dow']
+                    
+                    if self.debug and "P" in self.debug_cat:
+                        self.log(">>> Consumption New:")
+                        self.log(f">>> {consumption_new.to_string()}")
+
+                    consumption["consumption"] += pd.Series(consumption_new['total'].to_numpy(), index = consumption_mean.index)
+
                 else:
                     self.log(f"  - Ignoring 'Day of Week Weighting' because only {days} days of history is available")
                     consumption["consumption"] = consumption_mean
 
             if len(entity_ids) > 0:
                 self.log(f"    Estimated consumption from {entity_ids} loaded OK ")
-
             else:
                 self.log(f"    Estimated consumption from {entity_id} loaded OK ")
 
@@ -4178,6 +4221,35 @@ class PVOpt(hass.Hass):
             self.log("Printing final result of routine load_consumption.....")
             self.log(consumption.to_string())
         return consumption
+
+    # subtract zappi from grid to calculate house consumption
+    def _subtract_zappi_from_grid(self,ev,grid):
+
+        df_EV = None  # To store EV consumption
+        df_EV_Total = None  # To store EV consumption and Total consumption
+        dfx = None
+
+        self.log("    EV charger is seen as house load, so subtracting EV charging from Total consumption")
+        df_EV_Total = pd.concat([ev, grid], axis=1)  # concatenate total consumption and ev consumption into a single dataframe (as they are different lengths)
+        df_EV_Total.columns = ["EV", "Total"]  # Set column names
+        df_EV_Total = df_EV_Total.fillna(0)  # fill any missing values with 0
+        if self.debug and "P" in self.debug_cat:
+            self.log("Consumption data is")
+            self.log(df_EV_Total.to_string())
+
+        df_EV = df_EV_Total["EV"].squeeze()  # Extract EV consumption to Series
+        df_Total = df_EV_Total["Total"].squeeze()  # Extract total consumption to Series
+        df = df_Total - df_EV  # Substract EV consumption from Total Consumption
+
+        if self.debug and "P" in self.debug_cat:
+            self.log("Result of subtraction is")
+            self.log(df.to_string())
+
+        if (df < 0).any().any():  # Are there any negative values in the subtraction?
+            self.log("    Unexpected Negative values after substraction found, setting to zero")
+            df[df < 0] = 0
+
+        return df
 
     def _auto_cal(self):
         self.ulog("Calibrating PV System Model")

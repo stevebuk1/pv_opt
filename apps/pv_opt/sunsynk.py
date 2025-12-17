@@ -127,7 +127,7 @@ class InverterController:
     
 
     def _unknown_inverter(self):
-        e = f"Unknown inverter type {self.type}"
+        e = f"Unknown inverter type {self._type}"
         self.log(e, level="ERROR")
         self._host.status(e)
         raise Exception(e)
@@ -140,10 +140,10 @@ class InverterController:
         #  self.host.set_state(entity_id=entity_id, state=new_json)
 
     def enable_timed_mode(self):
-        if self.type == "SUNSYNK_SOLARSYNK2":
+        if self._type == "SUNSYNK_SOLARSYNK2":
             params = {
-                self.config["json_use_timer"]: 1,
-                self.config["json_priority_load"]: 1,
+                self._config["json_use_timer"]: 1,
+                self._config["json_priority_load"]: 1,
             }
             self._solarsynk_set_helper(params)
 
@@ -151,78 +151,78 @@ class InverterController:
             self._unknown_inverter()
 
     def control_charge(self, enable, **kwargs):
-        if self.type == "SUNSYNK_SOLARSYNK2":
+        if self._type == "SUNSYNK_SOLARSYNK2":
             time_now = pd.Timestamp.now(tz=self.tz)
 
             if enable:
                 self.enable_timed_mode()
                 params = {
-                    self.config["json_work_mode"]: 2,
-                    self.config["json_timed_charge_target_soc"]: kwargs.get("target_soc", 100),
-                    self.config["json_timed_charge_start"]: kwargs.get("start", time_now.strftime(TIMEFORMAT)),
-                    self.config["json_timed_charge_end"]: kwargs.get(
+                    self._config["json_work_mode"]: 2,
+                    self._config["json_timed_charge_target_soc"]: kwargs.get("target_soc", 100),
+                    self._config["json_timed_charge_start"]: kwargs.get("start", time_now.strftime(TIMEFORMAT)),
+                    self._config["json_timed_charge_end"]: kwargs.get(
                         "end", time_now.ceil("30min").strftime(TIMEFORMAT)
                     ),
-                    self.config["json_charge_current"]: min(
+                    self._config["json_charge_current"]: min(
                         kwargs.get("power", 0) / self._host.get_config("battery_voltage"),
                         self._host.get_config("battery_current_limit_amps"),
                     ),
-                    self.config["json_timed_charge_enable"]: True,
-                    self.config["json_gen_charge_enable"]: False,
-                } | {x: "00:00" for x in self.config["json_timed_charge_unused"]}
+                    self._config["json_timed_charge_enable"]: True,
+                    self._config["json_gen_charge_enable"]: False,
+                } | {x: "00:00" for x in self._config["json_timed_charge_unused"]}
 
                 self._solarsynk_set_helper(params)
 
             else:
                 params = {
-                    self.config["json_work_mode"]: 2,
-                    self.config["json_target_soc"]: 100,
-                    self.config["json_timed_charge_start"]: "00:00",
-                    self.config["json_timed_charge_end"]: "00:00",
-                    self.config["json_charge_current"]: self._host.get_config("battery_current_limit_amps"),
-                    self.config["json_timed_charge_enable"]: False,
-                    self.config["json_gen_charge_enable"]: True,
-                } | {x: "00:00" for x in self.config["json_timed_charge_unused"]}
+                    self._config["json_work_mode"]: 2,
+                    self._config["json_target_soc"]: 100,
+                    self._config["json_timed_charge_start"]: "00:00",
+                    self._config["json_timed_charge_end"]: "00:00",
+                    self._config["json_charge_current"]: self._host.get_config("battery_current_limit_amps"),
+                    self._config["json_timed_charge_enable"]: False,
+                    self._config["json_gen_charge_enable"]: True,
+                } | {x: "00:00" for x in self._config["json_timed_charge_unused"]}
         else:
             self._unknown_inverter()
 
     def control_discharge(self, enable, **kwargs):
-        if self.type == "SUNSYNK_SOLARSYNK2":
+        if self._type == "SUNSYNK_SOLARSYNK2":
             time_now = pd.Timestamp.now(tz=self.tz)
 
             if enable:
                 self.enable_timed_mode()
                 params = {
-                    self.config["json_work_mode"]: 0,
-                    self.config["json_timed_discharge_target_soc"]: kwargs.get(
+                    self._config["json_work_mode"]: 0,
+                    self._config["json_timed_discharge_target_soc"]: kwargs.get(
                         "target_soc", self._host.get_config("maximum_dod_percent")
                     ),
-                    self.config["json_timed_discharge_start"]: kwargs.get("start", time_now.strftime(TIMEFORMAT)),
-                    self.config["json_timed_discharge_end"]: kwargs.get(
+                    self._config["json_timed_discharge_start"]: kwargs.get("start", time_now.strftime(TIMEFORMAT)),
+                    self._config["json_timed_discharge_end"]: kwargs.get(
                         "end", time_now.ceil("30min").strftime(TIMEFORMAT)
                     ),
-                    self.config["json_discharge_power"]: kwargs.get("power", 0),
-                    self.config["json_timed_discharge_enable"]: True,
-                    self.config["json_gen_discharge_enable"]: False,
-                } | {x: "00:00" for x in self.config["json_timed_discharge_unused"]}
+                    self._config["json_discharge_power"]: kwargs.get("power", 0),
+                    self._config["json_timed_discharge_enable"]: True,
+                    self._config["json_gen_discharge_enable"]: False,
+                } | {x: "00:00" for x in self._config["json_timed_discharge_unused"]}
 
                 self._solarsynk_set_helper(**params)
 
             else:
                 params = {
-                    self.config["json_work_mode"]: 2,
-                    self.config["json_timed_discharge_target_soc"]: 100,
-                    self.config["json_timed_discharge_start"]: "00:00",
-                    self.config["json_timed_discharge_end"]: "00:00",
-                    self.config["json_discharge_power"]: 0,
-                    self.config["json_timed_discharge_enable"]: False,
-                    self.config["json_gen_discharge_enable"]: True,
-                } | {x: "00:00" for x in self.config["json_timed_discharge_unused"]}
+                    self._config["json_work_mode"]: 2,
+                    self._config["json_timed_discharge_target_soc"]: 100,
+                    self._config["json_timed_discharge_start"]: "00:00",
+                    self._config["json_timed_discharge_end"]: "00:00",
+                    self._config["json_discharge_power"]: 0,
+                    self._config["json_timed_discharge_enable"]: False,
+                    self._config["json_gen_discharge_enable"]: True,
+                } | {x: "00:00" for x in self._config["json_timed_discharge_unused"]}
         else:
             self._unknown_inverter()
 
     def hold_soc(self, enable, soc=None):
-        if self.type == "SUNSYNK_SOLARSYNK2":
+        if self._type == "SUNSYNK_SOLARSYNK2":
             pass
 
         else:
@@ -233,7 +233,7 @@ class InverterController:
         status = None
         time_now = pd.Timestamp.now(tz=self.tz)
 
-        if self.type == "SUNSYNK_SOLARSYNK2":
+        if self._type == "SUNSYNK_SOLARSYNK2":
             charge_start = pd.Timestamp(self._host.get_config("id_timed_charge_start"), tz=self.tz)
             charge_end = pd.Timestamp(self._host.get_config("id_timed_charge_end"), tz=self.tz)
             discharge_start = pd.Timestamp(self._host.get_config("id_timed_charge_start"), tz=self.tz)
