@@ -4092,13 +4092,6 @@ class PVOpt(hass.Hass):
                     self.log("Df after adding consumption margin is.......")
                     self.log(df.to_string())
 
-                # SVB midnight trimmer
-                #start_midnight = df.index.min().normalize() + pd.Timedelta(days=1)
-                #end_midnight = df.index.max().normalize()
-                #df_trimmed = df[start_midnight:end_midnight]
-                #dfx = pd.Series(index=df_trimmed.index, data=df_trimmed.to_list())  #Used for dow calcs below
-                #df = df_trimmed.groupby(df_trimmed.index.time).aggregate(self.get_config("consumption_grouping"))  # Group by time and take the mean
-
                 dfx = pd.Series(index=df.index, data=df.to_list())  #Used for dow calcs below
                 df = df.groupby(df.index.time).aggregate(self.get_config("consumption_grouping"))  # Group by time and take the mean
 
@@ -4107,8 +4100,6 @@ class PVOpt(hass.Hass):
                 if self.debug and "P" in self.debug_cat:
                     self.log(">>> All consumption:")
                     self.log(f">>> {dfx.to_string()}")
-                #    self.log(">>> Trimmed to midnight consumption:")
-                #    self.log(f">>> {df_trimmed.to_string()}")
                     self.log(">>> Consumption grouped by time:")
                     self.log(f">>> {df}")
 
@@ -4126,10 +4117,6 @@ class PVOpt(hass.Hass):
                 # df (right) is dataframe 24 hours long, aligned to midnight, average of 7 days. Index is time only. 
                 # thus consumption_mean_s is 48 hours long, starts from midnight. The first 24 hours and second 24 hours contains the same data. 
 
-                #consumption_mean_s = temp.merge(df, how='left', left_on="time", right_index=True)["consumption"]
-                #consumption_mean = consumption_mean_s.to_frame()
-                #consumption_mean.columns = ['consumption_mean']
-
                 consumption_mean = temp.merge(df, how='left', left_on="time", right_index=True)[["consumption"]].rename(columns={'consumption': 'consumption_mean'})
 
                 if self.debug and "P" in self.debug_cat:
@@ -4139,6 +4126,7 @@ class PVOpt(hass.Hass):
                 if days >= 7:
 
                     # Alternative way of finding data from a week ago, needs test, and will need 8 day loading
+                    # maybe use timenow instead of start? 
                     # start_last_week = start - timedelta(days=7)
                     # end_last_week = start_last_week + timedelta(days=2)
                     # consumption_dow = self.get_config("day_of_week_weighting") * dfx.iloc[start_last_week, end_last_week]
@@ -4152,7 +4140,7 @@ class PVOpt(hass.Hass):
                     #shift it forward by 7 days (only works if days = 7)
                     consumption_dow.index = consumption_dow.index + pd.Timedelta(days=7)
                    
-                    # Add extra entries to consumption_dow so it starts at midnight, then remove time column and change Nans to 0
+                    # Add extra entries to consumption_dow so it starts at midnight, then remove time column and change Nans to 0 (they are in the past)
                     consumption_dow2 = pd.concat([temp, consumption_dow], axis=1).drop(["time"], axis=1).fillna(0)
  
                     # merge consumption_mean and consumption dow, then trim back to 48 hours long
