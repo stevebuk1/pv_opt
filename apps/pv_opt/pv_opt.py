@@ -4125,9 +4125,9 @@ class PVOpt(hass.Hass):
 
                 if days >= 7:
 
-                    # Alternative way of finding data from a week ago, needs test, and will need 8 day loading
-                    # maybe use timenow instead of start? 
-                    # start_last_week = start - timedelta(days=7)
+                    # Alternative way of finding data from a week ago, needs test
+                    
+                    # start_last_week = pd.Timestamp.utcnow().floor("30min") - timedelta(days=7)
                     # end_last_week = start_last_week + timedelta(days=2)
                     # consumption_dow = self.get_config("day_of_week_weighting") * dfx.iloc[start_last_week, end_last_week]
 

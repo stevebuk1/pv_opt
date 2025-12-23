@@ -1,5 +1,6 @@
 import json
 import time
+import numpy as np
 from time import sleep
 from typing import final
 
@@ -129,6 +130,11 @@ class InverterController:
     def timed_mode(self):
         return True
 
+
+
+    def clear_hold_status(self):
+        pass
+
     def _unknown_inverter(self):
         e = f"Unknown inverter type {self._type}"
         self.log(e, level="ERROR")
@@ -137,7 +143,22 @@ class InverterController:
 
     def _solarsynk_set_helper(self, **kwargs):
         current_json = json.loads(self._host.get_config("id_control_helper"))
-        new_json = json.dumps(current_json | kwargs)
+
+        # Convert numpy/pandas types to native Python types
+        converted_kwargs = {}
+        for key, value in kwargs.items():
+            if isinstance(value, (np.integer, np.int64)):
+                converted_kwargs[key] = int(value)
+            elif isinstance(value, (np.floating, np.float64)):
+                converted_kwargs[key] = float(value)
+            elif isinstance(value, np.ndarray):
+                converted_kwargs[key] = value.tolist()
+            else:
+                converted_kwargs[key] = value
+
+        updated_json = current_json | converted_kwargs
+        new_json = json.dumps(updated_json)
+
         # entity_id = self._host.config("id_control_helper")
         entity_id = self._host.config.get(f"id_control_helper", None)
 
@@ -176,7 +197,7 @@ class InverterController:
                     ),
                     self._brand_config["json_timed_charge_enable"]: True,
                     self._brand_config["json_gen_charge_enable"]: False,
-                } | {x: "00:00" for x in self._config["json_timed_charge_unused"]}
+                } | {x: "00:00" for x in self._brand_config["json_timed_charge_unused"]}
 
                 self._solarsynk_set_helper(**params)
 
@@ -189,7 +210,7 @@ class InverterController:
                     self._brand_config["json_charge_current"]: self._host.get_config("battery_current_limit_amps"),
                     self._brand_config["json_timed_charge_enable"]: False,
                     self._brand_config["json_gen_charge_enable"]: True,
-                } | {x: "00:00" for x in self._config["json_timed_charge_unused"]}
+                } | {x: "00:00" for x in self._brand_config["json_timed_charge_unused"]}
         else:
             self._unknown_inverter()
 
@@ -208,7 +229,7 @@ class InverterController:
                     self._brand_config["json_timed_discharge_end"]: kwargs.get(
                         "end", time_now.ceil("30min").strftime(TIMEFORMAT)
                     ),
-                    self._brand_config["json_discharge_power"]: kwargs.get("power", 0),
+                    self._brand_config["json_timed_discharge_power"]: kwargs.get("power", 0),
                     self._brand_config["json_timed_discharge_enable"]: True,
                     self._brand_config["json_gen_discharge_enable"]: False,
                 } | {x: "00:00" for x in self._config["json_timed_discharge_unused"]}
@@ -221,7 +242,7 @@ class InverterController:
                     self._brand_config["json_timed_discharge_target_soc"]: 100,
                     self._brand_config["json_timed_discharge_start"]: "00:00",
                     self._brand_config["json_timed_discharge_end"]: "00:00",
-                    self._brand_config["json_discharge_power"]: 0,
+                    self._brand_config["json_timed_discharge_power"]: 0,
                     self._brand_config["json_timed_discharge_enable"]: False,
                     self._brand_config["json_gen_discharge_enable"]: True,
                 } | {x: "00:00" for x in self._brand_config["json_timed_discharge_unused"]}
