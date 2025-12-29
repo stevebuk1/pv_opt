@@ -153,7 +153,11 @@ class InverterController:
                 converted_kwargs[key] = float(value)
             elif isinstance(value, np.ndarray):
                 converted_kwargs[key] = value.tolist()
-            elif isinstance(value, pd.Timestamp):
+            elif isinstance(value, np.datetime64):
+                converted_kwargs[key] = str(value) 
+            elif isinstance(value, np.timedelta64):
+                converted_kwargs[key] = str(value)
+            elif isinstance(value, pd.Timestamp): # pd not expected but added for completeness
                 converted_kwargs[key] = value.isoformat()  # or str(value)
             elif isinstance(value, pd.Timedelta):
                 converted_kwargs[key] = str(value)
