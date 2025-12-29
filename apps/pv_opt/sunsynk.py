@@ -153,6 +153,10 @@ class InverterController:
                 converted_kwargs[key] = float(value)
             elif isinstance(value, np.ndarray):
                 converted_kwargs[key] = value.tolist()
+            elif isinstance(value, pd.Timestamp):
+                converted_kwargs[key] = value.isoformat()  # or str(value)
+            elif isinstance(value, pd.Timedelta):
+                converted_kwargs[key] = str(value)
             else:
                 converted_kwargs[key] = value
 
@@ -160,7 +164,7 @@ class InverterController:
         new_json = json.dumps(updated_json)
 
         # entity_id = self._host.config("id_control_helper")
-        entity_id = self._host.config.get(f"id_control_helper", None)
+        entity_id = self._host.config.get("id_control_helper", None)
 
         self.log(f"Setting SolarSynk input helper {entity_id} to {new_json}")
         #  self.host.set_state(entity_id=entity_id, state=new_json)
