@@ -142,7 +142,10 @@ class InverterController:
         raise Exception(e)
 
     def _solarsynk_set_helper(self, **kwargs):
-        current_json = json.loads(self._host.get_config("id_control_helper"))
+        if self._host.get_config("id_control_helper") is not None:
+            current_json = json.loads(self._host.get_config("id_control_helper"))
+        else:
+            current_json = {}
 
         # Convert numpy/pandas types to native Python types
         converted_kwargs = {}
@@ -207,7 +210,7 @@ class InverterController:
                     self._brand_config["json_gen_charge_enable"]: False,
                 } | {x: "00:00" for x in self._brand_config["json_timed_charge_unused"]}
 
-                self._solarsynk_set_helper(**params)
+                self._solarsynk_set_helper(**params) # not sure this is in the right place - should be after the next else
 
             else:
                 params = {
@@ -242,7 +245,7 @@ class InverterController:
                     self._brand_config["json_gen_discharge_enable"]: False,
                 } | {x: "00:00" for x in self._config["json_timed_discharge_unused"]}
 
-                self._solarsynk_set_helper(**params)
+                self._solarsynk_set_helper(**params)  # not sure this is in the right place - should be after the next else
 
             else:
                 params = {
