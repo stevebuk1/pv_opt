@@ -400,24 +400,40 @@ pv_opt:
 
 
   # ===============================================================================================================
-  # Brand / Integration Specific Config: SUNSYNK_SOLARSYNK2:
+  # Brand / Integration Specific Config: SUNSYNK_SOLARSYNK3: https://github.com/martinville/solarsynkv3
   # ===============================================================================================================
   # 
   # Uncomment the next three entries if using this integration. 
-
-  # inverter_type: SUNSYNK_SOLARSYNK2
-  # device_name: solarsynk
-  # inverter_sn: 000000  # enter {sunsynk_serial} from solarsynk2 addon
+  
+  inverter_type: SUNSYNK_SOLARSYNK3
+  device_name: solarsynkv3
+  inverter_sn: 2207112425a  # enter {sunsynk_serial} from solarsynk2 addon
 
   # These are the default entities used with the Sunsynk Solarsynk2 integration. You can change them here and over-ride the defaults
 
-  # maximum_dod_percent:  20
-  # id_battery_soc:  sensor.{device_name}_{inverter_sn}_battery_soc
-  # id_consumption_today: sensor.{device_name}_{inverter_sn}_day_load_energy
-  # id_grid_import_today: sensor.{device_name}_{inverter_sn}_day_grid_import
-  # id_grid_export_today: sensor.{device_name}_{inverter_sn}_day_grid_export
-  # supports_hold_soc: false
-  # update_cycle_seconds: 300
+  id_use_timer: sensor.{device_name}_{inverter_sn}_peakandvallery
+  id_priority_load: sensor.{device_name}_{inverter_sn}_energymode 
+  id_control_helper: input_text.{device_name}_{inverter_sn}_settings
+
+  id_timed_charge_start: sensor.{device_name}_{inverter_sn}_selltime1
+  id_timed_charge_end: sensor.{device_name}_{inverter_sn}_selltime2
+  id_timed_charge_enable: sensor.{device_name}_{inverter_sn}_gentime1on
+  id_timed_charge_target_soc: sensor.{device_name}_{inverter_sn}_cap1
+
+  id_timed_discharge_start: sensor.{device_name}_{inverter_sn}_selltime3
+  id_timed_discharge_end: sensor.{device_name}_{inverter_sn}_selltime4
+  id_timed_discharge_enable: ssensor.{device_name}_{inverter_sn}_gentime3on
+  id_timed_discharge_target_soc: sensor.{device_name}_{inverter_sn}_cap3
+  
+  id_battery_soc:  sensor.{device_name}_{inverter_sn}_battery_soc
+  battery_voltage: sensor.{device_name}_{inverter_sn}_battery_voltage
+  id_consumption_today: sensor.{device_name}_{inverter_sn}_load_daily_used
+  id_grid_import_today: sensor.sensor.{device_name}_{inverter_sn}_grid_etoday_from
+  id_grid_export_today: sensor.{device_name}_{inverter_sn}_grid_etoday_to
+
+  maximum_dod_percent:  20
+  supports_hold_soc: false
+  update_cycle_seconds: 300
 
   # ===============================================================================================================
   # Brand / Integration Specific Config: SOLIS_CLOUD: https://github.com/hultenvp/solis-sensor
