@@ -400,16 +400,16 @@ pv_opt:
 
 
   # ===============================================================================================================
-  # Brand / Integration Specific Config: SUNSYNK_SOLARSYNK3: https://github.com/martinville/solarsynkv3
+  # Brand / Integration Specific Config: SUNSYNK_SOLARSYNKV3: https://github.com/martinville/solarsynkv3
   # ===============================================================================================================
   # 
   # Uncomment the next three entries if using this integration. 
   
-  inverter_type: SUNSYNK_SOLARSYNK3
+  inverter_type: SUNSYNK_SOLARSYNKV3
   device_name: solarsynkv3
-  inverter_sn: 2207112425a  # enter {sunsynk_serial} from solarsynk2 addon
+  inverter_sn: 2207112425a  # enter {sunsynk_serial} from solarsynkv3 addon
 
-  # These are the default entities used with the Sunsynk Solarsynk2 integration. You can change them here and over-ride the defaults
+  # These are the default entities used with the Sunsynk Solarsynkv3 integration. You can change them here and over-ride the defaults
 
   id_use_timer: sensor.{device_name}_{inverter_sn}_peakandvallery
   id_priority_load: sensor.{device_name}_{inverter_sn}_energymode 

@@ -8,7 +8,7 @@ import pandas as pd
 
 TIMEFORMAT = "%H:%M"
 INVERTER_DEFS = {
-    "SUNSYNK_SOLARSYNK3": {
+    "SUNSYNK_SOLARSYNKV3": {
         "online": "sensor.{device_name}_{inverter_sn}_battery_soc",
 
         "default_config": {
@@ -179,7 +179,7 @@ class InverterController:
     def enable_timed_mode(self):
         self.log ("Entered enable_timed_mode")
         self.log (f"self._config = {self._config}")
-        if self._type == "SUNSYNK_SOLARSYNK3":
+        if self._type == "SUNSYNK_SOLARSYNKV3":
             params = {
                 self._brand_config["json_use_timer"]: 1,
                 self._brand_config["json_priority_load"]: 1,
@@ -190,7 +190,7 @@ class InverterController:
             self._unknown_inverter()
 
     def control_charge(self, enable, **kwargs):
-        if self._type == "SUNSYNK_SOLARSYNK3":
+        if self._type == "SUNSYNK_SOLARSYNKV3":
             time_now = pd.Timestamp.now(tz=self.tz)
 
             if enable:
@@ -215,7 +215,7 @@ class InverterController:
             else:
                 params = {
                     self._brand_config["json_work_mode"]: 2,
-                    self._brand_config["json_target_soc"]: 100,
+                    self._brand_config["json_timed_charge_target_soc"]: 100,
                     self._brand_config["json_timed_charge_start"]: "00:00",
                     self._brand_config["json_timed_charge_end"]: "00:00",
                     self._brand_config["json_charge_current"]: self._host.get_config("battery_current_limit_amps"),
@@ -226,7 +226,7 @@ class InverterController:
             self._unknown_inverter()
 
     def control_discharge(self, enable, **kwargs):
-        if self._type == "SUNSYNK_SOLARSYNK3":
+        if self._type == "SUNSYNK_SOLARSYNKV3":
             time_now = pd.Timestamp.now(tz=self.tz)
 
             if enable:
@@ -261,7 +261,7 @@ class InverterController:
             self._unknown_inverter()
 
     def hold_soc(self, enable, soc=None):
-        if self._type == "SUNSYNK_SOLARSYNK3":
+        if self._type == "SUNSYNK_SOLARSYNKV3":
             pass
 
         else:
@@ -272,7 +272,7 @@ class InverterController:
         status = None
         time_now = pd.Timestamp.now(tz=self.tz)
 
-        if self._type == "SUNSYNK_SOLARSYNK3":
+        if self._type == "SUNSYNK_SOLARSYNKV3":
             charge_start = pd.Timestamp(self._host.get_config("id_timed_charge_start"), tz=self.tz)
             charge_end = pd.Timestamp(self._host.get_config("id_timed_charge_end"), tz=self.tz)
             discharge_start = pd.Timestamp(self._host.get_config("id_timed_charge_start"), tz=self.tz)
