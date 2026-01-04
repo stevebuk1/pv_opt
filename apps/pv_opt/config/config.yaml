@@ -422,7 +422,7 @@ pv_opt:
 
   id_timed_discharge_start: sensor.{device_name}_{inverter_sn}_selltime3
   id_timed_discharge_end: sensor.{device_name}_{inverter_sn}_selltime4
-  id_timed_discharge_enable: ssensor.{device_name}_{inverter_sn}_gentime3on
+  id_timed_discharge_enable: sensor.{device_name}_{inverter_sn}_gentime3on
   id_timed_discharge_target_soc: sensor.{device_name}_{inverter_sn}_cap3
   
   id_battery_soc:  sensor.{device_name}_{inverter_sn}_battery_soc
