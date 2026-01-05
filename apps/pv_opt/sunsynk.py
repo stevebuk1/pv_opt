@@ -174,7 +174,7 @@ class InverterController:
         entity_id = self._host.config.get("id_control_helper", None)
 
         self.log(f"Setting SolarSynk input helper {entity_id} to {new_json}")
-        #  self.host.set_state(entity_id=entity_id, state=new_json)
+        #  self._host.set_state(entity_id=entity_id, state=new_json)
 
     def enable_timed_mode(self):
         self.log ("Entered enable_timed_mode")
@@ -202,8 +202,8 @@ class InverterController:
                     self._brand_config["json_timed_charge_end"]: kwargs.get(
                         "end", time_now.ceil("30min").strftime(TIMEFORMAT)
                     ),
-                    self._brand_config["json_charge_current"]: min(
-                        kwargs.get("power", 0) / self._host.get_config("battery_voltage"),
+                    self._brand_config["json_charge_current"]: min(round(
+                        kwargs.get("power", 0) / self._host.get_config("battery_voltage")),
                         self._host.get_config("battery_current_limit_amps"),
                     ),
                     self._brand_config["json_timed_charge_enable"]: True,
