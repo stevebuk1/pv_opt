@@ -35,7 +35,7 @@ INVERTER_DEFS = {
             "id_priority_load": "sensor.{device_name}_{inverter_sn}_priority_load",
             "id_timed_charge_start": "sensor.{device_name}_{inverter_sn}_prog1_time",
             "id_timed_charge_end": "sensor.{device_name}_{inverter_sn}_prog2_time",
-            "id_timed_charge_unused": ["sensor.{device_name}_{inverter_sn}_" + f"prog{i}_time" for i in range(2, 7)],
+            "id_timed_charge_unused": ["sensor.{device_name}_{inverter_sn}_" + f"prog{i}_time" for i in range(3, 7)],
             "id_timed_charge_enable": "sensor.{device_name}_{inverter_sn}_prog1_charge",
             "id_timed_charge_capacity": "sensor.{device_name}_{inverter_sn}_prog1_capacity",
             "id_timed_discharge_start": "sensor.{device_name}_{inverter_sn}_prog3_time",
@@ -51,7 +51,7 @@ INVERTER_DEFS = {
             "json_use_timer": "peakAndVallery",
             "json_timed_charge_start": "sellTime1",
             "json_timed_charge_end": "sellTime2",
-            "json_timed_charge_unused": [f"sellTime{i}" for i in range(2, 7)],
+            "json_timed_charge_unused": [f"sellTime{i}" for i in range(3, 7)],
             "json_timed_charge_enable": "time1on",
             "json_timed_charge_target_soc": "cap1",
             "json_charge_current": "sdBatteryCurrent",
@@ -148,6 +148,7 @@ class InverterController:
             current_json = {}
 
         # Convert numpy/pandas types to native Python types
+
         converted_kwargs = {}
         for key, value in kwargs.items():
             if isinstance(value, (np.integer, np.int64)):
@@ -157,11 +158,11 @@ class InverterController:
             elif isinstance(value, np.ndarray):
                 converted_kwargs[key] = value.tolist()
             elif isinstance(value, np.datetime64):
-                converted_kwargs[key] = str(value) 
+                converted_kwargs[key] = pd.Timestamp(value).strftime('%H:%M') 
             elif isinstance(value, np.timedelta64):
                 converted_kwargs[key] = str(value)
             elif isinstance(value, pd.Timestamp): # pd not expected but added for completeness
-                converted_kwargs[key] = value.isoformat()  # or str(value)
+                converted_kwargs[key] = value.strftime('%H:%M')
             elif isinstance(value, pd.Timedelta):
                 converted_kwargs[key] = str(value)
             else:
@@ -195,6 +196,7 @@ class InverterController:
 
             if enable:
                 self.enable_timed_mode()
+
                 params = {
                     self._brand_config["json_work_mode"]: 2,
                     self._brand_config["json_timed_charge_target_soc"]: kwargs.get("target_soc", 100),
@@ -206,11 +208,16 @@ class InverterController:
                         kwargs.get("power", 0) / self._host.get_config("battery_voltage")),
                         self._host.get_config("battery_current_limit_amps"),
                     ),
+                } 
+
+                self._solarsynk_set_helper(**params) 
+
+                params = {
                     self._brand_config["json_timed_charge_enable"]: True,
                     self._brand_config["json_gen_charge_enable"]: False,
                 } | {x: "00:00" for x in self._brand_config["json_timed_charge_unused"]}
 
-                self._solarsynk_set_helper(**params) # not sure this is in the right place - should be after the next else
+                self._solarsynk_set_helper(**params) 
 
             else:
                 params = {
@@ -219,9 +226,17 @@ class InverterController:
                     self._brand_config["json_timed_charge_start"]: "00:00",
                     self._brand_config["json_timed_charge_end"]: "00:00",
                     self._brand_config["json_charge_current"]: self._host.get_config("battery_current_limit_amps"),
+                } 
+
+                self._solarsynk_set_helper(**params)
+
+                params = {
                     self._brand_config["json_timed_charge_enable"]: False,
                     self._brand_config["json_gen_charge_enable"]: True,
                 } | {x: "00:00" for x in self._brand_config["json_timed_charge_unused"]}
+
+                self._solarsynk_set_helper(**params)
+
         else:
             self._unknown_inverter()
 
