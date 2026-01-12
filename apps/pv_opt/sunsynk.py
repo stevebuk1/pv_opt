@@ -7,6 +7,9 @@ from typing import final
 import pandas as pd
 
 TIMEFORMAT = "%H:%M"
+
+READ_SENSOR_RETRIES = 10
+
 INVERTER_DEFS = {
     "SUNSYNK_SOLARSYNKV3": {
         "online": "sensor.{device_name}_{inverter_sn}_battery_soc",
@@ -35,14 +38,10 @@ INVERTER_DEFS = {
             "id_priority_load": "sensor.{device_name}_{inverter_sn}_priority_load",
             "id_timed_charge_start": "sensor.{device_name}_{inverter_sn}_prog1_time",
             "id_timed_charge_end": "sensor.{device_name}_{inverter_sn}_prog2_time",
-            "id_timed_charge_unused": ["sensor.{device_name}_{inverter_sn}_" + f"prog{i}_time" for i in range(3, 7)],
             "id_timed_charge_enable": "sensor.{device_name}_{inverter_sn}_prog1_charge",
             "id_timed_charge_capacity": "sensor.{device_name}_{inverter_sn}_prog1_capacity",
             "id_timed_discharge_start": "sensor.{device_name}_{inverter_sn}_prog3_time",
             "id_timed_discharge_end": "sensor.{device_name}_{inverter_sn}_prog4_time",
-            "id_timed_discharge_unused": [
-                "sensor.{device_name}_{inverter_sn}_" + f"prog{i}_time" for i in [1, 2, 5, 6]
-            ],
             "id_timed_dicharge_enable": "sensor.{device_name}_{inverter_sn}_prog3_charge",
             "id_timed_discharge_capacity": "sensor.{device_name}_{inverter_sn}_prog3_capacity",
             "json_work_mode": "sysWorkMode",
@@ -51,14 +50,13 @@ INVERTER_DEFS = {
             "json_use_timer": "peakAndVallery",
             "json_timed_charge_start": "sellTime1",
             "json_timed_charge_end": "sellTime2",
-            "json_timed_charge_unused": [f"sellTime{i}" for i in range(3, 7)],
+            "json_timed_unused": [f"sellTime{i}" for i in range(5, 7)],
             "json_timed_charge_enable": "time1on",
             "json_timed_charge_target_soc": "cap1",
             "json_charge_current": "sdBatteryCurrent",
             "json_gen_charge_enable": "genTime1on",
             "json_timed_discharge_start": "sellTime3",
             "json_timed_discharge_end": "sellTime4",
-            "json_timed_discharge_unused": [f"sellTime{i}" for i in [1, 2, 5, 6]],
             "json_timed_discharge_enable": "time3on",
             "json_timed_discharge_target_soc": "cap3",
             "json_timed_discharge_power": "sellTime3Pac",
@@ -87,12 +85,9 @@ class InverterController:
         ):
             for item in defs:
                 if isinstance(defs[item], str):
-                    #conf[item] = defs[item].replace("{device_name}", self._device_name)
                     temp = defs[item].replace("{device_name}", self._device_name)
                     conf[item] = temp.replace("{inverter_sn}", self._inverter_sn)
                 elif isinstance(defs[item], list):
-                    #conf[item] = [z.replace("{device_name}", self._device_name) for z in defs[item]]
-                    #conf[item] = [z.replace("{inverter_sn}", self._inverter_sn) for z in defs[item]]
                     y = [z.replace("{device_name}", self._device_name) for z in defs[item]]
                     conf[item] = [x.replace("{inverter_sn}", self._inverter_sn) for x in y]
                 else:
@@ -177,6 +172,16 @@ class InverterController:
         self.log(f"Setting SolarSynk input helper {entity_id} to {new_json}")
         #  self._host.set_state(entity_id=entity_id, state=new_json)
 
+        # Wait until text input helper is empty (i.e is written to the Cloud)
+        # Max wait time of 10 seconds
+        empty = False
+        retries = 0
+        while not empty and retries < READ_SENSOR_RETRIES:
+            retries += 1
+            time.sleep(1)
+            content = self.get_state_retry(entity_id=entity_id)
+            empty = content == None
+
     def enable_timed_mode(self):
         self.log ("Entered enable_timed_mode")
         self.log (f"self._config = {self._config}")
@@ -187,6 +192,10 @@ class InverterController:
             }
             self._solarsynk_set_helper(**params)
 
+            params = {x: "00:00" for x in self._config["json_timed_unused"]}
+
+            self._solarsynk_set_helper(**params)
+
         else:
             self._unknown_inverter()
 
@@ -195,7 +204,7 @@ class InverterController:
             time_now = pd.Timestamp.now(tz=self.tz)
 
             if enable:
-                self.enable_timed_mode()
+                # self.enable_timed_mode()
 
                 params = {
                     self._brand_config["json_work_mode"]: 2,
@@ -215,7 +224,7 @@ class InverterController:
                 params = {
                     self._brand_config["json_timed_charge_enable"]: True,
                     self._brand_config["json_gen_charge_enable"]: False,
-                } | {x: "00:00" for x in self._brand_config["json_timed_charge_unused"]}
+                }
 
                 self._solarsynk_set_helper(**params) 
 
@@ -233,7 +242,7 @@ class InverterController:
                 params = {
                     self._brand_config["json_timed_charge_enable"]: False,
                     self._brand_config["json_gen_charge_enable"]: True,
-                } | {x: "00:00" for x in self._brand_config["json_timed_charge_unused"]}
+                }
 
                 self._solarsynk_set_helper(**params)
 
@@ -245,7 +254,7 @@ class InverterController:
             time_now = pd.Timestamp.now(tz=self.tz)
 
             if enable:
-                self.enable_timed_mode()
+                # self.enable_timed_mode()
                 params = {
                     self._brand_config["json_work_mode"]: 0,
                     self._brand_config["json_timed_discharge_target_soc"]: kwargs.get(
@@ -255,12 +264,19 @@ class InverterController:
                     self._brand_config["json_timed_discharge_end"]: kwargs.get(
                         "end", time_now.ceil("30min").strftime(TIMEFORMAT)
                     ),
+                } 
+
+                self._solarsynk_set_helper(**params) 
+
+                params = {
                     self._brand_config["json_timed_discharge_power"]: kwargs.get("power", 0),
                     self._brand_config["json_timed_discharge_enable"]: True,
                     self._brand_config["json_gen_discharge_enable"]: False,
-                } | {x: "00:00" for x in self._config["json_timed_discharge_unused"]}
+                } 
 
-                self._solarsynk_set_helper(**params)  # not sure this is in the right place - should be after the next else
+                self._solarsynk_set_helper(**params) 
+
+
 
             else:
                 params = {
@@ -269,9 +285,16 @@ class InverterController:
                     self._brand_config["json_timed_discharge_start"]: "00:00",
                     self._brand_config["json_timed_discharge_end"]: "00:00",
                     self._brand_config["json_timed_discharge_power"]: 0,
+                } 
+
+                self._solarsynk_set_helper(**params) 
+
+                params = {
                     self._brand_config["json_timed_discharge_enable"]: False,
                     self._brand_config["json_gen_discharge_enable"]: True,
-                } | {x: "00:00" for x in self._brand_config["json_timed_discharge_unused"]}
+                } 
+
+                self._solarsynk_set_helper(**params) 
         else:
             self._unknown_inverter()
 

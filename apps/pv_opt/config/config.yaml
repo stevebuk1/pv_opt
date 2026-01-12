@@ -433,7 +433,7 @@ pv_opt:
 
   maximum_dod_percent:  20
   supports_hold_soc: false
-  update_cycle_seconds: 300
+  update_cycle_seconds: 0
 
   # ===============================================================================================================
   # Brand / Integration Specific Config: SOLIS_CLOUD: https://github.com/hultenvp/solis-sensor
