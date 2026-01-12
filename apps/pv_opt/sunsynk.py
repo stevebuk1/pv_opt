@@ -179,7 +179,7 @@ class InverterController:
         while not empty and retries < READ_SENSOR_RETRIES:
             retries += 1
             time.sleep(1)
-            content = self.get_state_retry(entity_id=entity_id)
+            content = self._host.get_state_retry(entity_id=entity_id)
             empty = content == None
 
     def enable_timed_mode(self):
@@ -192,7 +192,7 @@ class InverterController:
             }
             self._solarsynk_set_helper(**params)
 
-            params = {x: "00:00" for x in self._config["json_timed_unused"]}
+            params = {x: "00:00" for x in self._brand_config["json_timed_unused"]}
 
             self._solarsynk_set_helper(**params)
 
