@@ -138,6 +138,7 @@ class InverterController:
 
     def _solarsynk_set_helper(self, **kwargs):
         if self._host.get_config("id_control_helper") is not None:
+            self.log("About to read Json")
             current_json = json.loads(self._host.get_config("id_control_helper"))
         else:
             current_json = {}
@@ -167,6 +168,7 @@ class InverterController:
         new_json = json.dumps(updated_json)
 
         # entity_id = self._host.config("id_control_helper")
+        self.log("About to get entity id")
         entity_id = self._host.config.get("id_control_helper", None)
 
         self.log(f"Setting SolarSynk input helper {entity_id} to {new_json}")
@@ -179,6 +181,7 @@ class InverterController:
         while not empty and retries < READ_SENSOR_RETRIES:
             retries += 1
             time.sleep(1)
+            self.log(f"Checking for {entity_id} to be empty")
             content = self._host.get_state_retry(entity_id=entity_id)
             empty = content == None
 
