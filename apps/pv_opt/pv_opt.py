@@ -870,8 +870,8 @@ class PVOpt(hass.Hass):
 
         # If Charging plan exists, convert dispatch start and end times to datetime format and append to df.
         if not df.empty:
-            df["start_dt"] = pd.to_datetime(df["start"])
-            df["end_dt"] = pd.to_datetime(df["end"])
+            df["start_dt"] = pd.to_datetime(df["start"], utc=True)
+            df["end_dt"] = pd.to_datetime(df["end"], utc=True)
             df["start_local"] = df["start_dt"].dt.tz_convert(self.tz)
             df["end_local"] = df["end_dt"].dt.tz_convert(self.tz)
 
@@ -1818,6 +1818,86 @@ class PVOpt(hass.Hass):
         else:
             self.log("  No upcoming Octopus Saving Events detected or joined:")
 
+    
+    def _load_saving_events_new(self):
+            """
+            MIGRATION NOTES - event entity → calendar entity
+            ─────────────────────────────────────────────────
+            Uses the calendar entity introduced to replace the deprecated event entity
+            (removed May 2026):
+                calendar.octopus_energy_<ACCOUNT_ID>_octoplus_saving_sessions
+            The calendar entity surfaces the current or next joined session via standard
+            HA calendar attributes (start_time, end_time). Note that octopoints_per_kwh
+            is not available from the calendar entity.
+            """
+
+            # ── 1. Discover the calendar entity ──────────────────────────────────
+            calendar_entity = next(
+                (name for name in self.get_state_retry("calendar").keys()
+                 if "octoplus_saving_sessions" in name),
+                None,
+            )
+
+            if calendar_entity is None:
+                self.log("")
+                self.log("  No Octopus Saving Sessions calendar entity found.")
+                return
+
+            self.log("")
+            self.rlog(f"Found Octopus Saving Sessions calendar entity: {calendar_entity}")
+
+            # ── 2. Obtain account_id from the entity name ─────────────────────────
+            # e.g. "calendar.octopus_energy_A-1B2C3D4E_octoplus_saving_sessions"
+            #                                ^^^^^^^^^^ extract this part
+            try:
+                octopus_account = calendar_entity.split("octopus_energy_")[1].split(
+                    "_octoplus_saving_sessions"
+                )[0]
+                self.config["octopus_account"] = octopus_account
+                if octopus_account not in self.redact_regex:
+                    self.redact_regex.append(octopus_account)
+                    self.redact_regex.append(octopus_account.lower().replace("-", "_"))
+            except IndexError:
+                self.log("  Could not extract account_id from calendar entity name.")
+
+            # ── 3. Read current/next session from calendar attributes ─────────────
+            # The calendar exposes `start_time` and `end_time` when a session is
+            # current or upcoming. octopoints_per_kwh is not available here.
+            cal_attrs = self.get_state_retry(calendar_entity, attribute="all").get(
+                "attributes", {}
+            )
+            start_time = cal_attrs.get("start_time")
+            end_time = cal_attrs.get("end_time")
+
+            if start_time and end_time:
+                synthetic_id = f"calendar_{start_time}"
+                if synthetic_id not in self.saving_events and pd.Timestamp(
+                    end_time, tz="UTC"
+                ) > pd.Timestamp.now(tz="UTC"):
+                    self.saving_events[synthetic_id] = {
+                        "id": synthetic_id,
+                        "start": start_time,
+                        "end": end_time,
+                        "octopoints_per_kwh": 0,  # unknown — not available from calendar
+                    }
+
+            # ── 4. Summary log ────────────────────────────────────────────────────
+            self.log("")
+            if len(self.saving_events) > 0:
+                self.log("  The following Octopus Saving Events have been joined:")
+                for id in self.saving_events:
+                    self.log(
+                        f"{id!s:>8}: "
+                        f"{pd.Timestamp(self.saving_events[id]['start']).strftime(DATE_TIME_FORMAT_SHORT)} - "
+                        f"{pd.Timestamp(self.saving_events[id]['end']).strftime(DATE_TIME_FORMAT_SHORT)} "
+                        f"at {int(self.saving_events[id]['octopoints_per_kwh']) / 8:5.1f}p/kWh"
+                    )
+            else:
+                self.log("  No upcoming Octopus Saving Events detected or joined.")
+
+
+
+
 
 
     def _load_free_electricity_events(self):
@@ -2416,7 +2496,8 @@ class PVOpt(hass.Hass):
         # initialse a DataFrame to cover today and tomorrow at 30 minute frequency
 
         self.log("")
-        self._load_saving_events()
+        # self._load_saving_events()
+        self._load_saving_events_new()  #Resolves Issue #418.
         self._load_free_electricity_events()
 
         if self.get_config("forced_discharge") and (self.get_config("supports_forced_discharge", True)):
@@ -3590,7 +3671,14 @@ class PVOpt(hass.Hass):
 
     def write_to_hass(self, entity, state, attributes={}):
         try:
-            self.set_state(state=state, entity_id=entity, attributes=attributes)
+            # self.set_state(state=state, entity_id=entity, attributes=attributes)
+
+            self.set_state(state=state, entity_id=entity, attributes=attributes, replace=True)   
+            #Trial for Bad post Errors in Appdaemon:
+            # HTTP POST: Bad Request {'attributes': {'friendly_name': 'PV Opt Charging Current', 'unit_of_measurement': 'A', 'state_class': 'measurement', 
+            # 'device_class': 'current', 'last_changed': '2026-03-18T02:20:38.310101+00:00', 'last_reported': '2026-03-18T02:20:38.310101+00:00', 'last_updated': '2026-03-18T02:20:38.310101+00:00', 'context': {'id': '01KKZBXEH6ZQ14Z8GTGH43G1QS', 'user_id': 'e3c112f9d6f245feb144be5523a1d754'}}}
+            # 20/03, 18:40:37 ERROR HASS: Error setting state: Bad Request
+            
             self.log(f"Output written to {entity}")
 
         except Exception as e:
@@ -4063,6 +4151,7 @@ class PVOpt(hass.Hass):
 
             if (len(self.zappi_consumption_entities) > 0) and self.ev:
                 self.log("Getting consumption in kWh from Zappi Charger(s)")
+                # self.log(f"Start time is {df.index[0]}, end time is {df.index[-1]}")
                 ev_power = self._get_zappi_power(start=df.index[0], end=df.index[-1], log=True) # in W
 
                 if len(ev_power) > 0:
