@@ -222,13 +222,13 @@ And add the `client_user` and `client_password` keys to `secrets.yaml` like this
 
 5.  Click on <b>Configuration</b> at the top
 
-6.  Click the 3 dots and <b>Edit in YAML</b> to add `pandas` and `numpy` as Python packages. Note that `numpy` has to be set to version `1.26.4` due to an unresolved compatability issue between Home Assistant and `2.0.0`:
+6.  Click the 3 dots and <b>Edit in YAML</b> to add `pandas` and `numpy` as Python packages.
 
     ```
     init_commands: []
     python_packages:
       - pandas
-      - numpy==1.26.4
+      - numpy
     system_packages: []
 
     ```
