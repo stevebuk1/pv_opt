@@ -1,4 +1,4 @@
-# PV Opt: Home Assistant Solar/Battery Optimiser v5.0.0-Beta-3
+# PV Opt: Home Assistant Solar/Battery Optimiser v5.0.0.
 
 Solar / Battery Charging Optimisation for Home Assistant. This appDaemon application attempts to optimise charging and discharging of a home solar/battery system to minimise cost electricity cost on a daily basis using freely available solar forecast data from SolCast. This is particularly beneficial for Octopus Agile but is also benefeficial for other time-of-use tariffs such as Octopus Flux or simple Economy 7.
 
@@ -7,11 +7,10 @@ The application will integrate fully with Solis inverters which are controlled u
 -   [Home Assistant Solax Modbus Integration](https://github.com/wills106/homeassistant-solax-modbus)
 -   [Home Assistant Core Modbus Integration](https://github.com/fboundy/ha_solis_modbus)
 -   [Home Assistant SolisCloud via Solis Sensor Integration](https://github.com/hultenvp/solis-sensor) (1)
--   [Home Assistant Solarman Integration](https://github.com/davidrapan/ha-solarman) (2)
+-   [Home Assistant Solarman Integration](https://github.com/davidrapan/ha-solarman)
 
 (1) Control of inverter via this integration is Experimental/Beta. An alternative is to also install [Solis Control Integration](https://github.com/mkuthan/solis-cloud-control)
-(2) https://github.com/StephanJoubert/home_assistant_solarman appears to be no longer maintained so has been replaced with
-https://github.com/davidrapan/ha-solarman. This should be used for new installs for PvOpt v4.0.0 onwards.
+
 
 Once installed it should require miminal configuration. Other inverters/integrations can be added if required or can be controlled indirectly using automations.
 
@@ -66,7 +65,7 @@ This app is not stand-alone it requires the following:
 1. Install the integation via HACS: https://github.com/BJReplay/ha-solcast-solar
 2. Add the Integration via Settings: http://homeassistant.local:8123/config/integrations/dashboard
 3. Once installed configure using your Solcast API Key from (1) .
-4. Set up an automation to update according to your desired schedule. Once every 3 hours will work.
+4. Set up an automation to update according to your desired schedule. Once every 3 hours will work. Or utilise Solcast automatic updates. 
 
 <h3>4. Install the Octopus Energy Integration (If Required)</h3>
 
@@ -121,9 +120,6 @@ Follow the Github instructions here: (https://github.com/davidrapan/ha-solarman)
 For Solis Inverters, replace existing Solis_Hybrid.yaml with this one:
 
 https://github.com/fboundy/pv_opt/blob/main/files/solis_hybrid.yaml
-
-Note: installs using https://github.com/StephanJoubert/home_assistant_solarman have writes to the inverter disabled. For full inverter control, reinstall using the Solarman repo
-above.
 
 <h3>6. Install the MQTT Integraion in Home Assistant</h3>
 
@@ -303,7 +299,7 @@ That's it. AppDaemon is up and running. There is futher documentation for the on
 Once downloaded AppDaemon should see the app and attempt to load it using the default configuration. Go back to the AppDaemon logs and this time open pv_opt_log. You should see:
 
 ```
-16:53:23     INFO: ******************* PV Opt v3.19.0-Beta-17 *******************
+16:53:23     INFO: ******************* PV Opt v5.0.0 *******************
 16:53:23     INFO:
 16:53:23     INFO: Time Zone Offset: 0.0 minutes
 16:53:23     INFO: Reading arguments from YAML:
@@ -358,12 +354,7 @@ For the Core Modbus Integration:
     inverter_type: SOLIS_CORE_MODBUS
     device_name: solis
 
-For the Solarman integration (legacy installs using https://github.com/StephanJoubert/home_assistant_solarman)
-
-    inverter_type: SOLIS_SOLARMAN
-    device_name: solis
-
-For the Solarman integration (new installs using https://github.com/davidrapan/ha-solarman)
+For the Solarman integration:
 
     inverter_type: SOLIS_SOLARMAN_V2
     device_name: solis
