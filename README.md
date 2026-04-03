@@ -396,11 +396,11 @@ These parameters will define how PV Opt estimates daily consumption:
 | Parameter               |   Units    | Entity                                 | Default | Description                                                                                       |
 | :---------------------- | :--------: | :------------------------------------- | :-----: | :------------------------------------------------------------------------------------------------ |
 | Use Consumption History | `on`/`off` | `switch.pvopt_use_consumption_history` |   On    | Toggles whether to use actual <b>consumption history</b> or an estimated <b>daily consumption</b> |
-| Load History Days | days | `number.pvopt_consumption_history_days` | 7 | Number of days of consumption history to use when predicting future load |
+| Load History Days | days | `number.pvopt_consumption_history_days` | 7 | Number of days of consumption history to use when predicting future load. This must be a multiple of 7, e.g. 7, 14, 21. HomeAssisant stores 10 days of history by default, longer periods requires additional tools e.g. MariaDB  |
 | Load Margin | % | `number.pvopt_consumption_margin` | 10% | Margin to add to historic load for forecast (safety factor) |
-| Weekday Weighting| fraction | `number.pvopt_day_of_week_weighting` | 0.5 | Defines how much weighting to give to the day of the week when averaging the load. 0.0 will use the simple average of the last `n` days based on `load_history_days` and 1.0 will just used the same day of the week within that window. Values inbetween will weight the estimate accordingly. If every day is the same use a low number. If your usage varies daily use a high number.
+| Weekday Weighting| fraction | `number.pvopt_day_of_week_weighting` | 0.5 | Defines how much weighting to give to the day of the week when averaging the load. 0.0 will use the simple average of the last `n` days based on `load_history_days` and 1.0 will just used the same day of the week within that window. Values in between will weight the estimate accordingly. If every day is the same use a low number. If your usage varies daily use a high number.
 | Daily Consumption | kWh | `number.pvopt_daily_consumption_kwh` | 17 | Estimated daily consumption to use when predicting future load |
-| Shape Consumption Profile | `on`/`off` | `switch.pvopt_shape_consumption_profile` | On | Defines whether to shapoe the consumption to a typical daily profile (`on`) or to assume constant usage (`off`). The shape of the daily profile can be modified within config.yaml. |
+| Shape Consumption Profile | `on`/`off` | `switch.pvopt_shape_consumption_profile` | On | Defines whether to shape the consumption to a typical daily profile (`on`) or to assume constant usage (`off`). The shape of the daily profile can be modified within config.yaml. |
 
 <h3>EV parameters</h3>
 
