@@ -1946,6 +1946,65 @@ class PVOpt(hass.Hass):
         else:
             self.log("  No upcoming Octopus Free Electricity Events detected")
 
+    def _load_free_electricity_events_new(self):
+        """
+        MIGRATION NOTES - event entity → calendar entity
+        ─────────────────────────────────────────────────
+        Uses the calendar entity introduced to replace the deprecated event entity
+        (removed May 2026):
+            calendar.octopus_energy_<ACCOUNT_ID>_octoplus_free_electricity_session
+        The calendar entity surfaces the current or next session via standard
+        HA calendar attributes (start_time, end_time).
+        Note: unlike saving sessions, free electricity sessions are automatic —
+        there is no join service and no octopoints_per_kwh to display.
+        """
+
+        # ── 1. Discover the calendar entity ──────────────────────────────────
+        calendar_entity = next(
+            (name for name in self.get_state_retry("calendar").keys()
+             if "octoplus_free_electricity_session" in name),
+            None,
+        )
+
+        if calendar_entity is None:
+            self.log("")
+            self.log("  No Octopus Free Electricity Session calendar entity found.")
+            return
+
+        self.log("")
+        self.rlog(f"Found Octopus Free Electricity Session calendar entity: {calendar_entity}")
+
+        # ── 2. Obtain account_id from the entity name ─────────────────────────
+        # e.g. "calendar.octopus_energy_A-1B2C3D4E_octoplus_free_electricity_session"
+        #                                ^^^^^^^^^^ extract this part
+        try:
+            octopus_account = calendar_entity.split("octopus_energy_")[1].split(
+                "_octoplus_free_electricity_session"
+            )[0]
+            self.config["octopus_account"] = octopus_account
+            if octopus_account not in self.redact_regex:
+                self.redact_regex.append(octopus_account)
+                self.redact_regex.append(octopus_account.lower().replace("-", "_"))
+        except IndexError:
+            self.log("  Could not extract account_id from calendar entity name.")
+
+        # ── 3. Read current/next session from calendar attributes ─────────────
+        # The calendar exposes `start_time` and `end_time` when a session is
+        # current or upcoming.
+        cal_attrs = self.get_state_retry(calendar_entity, attribute="all").get(
+            "attributes", {}
+        )
+        start_time = cal_attrs.get("start_time")
+        end_time = cal_attrs.get("end_time")
+
+        if start_time and end_time:
+            synthetic_code = f"calendar_{start_time}"
+            if synthetic_code not in self.free_electricity_events and pd.Timestamp(
+                end_time, tz="UTC"
+            ) > pd.Timestamp.now(tz="UTC"):
+
+    
+    
     def get_ha_value(self, entity_id):
         value = None
 
@@ -2498,7 +2557,8 @@ class PVOpt(hass.Hass):
         self.log("")
         # self._load_saving_events()
         self._load_saving_events_new()  #Resolves Issue #418.
-        self._load_free_electricity_events()
+        # self._load_free_electricity_events()
+        self._load_free_electricity_events_new()   #Resolves Issue #418
 
         if self.get_config("forced_discharge") and (self.get_config("supports_forced_discharge", True)):
             discharge_enable = "enabled"
