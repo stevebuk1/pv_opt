@@ -44,10 +44,7 @@
 - [Credits](#credits)
 
 
-
-
-
-
+<h2>Introduction</h2>
 
 Solar / Battery Charging Optimisation for Home Assistant. This AppDaemon application attempts to optimise charging and discharging of a home solar/battery system to minimise cost electricity cost on a daily basis using freely available solar forecast data from SolCast. This is particularly beneficial for Octopus Agile but is also benefeficial for other time-of-use tariffs such as Octopus Flux or simple Economy 7.
 
