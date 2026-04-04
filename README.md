@@ -694,3 +694,7 @@ The following methods may be useful for the inverter to call. If `self.host` is 
 | `self.host.entity_exists()` | `entity_id: str`             | `bool` that confirms whether an entity exists in Home Assistant                                                                                       |
 | `self.host.call_service()`  | `service: str`               | Call `service` in Home Assistant                                                                                                                      |
 |                             | `data: dict, optional`       | Data to be supplied to the service e.g. for writing to the Solis Modbus registers: `data={"hub": "solis", "slave": 1, "address": 43011, "value": 15}` |
+
+<h2>Credits</h2>
+
+- Pv_opt was created and maintained in fboundy/pv_opt before being transferred to its current owner. 
