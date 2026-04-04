@@ -22,11 +22,6 @@ PV Opt supports EV charging:
 -   If on the Agile tariff, PV Opt can calculate a car charging plan which can be used to control your EV charger/car via external HA automation scripts.
 -   If necessary Pv_opt automatically prevents house battery discharge during EV Charging.
 
-<h2>Don't Buy Me a Beer or a Coffee...</h2>
-
-Although I'm very partial to both, a better home for anything you might like to contribute would be the Mountain Rescue Team that I am currently a probationer (trainee) with. The Team comprises 40 unpaid volunteers and is on call 24/7 365 days a year in all weathers. You can donate via JustGiving by clicking on this link:
-
-[![](https://images.justgiving.com/image/3857db4a-711b-4b08-8158-b6f4e1dbfa54.jpg?template=size200x200)](https://link.justgiving.com/v1/charity/donate/charityId/779549)
 
 <h2>Pre-requisites</h2>
 
