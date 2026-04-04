@@ -6,10 +6,10 @@ The application will integrate fully with Solis inverters which are controlled u
 
 -   [Home Assistant Solax Modbus Integration](https://github.com/wills106/homeassistant-solax-modbus)
 -   [Home Assistant Core Modbus Integration](https://github.com/fboundy/ha_solis_modbus)
--   [Home Assistant SolisCloud via Solis Sensor Integration](https://github.com/hultenvp/solis-sensor) (1)
+-   [SolisCloud via Home Assistant Solis Sensor Integration](https://github.com/hultenvp/solis-sensor) (1)
 -   [Home Assistant Solarman Integration](https://github.com/davidrapan/ha-solarman)
 
-(1) Control of inverter via this integration is Experimental/Beta. An alternative is to also install [Solis Control Integration](https://github.com/mkuthan/solis-cloud-control)
+(1) Control of inverter via this integration is Experimental/Beta. An alternative is to also install [Solis Control Integration](https://github.com/mkuthan/solis-cloud-control) for control aspects. 
 
 
 Once installed it should require miminal configuration. Other inverters/integrations can be added if required or can be controlled indirectly using automations.
