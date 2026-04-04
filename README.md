@@ -2,6 +2,7 @@
 
 ## Table of Contents
 
+- [Introduction](#Introduction)
 - [Pre-requisites](#pre-requisites)
 - [Step by Step Installation Guide](#step-by-step-installation-guide)
   - [1. Get a Solcast Hobby Account](#1-get-a-solcast-hobby-account)
