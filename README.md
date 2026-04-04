@@ -1,5 +1,54 @@
 # PV Opt: Home Assistant Solar/Battery Optimiser v5.0.0.
 
+## Table of Contents
+
+- [Pre-requisites](#pre-requisites)
+- [Step by Step Installation Guide](#step-by-step-installation-guide)
+  - [1. Get a Solcast Hobby Account](#1-get-a-solcast-hobby-account)
+  - [2. Install HACS](#2-install-hacs)
+  - [3. Install the Solcast PV Solar Integration (v4.1.x)](#3-install-the-solcast-pv-solar-integration-v41x)
+  - [4. Install the Octopus Energy Integration (If Required)](#4-install-the-octopus-energy-integration-if-required)
+  - [5. Install the Integration to Control Your Inverter](#5-install-the-integration-to-control-your-inverter)
+    - [Solax Modbus](#solax-modbus)
+    - [HA Core Modbus](#ha-core-modbus)
+    - [Using Solis Cloud](#using-solis-cloud)
+  - [6. Install the MQTT Integration in Home Assistant](#6-install-the-mqtt-integraion-in-home-assistant)
+  - [7. Install Mosquitto MQTT Broker](#7-install-mosquitto-mqtt-broker)
+  - [8. Install File Editor](#8-install-file-editor)
+  - [9. Install Samba Share and/or Studio Code Server Add-ons If Required](#9-install-samba-share-andor-studio-code-server-add-ons-if-required)
+  - [10. Install AppDaemon](#10-install-appdaemon)
+  - [11. Configure AppDaemon](#11-configure-appdaemon)
+  - [12. Install PV Opt from HACS](#12-install-pv-opt-from-hacs)
+  - [13. Add an Automation to Restart AppDaemon when HA Restarts (Optional)](#13-add-an-automation-to-restart-appdaemon-when-ha-restarts-optional)
+- [Configuration](#configuration)
+  - [System Parameters](#system-parameters)
+  - [Control Parameters](#control-parameters)
+  - [Consumption Parameters](#consumption-parameters)
+  - [EV Parameters](#ev-parameters)
+  - [Pricing Parameters](#pricing-parameters)
+    - [Octopus Tariffs (using the Octopus API)](#octopus-tariffs-usinng-the-octopus-api)
+    - [Manual Tariffs](#manual-tariffs)
+  - [Tuning Parameters](#tuning-parameters)
+  - [Alternative Tariffs](#alternative-tariffs)
+- [Output](#output)
+- [EV Charging on the Agile Tariff](#ev-charging-on-the-agile-tariff)
+- [Known Issues](#known-issues)
+  - [Docker MariaDB Cache Size](#docker-mariadb-cache-size)
+- [Development - Adding Additional Inverters: the PV Opt API](#development---adding-additional-inverters-the-pv-opt-api)
+  - [Inverter Type](#inverter-type)
+  - [Inverter Module](#inverter-module)
+    - [Classes](#classes)
+    - [Class Attributes](#class-attributes)
+    - [Methods](#methods)
+    - [PV Opt Methods Available to the Inverter](#pv-opt-methods-available-to-the-inverter)
+- [Credits](#credits)
+
+
+
+
+
+
+
 Solar / Battery Charging Optimisation for Home Assistant. This AppDaemon application attempts to optimise charging and discharging of a home solar/battery system to minimise cost electricity cost on a daily basis using freely available solar forecast data from SolCast. This is particularly beneficial for Octopus Agile but is also benefeficial for other time-of-use tariffs such as Octopus Flux or simple Economy 7.
 
 The application will integrate fully with Solis inverters which are controlled using any of:
