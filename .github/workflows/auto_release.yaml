@@ -80,8 +80,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: "v${{ env.version }}"
-          release_name: "Release v${{ env.version }}"
-          body: ${{ env.release_notes }}
+          name: "Release v${{ env.version }}"
+          body: "${{ env.release_notes }}"
           draft: false
           prerelease: false
         env:
