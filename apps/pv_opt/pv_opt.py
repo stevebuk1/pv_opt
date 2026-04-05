@@ -3731,13 +3731,10 @@ class PVOpt(hass.Hass):
 
     def write_to_hass(self, entity, state, attributes={}):
         try:
-            # self.set_state(state=state, entity_id=entity, attributes=attributes)
 
-            self.set_state(state=state, entity_id=entity, attributes=attributes, replace=True)   
-            #Trial for Bad post Errors in Appdaemon:
-            # HTTP POST: Bad Request {'attributes': {'friendly_name': 'PV Opt Charging Current', 'unit_of_measurement': 'A', 'state_class': 'measurement', 
-            # 'device_class': 'current', 'last_changed': '2026-03-18T02:20:38.310101+00:00', 'last_reported': '2026-03-18T02:20:38.310101+00:00', 'last_updated': '2026-03-18T02:20:38.310101+00:00', 'context': {'id': '01KKZBXEH6ZQ14Z8GTGH43G1QS', 'user_id': 'e3c112f9d6f245feb144be5523a1d754'}}}
-            # 20/03, 18:40:37 ERROR HASS: Error setting state: Bad Request
+            if (state == 0): 
+                state = f"{state}"
+            self.set_state(state=state, entity_id=entity, attributes=attributes)
             
             self.log(f"Output written to {entity}")
 
