@@ -77,7 +77,7 @@ jobs:
 
       # Step 5: Create GitHub Release
       - name: Create GitHub Release
-        uses: actions/create-release@v1
+        uses: softprops/action-gh-release
         with:
           tag_name: "v${{ env.version }}"
           release_name: "Release v${{ env.version }}"
