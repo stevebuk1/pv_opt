@@ -742,4 +742,4 @@ The following methods may be useful for the inverter to call. If `self.host` is 
 
 <h2>Credits</h2>
 
-- Pv_opt was created and maintained in fboundy/pv_opt before being transferred to its current owner. 
+- Pv_opt was created and maintained by FBoundy in fboundy/pv_opt for many years before being transferred to its current owner in April 2026.
