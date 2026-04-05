@@ -9,6 +9,7 @@ jobs:
   publish-release:
     name: Publish Release
     runs-on: ubuntu-latest
+    environment: release       
 
     steps:
       # Step 1: Checkout the repository
