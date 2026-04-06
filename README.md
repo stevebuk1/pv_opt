@@ -288,7 +288,7 @@ And add the `client_user` and `client_password` keys to `secrets.yaml` like this
 
 9.  Either click on `Info` followed by `OPEN WEB UI` and then `Logs` or open your `main_log` file from the location specified in step (3) above. You should see:
 
-    ```
+```
 06/04, 20:33:00 INFO AppDaemon: ------------------------------------------------------------
 06/04, 20:33:00 INFO AppDaemon: AppDaemon Version 4.5.13 starting
 06/04, 20:33:00 INFO AppDaemon: ------------------------------------------------------------
@@ -318,7 +318,7 @@ And add the `client_user` and `client_password` keys to `secrets.yaml` like this
 06/04, 20:33:00 INFO AppDaemon: Scheduler running in realtime
 06/04, 20:33:01 INFO HASS: Completed initialization in 1.1s
 06/04, 20:33:01 INFO AppDaemon: App initialization complete
-    ```
+```
 
 That's it. AppDaemon is up and running. There is futher documentation for the on the [Add-on](https://github.com/hassio-addons/addon-appdaemon/blob/main/appdaemon/DOCS.md) and for [AppDaemon](https://appdaemon.readthedocs.io/en/latest/)
 
