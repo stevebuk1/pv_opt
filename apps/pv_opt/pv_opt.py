@@ -20,7 +20,6 @@ UNITS = {
     "power": "W",
 }
 
-
 OCTOPUS_PRODUCT_URL = r"https://api.octopus.energy/v1/products/"
 
 DEBUG = False
