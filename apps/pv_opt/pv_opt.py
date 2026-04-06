@@ -2002,7 +2002,24 @@ class PVOpt(hass.Hass):
             if synthetic_code not in self.free_electricity_events and pd.Timestamp(
                 end_time, tz="UTC"
             ) > pd.Timestamp.now(tz="UTC"):
+                self.free_electricity_events[synthetic_code] = {
+                    "code": synthetic_code,
+                    "start": start_time,
+                    "end": end_time,
+                }
 
+        # ── 4. Summary log ────────────────────────────────────────────────────
+        self.log("")
+        if len(self.free_electricity_events) > 0:
+            self.log("  The following upcoming Octopus Free Electricity Events are being applied:")
+            for id in self.free_electricity_events:
+                self.log(
+                    f"{id:8s}: "
+                    f"{pd.Timestamp(self.free_electricity_events[id]['start']).strftime(DATE_TIME_FORMAT_SHORT)} - "
+                    f"{pd.Timestamp(self.free_electricity_events[id]['end']).strftime(DATE_TIME_FORMAT_SHORT)}"
+                )
+        else:
+            self.log("  No upcoming Octopus Free Electricity Events detected")
     
     
     def get_ha_value(self, entity_id):
@@ -3503,7 +3520,8 @@ class PVOpt(hass.Hass):
             x = self.opt[self.opt["carslot"] == 1].copy()
             x["start"] = x.index.tz_convert(self.tz)
             # x["end"] = x.index.tz_convert(self.tz) + pd.Timedelta(30, "minutes")
-            x["end"] = x.index.tz_convert(self.tz) + pd.to_timedelta((x["dt_hours"] * 60), unit="m").round("min")
+            # x["end"] = x.index.tz_convert(self.tz) + pd.to_timedelta((x["dt_hours"] * 60), unit="m").round("min")
+            x["end"] = x.index.tz_convert(self.tz) + pd.to_timedelta((x["dt_hours"] * 60), unit="m").dt.round("min")
 
             # Delete any entries where charging is already scheduled (Forced > 1)
             x = x.drop(x[x["forced"] > 1].index)
