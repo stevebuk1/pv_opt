@@ -39,24 +39,20 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          # Ensure you are on the correct branch
-          git checkout -B $GITHUB_HEAD_REF || git checkout -b new-branch-name
+          # Get onto the actual PR branch (checkout detaches HEAD by default)
+          git checkout -B $GITHUB_HEAD_REF origin/$GITHUB_HEAD_REF
 
-          # Stage and commit changes
+          # Stage all changes
           git add .
+
+          # Only commit and push if there are actual formatting changes
           if git diff --cached --quiet; then
             echo "No formatting changes to commit."
             exit 0
           fi
+
           git commit -m "Auto-format code with Black and isort"
-
-          # Fetch latest changes and rebase before pushing
-          git fetch origin $GITHUB_HEAD_REF
-          git rebase origin/$GITHUB_HEAD_REF || git push --force-with-lease origin $GITHUB_HEAD_REF
-
-
-          # Push changes
-           git push --force-with-lease origin $GITHUB_HEAD_REF
+          git push origin $GITHUB_HEAD_REF
 
 
 
