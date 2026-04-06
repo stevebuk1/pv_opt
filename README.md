@@ -320,7 +320,7 @@ And add the `client_user` and `client_password` keys to `secrets.yaml` like this
 06/04, 20:33:01 INFO AppDaemon: App initialization complete
 ```
 
-That's it. AppDaemon is up and running. There is futher documentation for the on the [Add-on](https://github.com/hassio-addons/addon-appdaemon/blob/main/appdaemon/DOCS.md) and for [AppDaemon](https://appdaemon.readthedocs.io/en/latest/)
+That's it. AppDaemon is up and running. There is futher documentation for the [Add-on](https://github.com/hassio-addons/addon-appdaemon/blob/main/appdaemon/DOCS.md) and for [AppDaemon](https://appdaemon.readthedocs.io/en/latest/)
 
 <h3>12. Install PV Opt from HACS</h3>
 
