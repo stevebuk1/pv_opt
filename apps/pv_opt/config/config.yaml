@@ -41,10 +41,12 @@ pv_opt:
   # V = Power Flows debugging (extra verbose)
   # I = inverter control/commands Logging
   # E = EV debugging
+  # L = Solcast logging
+  # Z = Savings Events logging
 
   # Letters can be added to "debug_categories" in any order
 
-  debug_categories: W
+  debug_categories: OW
 
   # ========================================
   # Basic parameters
@@ -398,30 +400,47 @@ pv_opt:
 
 
   # ===============================================================================================================
-  # Brand / Integration Specific Config: SUNSYNK_SOLARSYNK2:
+  # Brand / Integration Specific Config: SUNSYNK_SOLARSYNKV3: https://github.com/martinville/solarsynkv3
   # ===============================================================================================================
   # 
   # Uncomment the next three entries if using this integration. 
+  
+  inverter_type: SUNSYNK_SOLARSYNKV3
+  device_name: solarsynkv3
+  inverter_sn: 2207112425a  # enter {sunsynk_serial} from solarsynkv3 addon
 
-  # inverter_type: SUNSYNK_SOLARSYNK2
-  # device_name: solarsynk
-  # inverter_sn: 000000  # enter {sunsynk_serial} from solarsynk2 addon
+  # These are the default entities used with the Sunsynk Solarsynkv3 integration. You can change them here and over-ride the defaults
 
-  # These are the default entities used with the Sunsynk Solarsynk2 integration. You can change them here and over-ride the defaults
+  id_use_timer: sensor.{device_name}_{inverter_sn}_peakandvallery
+  id_priority_load: sensor.{device_name}_{inverter_sn}_energymode 
+  id_control_helper: input_text.{device_name}_{inverter_sn}_settings
 
-  # maximum_dod_percent:  20
-  # id_battery_soc:  sensor.{device_name}_{inverter_sn}_battery_soc
-  # id_consumption_today: sensor.{device_name}_{inverter_sn}_day_load_energy
-  # id_grid_import_today: sensor.{device_name}_{inverter_sn}_day_grid_import
-  # id_grid_export_today: sensor.{device_name}_{inverter_sn}_day_grid_export
-  # supports_hold_soc: false
-  # update_cycle_seconds: 300
+  id_timed_charge_start: sensor.{device_name}_{inverter_sn}_selltime1
+  id_timed_charge_end: sensor.{device_name}_{inverter_sn}_selltime2
+  id_timed_charge_enable: sensor.{device_name}_{inverter_sn}_gentime1on
+  id_timed_charge_target_soc: sensor.{device_name}_{inverter_sn}_cap1
+
+  id_timed_discharge_start: sensor.{device_name}_{inverter_sn}_selltime3
+  id_timed_discharge_end: sensor.{device_name}_{inverter_sn}_selltime4
+  id_timed_discharge_enable: sensor.{device_name}_{inverter_sn}_gentime3on
+  id_timed_discharge_target_soc: sensor.{device_name}_{inverter_sn}_cap3
+  
+  id_battery_soc:  sensor.{device_name}_{inverter_sn}_battery_soc
+  battery_voltage: sensor.{device_name}_{inverter_sn}_battery_voltage
+  id_consumption_today: sensor.{device_name}_{inverter_sn}_load_daily_used
+  id_grid_import_today: sensor.sensor.{device_name}_{inverter_sn}_grid_etoday_from
+  id_grid_export_today: sensor.{device_name}_{inverter_sn}_grid_etoday_to
+
+  maximum_dod_percent:  20
+  supports_hold_soc: false
+  update_cycle_seconds: 0
 
   # ===============================================================================================================
   # Brand / Integration Specific Config: SOLIS_CLOUD: https://github.com/hultenvp/solis-sensor
   # ===============================================================================================================
   #
-  # These are the default entities used with the Solis Solax Modbus integration. You can change them here and over-ride the defaults
+  # These are the default entities used with the Solis Sensor integration with Control Switched on. 
+  # You can change them here and over-ride the defaults
 
   # inverter_type: SOLIS_CLOUD
   # device_name: soliscloud
@@ -453,11 +472,59 @@ pv_opt:
   # id_timed_discharge_button: button.{device_name}_update_timed_discharge_1
   # id_timed_charge_discharge_button: button.{device_name}_update_timed_charge_discharge_1
 
+  # Required for Tariff Comparison, see end of file. Can be commented out if not using. 
+  #  id_solar_power:
+  #  - sensor.{device_name}_dc_power_pv1
+  #  - sensor.{device_name}_dc_power_pv2
+
+  # ===============================================================================================================
+  # Brand / Integration Specific Config: SOLIS_CLOUD_SENSOR_CONTROL
+  # https://github.com/hultenvp/solis-sensor (for read only sensors) 
+  # https://github.com/mkuthan/solis-cloud-control (for controlling the inverter)
+  # ===============================================================================================================
+  
+  # inverter_type: SOLIS_CLOUD_SENSOR_CONTROL
+  # device_name: solis
+  # update_cycle_seconds: 0
+  
+  # These are the default entities used with the Solis Sensor Integration (with Control Switched off) 
+  # You can change them here and over-ride the defaults.
+  
+  # battery_voltage: sensor.{device_name}_battery_voltage_2
+  # maximum_dod_percent: sensor.{device_name}_force_discharge_soc
+  id_battery_current: sensor.solis_battery_current_2  # Debug purposes only
+  # id_consumption_today: sensor.{device_name}_daily_grid_energy_used
+  # # id_consumption:
+  # #   - sensor.{device_name}_total_consumption_power
+  # id_grid_import_today: sensor.{device_name}_daily_grid_energy_purchased
+  # id_grid_export_today: sensor.{device_name}_daily_on_grid_energy
+  # id_battery_soc: sensor.{device_name}_remaining_battery_capacity
+  
+  # These are the default entities used with the the Solis Cloud Control Integration.
+  # You can change them here and over-ride the defaults.
+    
+  # id_inverter_mode: select.{device_name}_storage_mode
+
+  # id_timed_charge_time: text.{device_name}_slot1_charge_time
+  # id_timed_charge_current: number.{device_name_slot1_charge_current
+  # id_timed_charge_soc: number.{device_name}_slot1_charge_soc
+
+  # id_timed_discharge_time: text.{device_name}_slot1_discharge_time
+  # id_timed_discharge_current: number.{device_name}_slot1_discharge_current
+  # id_timed_discharge_soc: number.{device_name}_slot1_discharge_soc
+
+  # Required for Tariff Comparison, see end of file. Can be commented out if not using. 
+  #  id_solar_power:
+  #  - sensor.{device_name}_dc_power_pv1
+  #  - sensor.{device_name}_dc_power_pv2
+
+
+  # ===============================================================================================================
   # Tariff comparison
+  # ===============================================================================================================
+
   # id_daily_solar: sensor.{device_name}_power_generation_today
-  id_solar_power:
-    - sensor.{device_name}_pv_power_1
-    - sensor.{device_name}_pv_power_2
+ 
   alt_tariffs:
     - name: Agile_Fix
       octopus_import_tariff_code: E-1R-AGILE-23-12-06-G
