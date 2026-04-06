@@ -568,7 +568,7 @@ sensor:
       - 'date_time_iso'
 ```
 
-If you're using any of the Solis Cloud integrations, you can start with the `dashboards/pvopt_dashboard_solis_cloud.yaml`. Note that you will need to manually paste this into a dashboard and edit the charts to use the correct Octopus Energy sensors. 
+If you're using any of the Solis Cloud integrations, you can start with the '.dashboards\pvopt_dashboard_soliscloud_v2.yaml'. Note that you will need to manually paste this into a dashboard and edit the charts to use the correct Octopus Energy sensors. 
 
 For this dashboard you'll also need a couple of extra template sensors which will need adding to `/homeassistant/configuration.yaml`:
 
