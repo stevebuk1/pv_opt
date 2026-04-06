@@ -286,7 +286,7 @@ And add the `client_user` and `client_password` keys to `secrets.yaml` like this
      s6-rc: info: service legacy-services successfully started
     ```
 
-9.  Either click on `Info` followed by `OPEN WEB UI` and then `Logs` or open your `main_log` file from the location specified in step (3) above. You should see:
+9.  Either click on `Info` followed by `OPEN WEB UI` and then `Logs` or open your `main.log` file from the location specified in step (3) above. You should see:
 
 ```
 06/04, 20:33:00 INFO AppDaemon: ------------------------------------------------------------
@@ -331,7 +331,7 @@ That's it. AppDaemon is up and running. There is futher documentation for the on
 4. Add this repository https://github.com/fboundy/pv_opt and select `AppDaemon` as the `Category`
 5. Download the app
 
-Once downloaded AppDaemon should see the app and attempt to load it using the default configuration. Go back to the AppDaemon logs and this time open pv_opt_log. You should see:
+Once downloaded AppDaemon should see the app and attempt to load it using the default configuration. Go back to the AppDaemon logs and this time open pv_opt.log. You should see:
 
 ```
 16:53:23     INFO: ******************* PV Opt v5.0.0 *******************
