@@ -50,6 +50,9 @@ jobs:
           fi
           git commit -m "Auto-format code with Black and isort"
 
+          # Pull latest changes before pushing
+          git pull origin $GITHUB_HEAD_REF --rebase
+
           # Fetch latest changes and rebase before pushing
           git fetch origin $GITHUB_HEAD_REF
           git rebase origin/$GITHUB_HEAD_REF || git push --force-with-lease origin $GITHUB_HEAD_REF
