@@ -328,7 +328,7 @@ That's it. AppDaemon is up and running. There is futher documentation for the [A
 1. Go to HACS
 2. Select `Automation`
 3. Click on the 3 dots top right and `Add Custom Repository`
-4. Add this repository https://github.com/fboundy/pv_opt and select `AppDaemon` as the `Category`
+4. Add this repository https://github.com/stevebuk1/pv_opt and select `AppDaemon` as the `Category`
 5. Download the app
 
 Once downloaded AppDaemon should see the app and attempt to load it using the default configuration. Go back to the AppDaemon logs and this time open pv_opt.log. You should see:
