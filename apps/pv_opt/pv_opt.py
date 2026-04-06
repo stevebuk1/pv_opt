@@ -590,7 +590,7 @@ class PVOpt(hass.Hass):
 
         self.inverter_sn = self.args.pop("inverter_sn", "")
         if self.inverter_sn != "":
-           self.redact_regex.append(self.inverter_sn)
+            self.redact_regex.append(self.inverter_sn)
 
         self.redact = self.args.pop("redact_personal_data_from_log", True)
         self._load_inverter()
@@ -880,7 +880,7 @@ class PVOpt(hass.Hass):
         # self.log(df.dtypes)
         # self.log(df.info)
 
-        # v16.0.0 of the Octopus Energy Integration randomly doesnt generate charge_in_kwh. Check it exists before logging it. 
+        # v16.0.0 of the Octopus Energy Integration randomly doesnt generate charge_in_kwh. Check it exists before logging it.
 
         if "charge_in_kwh" in df.columns:
 
@@ -893,8 +893,6 @@ class PVOpt(hass.Hass):
                 self.log(
                     f"    {window[1]['start_dt'].tz_convert(self.tz).strftime('%H:%M'):>7s} to {window[1]['end_dt'].tz_convert(self.tz).strftime('%H:%M'):<7s}  "
                 )
-
-       
 
         if len(df) == 0:
             self.log("    No IOG Smart Charging Schedule found.")
@@ -1140,7 +1138,6 @@ class PVOpt(hass.Hass):
             self.log(f">>>\n{df.to_string()}")
 
         return df
-
 
     def calculate_agile_car_slots(self):
 
@@ -1562,7 +1559,6 @@ class PVOpt(hass.Hass):
                         # Set import import price to 0 for slots (isnt used/displayed if using IOG, but is in Agile)
 
                         car_slots["import"] = 0
-     
 
                         if self.debug and "E" in self.debug_cat:
                             self.log("")
@@ -1575,7 +1571,9 @@ class PVOpt(hass.Hass):
 
                         if "charge_in_kwh" not in car_slots.columns:
                             car_slots["charge_in_kwh"] = 0
-                            self.log("charge_in_kwh info not received from Octopus Energy Integration, setting to zero")
+                            self.log(
+                                "charge_in_kwh info not received from Octopus Energy Integration, setting to zero"
+                            )
 
                         if self.debug and "E" in self.debug_cat:
                             self.log("")
@@ -1816,95 +1814,92 @@ class PVOpt(hass.Hass):
         else:
             self.log("  No upcoming Octopus Saving Events detected or joined:")
 
-    
     def _load_saving_events_new(self):
-            """
-            MIGRATION NOTES - event entity → calendar entity
-            ─────────────────────────────────────────────────
-            Uses the calendar entity introduced to replace the deprecated event entity
-            (removed May 2026):
-                calendar.octopus_energy_<ACCOUNT_ID>_octoplus_saving_sessions
-            The calendar entity surfaces the current or next joined session via standard
-            HA calendar attributes (start_time, end_time). Note that octopoints_per_kwh
-            is not available from the calendar entity.
-            """
+        """
+        MIGRATION NOTES - event entity → calendar entity
+        ─────────────────────────────────────────────────
+        Uses the calendar entity introduced to replace the deprecated event entity
+        (removed May 2026):
+            calendar.octopus_energy_<ACCOUNT_ID>_octoplus_saving_sessions
+        The calendar entity surfaces the current or next joined session via standard
+        HA calendar attributes (start_time, end_time). Note that octopoints_per_kwh
+        is not available from the calendar entity.
+        """
 
-            # ── 1. Discover the calendar entity ──────────────────────────────────
-            calendar_entity = next(
-                (name for name in self.get_state_retry("calendar").keys()
-                 if "octoplus_saving_sessions" in name),
-                None,
-            )
+        # ── 1. Discover the calendar entity ──────────────────────────────────
+        calendar_entity = next(
+            (name for name in self.get_state_retry("calendar").keys() if "octoplus_saving_sessions" in name),
+            None,
+        )
 
-            if calendar_entity is None:
-                self.log("")
-                self.log("  No Octopus Saving Sessions calendar entity found.")
-                return
-
+        if calendar_entity is None:
             self.log("")
-            self.rlog(f"Found Octopus Saving Sessions calendar entity: {calendar_entity}")
+            self.log("  No Octopus Saving Sessions calendar entity found.")
+            return
 
-            # ── 2. Obtain account_id from the entity name ─────────────────────────
-            # e.g. "calendar.octopus_energy_A-1B2C3D4E_octoplus_saving_sessions"
-            #                                ^^^^^^^^^^ extract this part
-            try:
-                octopus_account = calendar_entity.split("octopus_energy_")[1].split(
-                    "_octoplus_saving_sessions"
-                )[0]
-                self.config["octopus_account"] = octopus_account
-                if octopus_account not in self.redact_regex:
-                    self.redact_regex.append(octopus_account)
-                    self.redact_regex.append(octopus_account.lower().replace("-", "_"))
-            except IndexError:
-                self.log("  Could not extract account_id from calendar entity name.")
+        self.log("")
+        self.rlog(f"Found Octopus Saving Sessions calendar entity: {calendar_entity}")
 
-            # ── 3. Read current/next session from calendar attributes ─────────────
-            # The calendar exposes `start_time` and `end_time` when a session is
-            # current or upcoming. octopoints_per_kwh is not available here.
-            cal_attrs = self.get_state_retry(calendar_entity, attribute="all").get(
-                "attributes", {}
-            )
-            start_time = cal_attrs.get("start_time")
-            end_time = cal_attrs.get("end_time")
+        # ── 2. Obtain account_id from the entity name ─────────────────────────
+        # e.g. "calendar.octopus_energy_A-1B2C3D4E_octoplus_saving_sessions"
+        #                                ^^^^^^^^^^ extract this part
+        try:
+            octopus_account = calendar_entity.split("octopus_energy_")[1].split("_octoplus_saving_sessions")[0]
+            self.config["octopus_account"] = octopus_account
+            if octopus_account not in self.redact_regex:
+                self.redact_regex.append(octopus_account)
+                self.redact_regex.append(octopus_account.lower().replace("-", "_"))
+        except IndexError:
+            self.log("  Could not extract account_id from calendar entity name.")
 
-            if start_time and end_time:
-                synthetic_id = f"calendar_{start_time}"
-                if synthetic_id not in self.saving_events and pd.Timestamp(
-                    end_time, tz="UTC"
-                ) > pd.Timestamp.now(tz="UTC"):
-                    self.saving_events[synthetic_id] = {
-                        "id": synthetic_id,
-                        "start": start_time,
-                        "end": end_time,
-                        "octopoints_per_kwh": 0,  # unknown — not available from calendar
-                    }
+        # ── 3. Read current/next session from calendar attributes ─────────────
+        # The calendar exposes `start_time` and `end_time` when a session is
+        # current or upcoming. octopoints_per_kwh is not available here.
+        cal_attrs = self.get_state_retry(calendar_entity, attribute="all").get("attributes", {})
+        start_time = cal_attrs.get("start_time")
+        end_time = cal_attrs.get("end_time")
 
-            # ── 4. Summary log ────────────────────────────────────────────────────
-            self.log("")
-            if len(self.saving_events) > 0:
-                self.log("  The following Octopus Saving Events have been joined:")
-                for id in self.saving_events:
-                    self.log(
-                        f"{id!s:>8}: "
-                        f"{pd.Timestamp(self.saving_events[id]['start']).strftime(DATE_TIME_FORMAT_SHORT)} - "
-                        f"{pd.Timestamp(self.saving_events[id]['end']).strftime(DATE_TIME_FORMAT_SHORT)} "
-                        f"at {int(self.saving_events[id]['octopoints_per_kwh']) / 8:5.1f}p/kWh"
-                    )
-            else:
-                self.log("  No upcoming Octopus Saving Events detected or joined.")
+        if start_time and end_time:
+            synthetic_id = f"calendar_{start_time}"
+            if synthetic_id not in self.saving_events and pd.Timestamp(end_time, tz="UTC") > pd.Timestamp.now(
+                tz="UTC"
+            ):
+                self.saving_events[synthetic_id] = {
+                    "id": synthetic_id,
+                    "start": start_time,
+                    "end": end_time,
+                    "octopoints_per_kwh": 0,  # unknown — not available from calendar
+                }
 
-
-
-
-
+        # ── 4. Summary log ────────────────────────────────────────────────────
+        self.log("")
+        if len(self.saving_events) > 0:
+            self.log("  The following Octopus Saving Events have been joined:")
+            for id in self.saving_events:
+                self.log(
+                    f"{id!s:>8}: "
+                    f"{pd.Timestamp(self.saving_events[id]['start']).strftime(DATE_TIME_FORMAT_SHORT)} - "
+                    f"{pd.Timestamp(self.saving_events[id]['end']).strftime(DATE_TIME_FORMAT_SHORT)} "
+                    f"at {int(self.saving_events[id]['octopoints_per_kwh']) / 8:5.1f}p/kWh"
+                )
+        else:
+            self.log("  No upcoming Octopus Saving Events detected or joined.")
 
     def _load_free_electricity_events(self):
         if (
-            len([name for name in self.get_state_retry("event").keys() if ("octoplus_free_electricity_session_events" in name)])
+            len(
+                [
+                    name
+                    for name in self.get_state_retry("event").keys()
+                    if ("octoplus_free_electricity_session_events" in name)
+                ]
+            )
             > 0
         ):
             free_electricity_events_entity = [
-                name for name in self.get_state_retry("event").keys() if ("octoplus_free_electricity_session_events" in name)
+                name
+                for name in self.get_state_retry("event").keys()
+                if ("octoplus_free_electricity_session_events" in name)
             ][0]
             self.log("")
             self.rlog(f"Found Octopus Free Electricity Session Events entity: {free_electricity_events_entity}")
@@ -1915,25 +1910,28 @@ class PVOpt(hass.Hass):
                 self.redact_regex.append(octopus_account)
                 self.redact_regex.append(octopus_account.lower().replace("-", "_"))
 
-            free_events = self.get_state_retry(free_electricity_events_entity, attribute="all")["attributes"][
-                "events"
-            ]
+            free_events = self.get_state_retry(free_electricity_events_entity, attribute="all")["attributes"]["events"]
 
             # The logging in this if statement should be hidden behind a debugging switch
             if len(free_events) > 0:
 
                 self.log("  The following Free Electricty Events have been identified:")
                 for event in free_events:
-                        self.log(f"{event['code']:8s}: {pd.Timestamp(event  ['start']).strftime(DATE_TIME_FORMAT_SHORT)} - {pd.Timestamp(event['end']).strftime(DATE_TIME_FORMAT_SHORT)}")
+                    self.log(
+                        f"{event['code']:8s}: {pd.Timestamp(event  ['start']).strftime(DATE_TIME_FORMAT_SHORT)} - {pd.Timestamp(event['end']).strftime(DATE_TIME_FORMAT_SHORT)}"
+                    )
 
                 self.log("  The following upcoming Free Electricty Events have been identified:")
                 for event in free_events:
-                    if event["code"] not in self.free_electricity_events and pd.Timestamp(event["end"], tz="UTC") > pd.Timestamp.now(tz="UTC"):
-                        self.log(f"{event['code']:8s}: {pd.Timestamp(event  ['start']).strftime(DATE_TIME_FORMAT_SHORT)} - {pd.Timestamp(event['end']).strftime(DATE_TIME_FORMAT_SHORT)}")
+                    if event["code"] not in self.free_electricity_events and pd.Timestamp(
+                        event["end"], tz="UTC"
+                    ) > pd.Timestamp.now(tz="UTC"):
+                        self.log(
+                            f"{event['code']:8s}: {pd.Timestamp(event  ['start']).strftime(DATE_TIME_FORMAT_SHORT)} - {pd.Timestamp(event['end']).strftime(DATE_TIME_FORMAT_SHORT)}"
+                        )
                         self.free_electricity_events[event["code"]] = event
-                        
-        self.log("")
 
+        self.log("")
 
         if len(self.free_electricity_events) > 0:
             self.log("  The following upcoming Octopus Free Electricity Events are being applied:")
@@ -1959,8 +1957,7 @@ class PVOpt(hass.Hass):
 
         # ── 1. Discover the calendar entity ──────────────────────────────────
         calendar_entity = next(
-            (name for name in self.get_state_retry("calendar").keys()
-             if "octoplus_free_electricity_session" in name),
+            (name for name in self.get_state_retry("calendar").keys() if "octoplus_free_electricity_session" in name),
             None,
         )
 
@@ -1976,9 +1973,9 @@ class PVOpt(hass.Hass):
         # e.g. "calendar.octopus_energy_A-1B2C3D4E_octoplus_free_electricity_session"
         #                                ^^^^^^^^^^ extract this part
         try:
-            octopus_account = calendar_entity.split("octopus_energy_")[1].split(
-                "_octoplus_free_electricity_session"
-            )[0]
+            octopus_account = calendar_entity.split("octopus_energy_")[1].split("_octoplus_free_electricity_session")[
+                0
+            ]
             self.config["octopus_account"] = octopus_account
             if octopus_account not in self.redact_regex:
                 self.redact_regex.append(octopus_account)
@@ -1989,9 +1986,7 @@ class PVOpt(hass.Hass):
         # ── 3. Read current/next session from calendar attributes ─────────────
         # The calendar exposes `start_time` and `end_time` when a session is
         # current or upcoming.
-        cal_attrs = self.get_state_retry(calendar_entity, attribute="all").get(
-            "attributes", {}
-        )
+        cal_attrs = self.get_state_retry(calendar_entity, attribute="all").get("attributes", {})
         start_time = cal_attrs.get("start_time")
         end_time = cal_attrs.get("end_time")
 
@@ -2018,8 +2013,7 @@ class PVOpt(hass.Hass):
                 )
         else:
             self.log("  No upcoming Octopus Free Electricity Events detected")
-    
-    
+
     def get_ha_value(self, entity_id):
         value = None
 
@@ -2098,13 +2092,11 @@ class PVOpt(hass.Hass):
                 (v.replace("{device_name}", self.device_name) if isinstance(v, str) else v) for v in self.args[item]
             ]
 
-            #self.log(f"values1 = {values_temp}")
+            # self.log(f"values1 = {values_temp}")
 
-            values = [
-                (w.replace("{inverter_sn}", self.inverter_sn) if isinstance(w, str) else w) for w in values_temp
-            ]
+            values = [(w.replace("{inverter_sn}", self.inverter_sn) if isinstance(w, str) else w) for w in values_temp]
 
-            #self.log(f"values2 = {values}")
+            # self.log(f"values2 = {values}")
 
             if values[0] is None:
                 self.config[item] = self.get_default_config(item)
@@ -2112,7 +2104,6 @@ class PVOpt(hass.Hass):
                     f"    {item:34s} = {str(self.config[item]):57s} {str(self.get_config(item)):>6s}: system default. Null entry found in YAML.",
                     level="WARNING",
                 )
-
 
             elif item == "alt_tariffs":
                 self.config[item] = values
@@ -2571,9 +2562,9 @@ class PVOpt(hass.Hass):
 
         self.log("")
         # self._load_saving_events()
-        self._load_saving_events_new()  #Resolves Issue #418.
+        self._load_saving_events_new()  # Resolves Issue #418.
         # self._load_free_electricity_events()
-        self._load_free_electricity_events_new()   #Resolves Issue #418
+        self._load_free_electricity_events_new()  # Resolves Issue #418
 
         if self.get_config("forced_discharge") and (self.get_config("supports_forced_discharge", True)):
             discharge_enable = "enabled"
@@ -2898,7 +2889,7 @@ class PVOpt(hass.Hass):
 
         # Set last end time to be 30 mins greater than last start time.
 
-        (y.at[y.index[-1], "end"]) = (y.at[y.index[-1], "start"]) + pd.Timedelta(30, "minutes")
+        y.at[y.index[-1], "end"] = (y.at[y.index[-1], "start"]) + pd.Timedelta(30, "minutes")
 
         # self.log("")
         # self.log("Y is........")
@@ -3125,10 +3116,10 @@ class PVOpt(hass.Hass):
             self.log("Read only mode enabled. Not querying inverter.")
             self.status("Idle (Read Only)")
 
-            #SVB logging
-            #self.log("")
-            #entity_id = self.config[f"id_battery_current"]
-            #self.log(f"Battery current is {self.get_state_retry(entity_id)}")
+            # SVB logging
+            # self.log("")
+            # entity_id = self.config[f"id_battery_current"]
+            # self.log(f"Battery current is {self.get_state_retry(entity_id)}")
             ##End logging
 
         else:
@@ -3137,10 +3128,10 @@ class PVOpt(hass.Hass):
             did_something = True
             self.status("Updating Inverter")
 
-            #SVB logging
-            #self.log("")
-            #entity_id = self.config[f"id_battery_current"]
-            #self.log(f"Battery current is {self.get_state_retry(entity_id)}")
+            # SVB logging
+            # self.log("")
+            # entity_id = self.config[f"id_battery_current"]
+            # self.log(f"Battery current is {self.get_state_retry(entity_id)}")
             ##End logging
 
             inverter_update_count = 0
@@ -3223,7 +3214,7 @@ class PVOpt(hass.Hass):
                     self.log("Currently in charge/discharge/hold slot")
 
                     # If the current slot is a Hold SOC slot and we aren't holding then we need to
-                    # enable Hold SOC. This is achieved by setting a charge current of zero. 
+                    # enable Hold SOC. This is achieved by setting a charge current of zero.
 
                     if (
                         self.hold and self.hold[0]["active"]
@@ -3260,8 +3251,7 @@ class PVOpt(hass.Hass):
 
                         # Clear off hold status (no longer read from the inverter so needs clearing by command)
                         self.log("Clearing hold status")
-                        self.inverter.clear_hold_status()                       
-                        
+                        self.inverter.clear_hold_status()
 
                         if self.charge_power > 0:  # Intentionally 0 (not 1) to ensure Car slots are also encompassed.
                             if not status["charge"]["active"]:
@@ -3394,7 +3384,6 @@ class PVOpt(hass.Hass):
                             self.status(f"Waiting for inverter Read cycle: {i}")
                             time.sleep(1)
                             i -= 1
-
 
             status_switches = {
                 "charge": "off",
@@ -3748,10 +3737,10 @@ class PVOpt(hass.Hass):
     def write_to_hass(self, entity, state, attributes={}):
         try:
 
-            if (state == 0): 
+            if state == 0:
                 state = f"{state}"
             self.set_state(state=state, entity_id=entity, attributes=attributes)
-            
+
             self.log(f"Output written to {entity}")
 
         except Exception as e:
@@ -3826,8 +3815,7 @@ class PVOpt(hass.Hass):
         else:
             unit_cost_today = 0
 
-        
-        #SVB debuggging
+        # SVB debuggging
         self.log(f"Cost_actual today: {self._cost_actual().sum()}")
 
         self.log(f"Average unit cost today: {unit_cost_today:0.2f}p/kWh")
@@ -4056,11 +4044,11 @@ class PVOpt(hass.Hass):
 
             if self.debug and "L" in self.debug_cat:
                 self.log(f"Solcast array is = \n{df.to_string()}")
-                    
-            if 'dampening_factor' in df.columns:
+
+            if "dampening_factor" in df.columns:
                 if self.debug and "L" in self.debug_cat:
                     self.log("Dampening factor column detected - deleting")
-                df = df.drop(['dampening_factor'], axis=1)
+                df = df.drop(["dampening_factor"], axis=1)
 
             df = df.set_axis(["Solcast", "Solcast_p10", "Solcast_p90"], axis=1)
 
@@ -4104,27 +4092,29 @@ class PVOpt(hass.Hass):
                 self.log(f"\n{df.to_string()}")
 
             df.index = pd.to_datetime(df.index)
-            x = df.diff().clip(0).fillna(0).cumsum() + df.iloc[0]   #remove any negative values from series
-            x.index = x.index.round("1s")   # round to nearest second
-            x = x[~x.index.duplicated()]    # remove any duplicates
+            x = df.diff().clip(0).fillna(0).cumsum() + df.iloc[0]  # remove any negative values from series
+            x.index = x.index.round("1s")  # round to nearest second
+            x = x[~x.index.duplicated()]  # remove any duplicates
 
             if self.debug and "Q" in self.debug_cat:
                 self.log(f"power: Processed kWh data from {entity_id} is")
                 self.log(f"\n{x.to_string()}")
 
-            y = -pd.concat([x.resample("1s").interpolate().resample("30min").asfreq(), x.iloc[-1:]]).diff(-1)  #resample to 1s, interpolate, resammple to 30 mins.
+            y = -pd.concat([x.resample("1s").interpolate().resample("30min").asfreq(), x.iloc[-1:]]).diff(
+                -1
+            )  # resample to 1s, interpolate, resammple to 30 mins.
 
             if self.debug and "Q" in self.debug_cat:
                 self.log(f"power: Processed and resampled kWh data from {entity_id} is")
                 self.log(f"\n{y.to_string()}")
 
-            dt = y.index.diff().total_seconds() / pd.Timedelta("60min").total_seconds() / 1000  
+            dt = y.index.diff().total_seconds() / pd.Timedelta("60min").total_seconds() / 1000
 
             if self.debug and "Q" in self.debug_cat:
                 self.log(f"power: Final dt is ")
                 self.log(dt)
 
-            df = y[1:-1] / dt[2:]   # remove first and last rows, then calculate rate of change (which is power).
+            df = y[1:-1] / dt[2:]  # remove first and last rows, then calculate rate of change (which is power).
 
             if self.debug and "Q" in self.debug_cat:
                 self.log(f"power: Final df after calculating rate of change is ")
@@ -4136,8 +4126,6 @@ class PVOpt(hass.Hass):
                 df = df.loc[:end]
 
         return df
-
- 
 
     def load_consumption(self, start, end):
         ev_power = pd.DataFrame()
@@ -4225,7 +4213,7 @@ class PVOpt(hass.Hass):
             if (len(self.zappi_consumption_entities) > 0) and self.ev:
                 self.log("Getting consumption in kWh from Zappi Charger(s)")
                 # self.log(f"Start time is {df.index[0]}, end time is {df.index[-1]}")
-                ev_power = self._get_zappi_power(start=df.index[0], end=df.index[-1], log=True) # in W
+                ev_power = self._get_zappi_power(start=df.index[0], end=df.index[-1], log=True)  # in W
 
                 if len(ev_power) > 0:
                     self.log("")
@@ -4240,22 +4228,23 @@ class PVOpt(hass.Hass):
                     self.log("")
                     self.log("  No power returned from Zappi(s)")
 
-
             if (start < time_now) and (end < time_now):
                 consumption["consumption"] = df.loc[start:end]
 
             else:
                 if self.ev and self.get_config("ev_part_of_house_load") and len(ev_power) > 0:
                     df = self._subtract_zappi_from_grid(ev_power, df)
-                
+
                 # Add consumption margin
                 df = df * (1 + self.get_config("consumption_margin") / 100)
                 if self.debug and "Q" in self.debug_cat:
                     self.log("Df after adding consumption margin is.......")
                     self.log(df.to_string())
 
-                dfx = pd.Series(index=df.index, data=df.to_list())  #Used for dow calcs below
-                df = df.groupby(df.index.time).aggregate(self.get_config("consumption_grouping"))  # Group by time and take the mean
+                dfx = pd.Series(index=df.index, data=df.to_list())  # Used for dow calcs below
+                df = df.groupby(df.index.time).aggregate(
+                    self.get_config("consumption_grouping")
+                )  # Group by time and take the mean
 
                 df.name = "consumption"
 
@@ -4265,21 +4254,22 @@ class PVOpt(hass.Hass):
                     self.log(">>> Consumption grouped by time:")
                     self.log(f">>> {df}")
 
-
-                #Generate a dataframe 48hours long
+                # Generate a dataframe 48hours long
                 temp = pd.DataFrame(index=index)
-                #Make the index time only
+                # Make the index time only
                 temp["time"] = temp.index.time
 
                 # SVB logging
-                #self.log("temp = ")
-                #self.log(temp.to_string())
+                # self.log("temp = ")
+                # self.log(temp.to_string())
 
-                # temp (left) is dataframe of 48 hours long aligned to midnight. Index has time and date. Column "time" is time only. 
-                # df (right) is dataframe 24 hours long, aligned to midnight, average of 7 days. Index is time only. 
-                # thus consumption_mean_s is 48 hours long, starts from midnight. The first 24 hours and second 24 hours contains the same data. 
+                # temp (left) is dataframe of 48 hours long aligned to midnight. Index has time and date. Column "time" is time only.
+                # df (right) is dataframe 24 hours long, aligned to midnight, average of 7 days. Index is time only.
+                # thus consumption_mean_s is 48 hours long, starts from midnight. The first 24 hours and second 24 hours contains the same data.
 
-                consumption_mean = temp.merge(df, how='left', left_on="time", right_index=True)[["consumption"]].rename(columns={'consumption': 'consumption_mean'})
+                consumption_mean = temp.merge(df, how="left", left_on="time", right_index=True)[
+                    ["consumption"]
+                ].rename(columns={"consumption": "consumption_mean"})
 
                 if self.debug and "P" in self.debug_cat:
                     self.log(">>> Consumption Mean:")
@@ -4288,37 +4278,43 @@ class PVOpt(hass.Hass):
                 if days >= 7:
 
                     # Alternative way of finding data from a week ago, needs test
-                    
+
                     # start_last_week = pd.Timestamp.utcnow().floor("30min") - timedelta(days=7)
                     # end_last_week = start_last_week + timedelta(days=2)
                     # consumption_dow = self.get_config("day_of_week_weighting") * dfx.iloc[start_last_week, end_last_week]
 
                     # this line is aligned to time now
-                    # dfx is index of time and date, 7 days long. 
-                    # it does not extract the correct day if days >7, as it just selects the first 2 days. 
+                    # dfx is index of time and date, 7 days long.
+                    # it does not extract the correct day if days >7, as it just selects the first 2 days.
                     consumption_dow = pd.DataFrame(self.get_config("day_of_week_weighting") * dfx.iloc[: len(temp)])
-                    consumption_dow.columns = ['consumption_dow']
+                    consumption_dow.columns = ["consumption_dow"]
 
-                    #shift it forward by 7 days (only works if days = 7)
+                    # shift it forward by 7 days (only works if days = 7)
                     consumption_dow.index = consumption_dow.index + pd.Timedelta(days=7)
-                   
+
                     # Add extra entries to consumption_dow so it starts at midnight, then remove time column and change Nans to 0 (they are in the past)
                     consumption_dow2 = pd.concat([temp, consumption_dow], axis=1).drop(["time"], axis=1).fillna(0)
- 
+
                     # merge consumption_mean and consumption dow, then trim back to 48 hours long
-                    consumption_new = consumption_dow2.merge(consumption_mean, how='outer', left_index=True, right_index=True).head(96)
+                    consumption_new = consumption_dow2.merge(
+                        consumption_mean, how="outer", left_index=True, right_index=True
+                    ).head(96)
 
                     # multiply each value in col consumption_mean by  (1 - self.get_config("day_of_week_weighting"))
-                    consumption_new['consumption_mean'] = consumption_new['consumption_mean'] * (1 - self.get_config("day_of_week_weighting"))
+                    consumption_new["consumption_mean"] = consumption_new["consumption_mean"] * (
+                        1 - self.get_config("day_of_week_weighting")
+                    )
 
                     # add the dow data to the mean data as a "total" column
-                    consumption_new['total'] = consumption_new['consumption_mean'] + consumption_new['consumption_dow']
-                    
+                    consumption_new["total"] = consumption_new["consumption_mean"] + consumption_new["consumption_dow"]
+
                     if self.debug and "P" in self.debug_cat:
                         self.log(">>> Consumption New:")
                         self.log(f">>> {consumption_new.to_string()}")
 
-                    consumption["consumption"] += pd.Series(consumption_new['total'].to_numpy(), index = consumption_mean.index)
+                    consumption["consumption"] += pd.Series(
+                        consumption_new["total"].to_numpy(), index=consumption_mean.index
+                    )
 
                 else:
                     self.log(f"  - Ignoring 'Day of Week Weighting' because only {days} days of history is available")
@@ -4373,14 +4369,16 @@ class PVOpt(hass.Hass):
         return consumption
 
     # subtract zappi from grid to calculate house consumption
-    def _subtract_zappi_from_grid(self,ev,grid):
+    def _subtract_zappi_from_grid(self, ev, grid):
 
         df_EV = None  # To store EV consumption
         df_EV_Total = None  # To store EV consumption and Total consumption
         dfx = None
 
         self.log("    EV charger is seen as house load, so subtracting EV charging from Total consumption")
-        df_EV_Total = pd.concat([ev, grid], axis=1)  # concatenate total consumption and ev consumption into a single dataframe (as they are different lengths)
+        df_EV_Total = pd.concat(
+            [ev, grid], axis=1
+        )  # concatenate total consumption and ev consumption into a single dataframe (as they are different lengths)
         df_EV_Total.columns = ["EV", "Total"]  # Set column names
         df_EV_Total = df_EV_Total.fillna(0)  # fill any missing values with 0
         if self.debug and "P" in self.debug_cat:
@@ -4725,8 +4723,8 @@ class PVOpt(hass.Hass):
             df = pd.DataFrame(hist[0]).set_index("last_updated")["state"]
             df.index = pd.to_datetime(df.index, format="ISO8601")
 
-            #get_history has changed in Appdaemon v4.5.X, it now reports local time, rather than the timezone of "days" (or a default of UTC, not sure which)
-            #all use of hass2df seems to pass UTC time, to convert results to UTC. 
+            # get_history has changed in Appdaemon v4.5.X, it now reports local time, rather than the timezone of "days" (or a default of UTC, not sure which)
+            # all use of hass2df seems to pass UTC time, to convert results to UTC.
             df.index = pd.to_datetime(df.index, utc=True)
 
             df = df.sort_index()
@@ -4761,10 +4759,9 @@ class PVOpt(hass.Hass):
             # SVB
             # self.log("write and poll time - time detected. Trimming time to hours and minutes")
         state = self.get_state_retry(entity_id=entity_id)
-        
+
         # SVB
         # self.log(f"Write_and_poll_time: time = {times}, old_time = {state}")
-
 
         if state != times:
             changed = True
@@ -4834,7 +4831,9 @@ class PVOpt(hass.Hass):
                     self.log("Write_and_poll_text: Entered while loop")
 
                     retries += 1
-                    time.sleep(WRITE_POLL_TIME_SLEEP)  # as WRITE_POLL_SLEEP value not sufficent for SolisCloud writes to charge/discharge current. 
+                    time.sleep(
+                        WRITE_POLL_TIME_SLEEP
+                    )  # as WRITE_POLL_SLEEP value not sufficent for SolisCloud writes to charge/discharge current.
                     new_state = self.get_state_retry(entity_id=entity_id)
                     written = new_state == text
 
@@ -4854,7 +4853,6 @@ class PVOpt(hass.Hass):
             #    self.log(str_log)
 
         return (changed, written)
-
 
     def write_and_poll_value(self, entity_id, value: int | float, tolerance=0.0, verbose=True):
         changed = False

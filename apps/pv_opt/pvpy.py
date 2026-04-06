@@ -396,7 +396,6 @@ class Tariff:
                     self.log(f"event_start = {event_start}")
                     self.log(f"event_end = {event_end}")
 
-
                 if event_start <= end or event_end > start and event_value > 0:
                     event_start = max(event_start, start)
                     event_end = min(event_end - pd.Timedelta(30, "minutes"), end)
@@ -410,7 +409,7 @@ class Tariff:
 
                     df.loc[event_start:event_end, "unit"] += event_value
 
-# Update for Free Electricity Events if they exist
+        # Update for Free Electricity Events if they exist
 
         if (self.host is not None) and ("unit" in df.columns):
             events = self.host.free_electricity_events
@@ -434,7 +433,6 @@ class Tariff:
                     self.log("After UTC conversion")
                     self.log(f"event_start = {event_start}")
                     self.log(f"event_end = {event_end}")
-
 
                 if event_start <= end or event_end > start and event_value > 0:
                     event_start = max(event_start, start)
@@ -704,7 +702,6 @@ class Contract:
 
         # SVB debugging
         # self.log(f"Start = {start}, End = {end}")
-        
 
         if (
             isinstance(grid_flow, pd.DataFrame)
@@ -721,15 +718,13 @@ class Contract:
             grid_exp = grid_flow.clip(upper=0)
 
         dt = get_dt_hours(grid_flow)
-         
 
         # imp_df = self.tariffs["import"].to_df(start, end, **kwargs)
         imp_df = self.tariffs["import"].to_df(start=start.floor("30min"), end=end, **kwargs)
         imp_df.index = [start] + list(imp_df.index[1:])
 
-
         # SVB logging
-        #self.log("dt = ")
+        # self.log("dt = ")
         # self.log(f"\n{dt.to_string()}")
         # self.log("imp_df = ")
         # self.log(f"\n{imp_df.to_string()}")
@@ -746,7 +741,6 @@ class Contract:
             exp_df.index = [start] + list(exp_df.index[1:])
             nc += exp_df["unit"] * grid_exp / 1000 * dt
 
-
         if kwargs.get("log") and (self.host.debug and "F" in self.host.debug_cat):
             self.rlog(f">>> Import{self.tariffs['import'].to_df(start,end).to_string()}")
             self.rlog(f">>> Export{self.tariffs['export'].to_df(start,end).to_string()}")
@@ -755,7 +749,6 @@ class Contract:
             self.log("")
             self.log(">>> Return from net_cost routine")
             self.log(f">>> net_cost returned is {nc}")
-
 
         # SVB logging
         # self.log("nc.sum = ")
@@ -1228,17 +1221,28 @@ class PVsystemModel:
                     )
 
                 forced_charge = min(
-                    min(self.battery.max_charge_power, self.inverter.charger_power)- x["forced"].loc[start_window] - x["solar"].loc[start_window],
-                    ((100 - x["soc_end"].loc[start_window]) / 100 * self.battery.capacity) / x["dt_hours"].loc[start_window],
+                    min(self.battery.max_charge_power, self.inverter.charger_power)
+                    - x["forced"].loc[start_window]
+                    - x["solar"].loc[start_window],
+                    ((100 - x["soc_end"].loc[start_window]) / 100 * self.battery.capacity)
+                    / x["dt_hours"].loc[start_window],
                 )
 
                 if self.host.debug and "C" in self.host.debug_cat:
-                    value1 = min(self.battery.max_charge_power, self.inverter.charger_power)- x["forced"].loc[start_window] - x["solar"].loc[start_window]
-                    value2 = ((100 - x["soc_end"].loc[start_window]) / 100 * self.battery.capacity) 
+                    value1 = (
+                        min(self.battery.max_charge_power, self.inverter.charger_power)
+                        - x["forced"].loc[start_window]
+                        - x["solar"].loc[start_window]
+                    )
+                    value2 = (100 - x["soc_end"].loc[start_window]) / 100 * self.battery.capacity
                     value3 = x["dt_hours"].loc[start_window]
-                    value4 = ((100 - x["soc_end"].loc[start_window]) / 100 * self.battery.capacity) / x["dt_hours"].loc[start_window]
+                    value4 = ((100 - x["soc_end"].loc[start_window]) / 100 * self.battery.capacity) / x[
+                        "dt_hours"
+                    ].loc[start_window]
                     self.log(f"Start window = {start_window}")
-                    self.log(f"Value 1 = {value1:6.1f}, Value2 = {value2:6.1f}, Value3 = {value3:6.1f}, Value4 = {value4:6.1f}")
+                    self.log(
+                        f"Value 1 = {value1:6.1f}, Value2 = {value2:6.1f}, Value3 = {value3:6.1f}, Value4 = {value4:6.1f}"
+                    )
                     self.log(f"Forced Charge = {forced_charge}")
                 slot = (
                     start_window,
@@ -1248,7 +1252,6 @@ class PVsystemModel:
                 slots.append(slot)
 
                 self.calculate_flows(slots=slots)
-            
 
                 if self.host.debug and "F" in self.host.debug_cat:
                     self.log("self.flows after flows called = ")
@@ -1261,7 +1264,6 @@ class PVsystemModel:
                     if net_cost < best_cost:
                         self.log("Cost reduction found - printing flows")
                         self.log(f"\n{self.flows.to_string()}")
-
 
                 str_log += f"Net: {net_cost:5.1f} "
                 if net_cost < best_cost - self.host.get_config("slot_threshold_p"):
