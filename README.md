@@ -1,4 +1,4 @@
-# PV Opt: Home Assistant Solar/Battery Optimiser v5.0.0.
+# PV Opt: Home Assistant Solar/Battery Optimiser v5.0.0
 
 - [Introduction](#Introduction)
 - [Pre-requisites](#pre-requisites)
@@ -137,7 +137,7 @@ At present this app works directly with Solis hybrid inverters using one of the 
 
 <h4>HA Core Modbus</h4>
 
-Follow the Github instructions here: https://github.com/fboundy/ha_solis_modbus
+Follow the Github instructions here: https://github.com/stevebuk1/ha_solis_modbus
 
 <h4>Using Solis Cloud</h4>
 <h5>Solis-Sensor</h5>
@@ -159,7 +159,7 @@ Follow the Github instructions here: (https://github.com/davidrapan/ha-solarman)
 
 For Solis Inverters, replace existing Solis_Hybrid.yaml with this one:
 
-https://github.com/fboundy/pv_opt/blob/main/files/solis_hybrid.yaml
+https://github.com/stevebuk1/pv_opt/blob/main/files/solis_hybrid.yaml
 
 <h3>6. Install the MQTT Integraion in Home Assistant</h3>
 
@@ -289,40 +289,35 @@ And add the `client_user` and `client_password` keys to `secrets.yaml` like this
 9.  Either click on `Info` followed by `OPEN WEB UI` and then `Logs` or open your `main_log` file from the location specified in step (3) above. You should see:
 
     ```
-    13:16:24 INFO AppDaemon: AppDaemon Version 4.4.2 starting
-    13:16:24 INFO AppDaemon: Python version is 3.11.6
-    13:16:24 INFO AppDaemon: Configuration read from: /config/appdaemon.yaml
-    13:16:24 INFO AppDaemon: Added log: AppDaemon
-    13:16:24 INFO AppDaemon: Added log: Error
-    13:16:24 INFO AppDaemon: Added log: Access
-    13:16:24 INFO AppDaemon: Added log: Diag
-    13:16:24 INFO AppDaemon: Added log: PV_Opt
-    13:16:25 INFO AppDaemon: Loading Plugin HASS using class HassPlugin from module hassplugin
-    13:16:25 INFO HASS: HASS Plugin Initializing
-    13:16:25 WARNING HASS: ha_url not found in HASS configuration - module not initialized
-    13:16:25 INFO HASS: HASS Plugin initialization complete
-    13:16:25 INFO AppDaemon: Loading Plugin MQTT using class MqttPlugin from module mqttplugin
-    13:16:26 INFO MQTT: MQTT Plugin Initializing
-    13:16:26 INFO MQTT: Using 'localad/status' as Will Topic
-    13:16:26 INFO MQTT: Using 'localad/status' as Birth Topic
-    13:16:26 INFO AppDaemon: Initializing HTTP
-    13:16:26 INFO AppDaemon: Using 'ws' for event stream
-    13:16:26 INFO AppDaemon: Starting API
-    13:16:26 INFO AppDaemon: Starting Admin Interface
-    13:16:26 INFO AppDaemon: Starting Dashboards
-    13:16:26 INFO HASS: Connected to Home Assistant 2023.11.1
-    13:16:26 INFO AppDaemon: Starting Apps with 0 workers and 0 pins
-    13:16:26 INFO AppDaemon: Running on port 5050
-    13:16:26 INFO MQTT: Connected to Broker at URL core-mosquitto:1883
-    13:16:26 INFO AppDaemon: Got initial state from namespace mqtt
-    13:16:26 INFO MQTT: MQTT Plugin initialization complete
-    13:16:26 INFO HASS: Evaluating startup conditions
-    13:16:26 INFO HASS: Startup condition met: hass state=RUNNING
-    13:16:26 INFO HASS: All startup conditions met
-    13:16:26 INFO AppDaemon: Got initial state from namespace default
-    13:16:28 INFO AppDaemon: Scheduler running in realtime
-    13:16:28 INFO AppDaemon: Adding /homeassistant/appdaemon/apps to module import path
-    13:16:28 INFO AppDaemon: App initialization complete
+06/04, 20:33:00 INFO AppDaemon: ------------------------------------------------------------
+06/04, 20:33:00 INFO AppDaemon: AppDaemon Version 4.5.13 starting
+06/04, 20:33:00 INFO AppDaemon: ------------------------------------------------------------
+06/04, 20:33:00 INFO AppDaemon: Python version is 3.12.12
+06/04, 20:33:00 INFO AppDaemon: Configuration read from: /config/appdaemon.yaml
+06/04, 20:33:00 INFO AppDaemon: Using /homeassistant/appdaemon/apps as app_dir
+06/04, 20:33:00 INFO AppDaemon: Loading built-in plugin 'HASS' using 'HassPlugin' from 'appdaemon.plugins.hass.hassplugin'
+06/04, 20:33:00 INFO HASS: HASS Plugin initialization complete
+06/04, 20:33:00 INFO AppDaemon: Loading built-in plugin 'MQTT' using 'MqttPlugin' from 'appdaemon.plugins.mqtt.mqttplugin'
+06/04, 20:33:00 INFO MQTT: MQTT Plugin Initializing
+06/04, 20:33:00 INFO MQTT: Using 'localad/status' as birth topic with payload 'online'
+06/04, 20:33:00 INFO MQTT: Using 'localad/status' as will topic with payload 'offline'
+06/04, 20:33:00 INFO AppDaemon: Initializing HTTP
+06/04, 20:33:00 INFO AppDaemon: Using 'ws' for event stream
+06/04, 20:33:00 INFO AppDaemon: Starting API
+06/04, 20:33:00 INFO AppDaemon: Starting Admin Interface
+06/04, 20:33:00 INFO AppDaemon: Starting Dashboards
+06/04, 20:33:00 INFO AppDaemon: Starting apps with 1 worker threads. Apps will all be assigned threads and pinned to them.
+06/04, 20:33:00 INFO AppDaemon: Running on port 5050
+06/04, 20:33:00 INFO AppDaemon: Waiting for plugins to be ready
+06/04, 20:33:00 INFO HASS: Connected to Home Assistant 2026.2.3 with aiohttp websocket
+06/04, 20:33:00 INFO HASS: Authenticated to Home Assistant 2026.2.3
+06/04, 20:33:00 INFO MQTT: Connected to MQTT broker at URL core-mosquitto:1883 with paho-mqtt
+06/04, 20:33:00 INFO MQTT: MQTT Plugin initialization complete
+06/04, 20:33:00 INFO HASS: Waiting for Home Assistant to start
+06/04, 20:33:00 INFO AppDaemon: All plugins ready
+06/04, 20:33:00 INFO AppDaemon: Scheduler running in realtime
+06/04, 20:33:01 INFO HASS: Completed initialization in 1.1s
+06/04, 20:33:01 INFO AppDaemon: App initialization complete
     ```
 
 That's it. AppDaemon is up and running. There is futher documentation for the on the [Add-on](https://github.com/hassio-addons/addon-appdaemon/blob/main/appdaemon/DOCS.md) and for [AppDaemon](https://appdaemon.readthedocs.io/en/latest/)
