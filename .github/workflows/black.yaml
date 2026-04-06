@@ -12,6 +12,9 @@ jobs:
       # Step 1: Checkout the repository
       - name: Checkout Repository
         uses: actions/checkout@v3
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
 
       # Step 2: Set up Python environment
       - name: Set up Python
@@ -39,18 +42,19 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          # Ensure you are on the correct branch
-          git checkout -B $GITHUB_HEAD_REF || git checkout -b new-branch-name
+          # Get onto the actual PR branch (checkout detaches HEAD by default)
+          git checkout -B $GITHUB_HEAD_REF origin/$GITHUB_HEAD_REF
 
-          # Stage and commit changes
+          # Stage all changes
           git add .
+
+          # Only commit and push if there are actual formatting changes
           if git diff --cached --quiet; then
             echo "No formatting changes to commit."
             exit 0
           fi
-          git commit -m "Auto-format code with Black and isort"
 
-          # Push changes
+          git commit -m "Auto-format code with Black and isort"
           git push origin $GITHUB_HEAD_REF
 
 
