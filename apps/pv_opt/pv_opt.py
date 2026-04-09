@@ -5,13 +5,20 @@ import time
 from datetime import datetime, timedelta
 from json import dumps
 
-import appdaemon.adbase as ad
-import appdaemon.plugins.hass.hassapi as hass
-import appdaemon.plugins.mqtt.mqttapi as mqtt
+try:
+    import appdaemon.adbase as ad
+    import appdaemon.plugins.hass.hassapi as hass
+    import appdaemon.plugins.mqtt.mqttapi as mqtt
+    APPDAEMON = True
+except ImportError:
+    import ha_interface.ha_interface as ad
+    import ha_interface.ha_interface as hass
+    APPDAEMON = False
 import numpy as np
 import pandas as pd
 import pvpy as pv
 from numpy import nan
+
 
 VERSION = "5.0.0"
 
@@ -4989,5 +4996,29 @@ class PVOpt(hass.Hass):
         if item is not None:
             return DEFAULT_CONFIG[item]["default"]
 
+if __name__ == "__main__":
+    import asyncio
+    import json
+    import logging
+    import os
+    import sys
+
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s  %(levelname)-8s %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+
+    OPTIONS_FILE = "/data/options.json"
+    if not os.path.exists(OPTIONS_FILE):
+        logging.warning(f"{OPTIONS_FILE} not found — using empty config")
+        options = {}
+    else:
+        with open(OPTIONS_FILE) as f:
+            options = json.load(f)
+
+    app = PVOpt(options=options)
+
+    asyncio.run(app._run())
 
 # %%
