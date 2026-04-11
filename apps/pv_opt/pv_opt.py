@@ -5003,19 +5003,51 @@ if __name__ == "__main__":
     import os
     import sys
 
+    import yaml
+
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s  %(levelname)-8s %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
     )
 
+    # ── Load Add-On UI options (MQTT credentials, log level, etc.) ────────────
     OPTIONS_FILE = "/data/options.json"
     if not os.path.exists(OPTIONS_FILE):
-        logging.warning(f"{OPTIONS_FILE} not found — using empty config")
-        options = {}
+        logging.warning(f"{OPTIONS_FILE} not found — using empty Add-On options")
+        addon_options = {}
     else:
         with open(OPTIONS_FILE) as f:
-            options = json.load(f)
+            addon_options = json.load(f)
+
+    # ── Load pv_opt config.yaml (the main app configuration) ─────────────────
+    # Default location mirrors the AppDaemon path inside the container.
+    # Users can override by setting config_path in the Add-On UI.
+    CONFIG_FILE = addon_options.get("config_path", "/config/pv_opt/config.yaml")
+    if not os.path.exists(CONFIG_FILE):
+        logging.warning(
+            f"pv_opt config.yaml not found at {CONFIG_FILE} — "
+            f"running with Add-On UI options only. "
+            f"Copy your config.yaml to {CONFIG_FILE} to configure pv_opt."
+        )
+        pv_opt_config = {}
+    else:
+        with open(CONFIG_FILE) as f:
+            raw = yaml.safe_load(f)
+        # AppDaemon wraps settings under a top-level 'pv_opt:' key — strip it.
+        if isinstance(raw, dict) and "pv_opt" in raw:
+            pv_opt_config = raw["pv_opt"]
+            # Remove AppDaemon-only keys that have no meaning here
+            for ad_key in ("module", "class", "log"):
+                pv_opt_config.pop(ad_key, None)
+        else:
+            pv_opt_config = raw or {}
+        logging.info(f"Loaded pv_opt config from {CONFIG_FILE}")
+
+    # ── Merge: pv_opt config.yaml takes precedence over Add-On UI options ────
+    # Add-On UI options (MQTT, log_level, config_path) fill in anything not
+    # already set by config.yaml, so users never need to duplicate settings.
+    options = {**addon_options, **pv_opt_config}
 
     app = PVOpt(options=options)
 
