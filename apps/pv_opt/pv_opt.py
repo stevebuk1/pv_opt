@@ -4202,9 +4202,13 @@ class PVOpt(hass.Hass):
                 )
 
                 if len(entity_ids) > 0:
-                    self.log(f"  - Got {actual_days} days history from {entity_ids} from {df.index[0].strftime(DATE_TIME_FORMAT_SHORT)} to {df.index[-1].strftime(DATE_TIME_FORMAT_SHORT)}")
+                    self.log(
+                        f"  - Got {actual_days} days history from {entity_ids} from {df.index[0].strftime(DATE_TIME_FORMAT_SHORT)} to {df.index[-1].strftime(DATE_TIME_FORMAT_SHORT)}"
+                    )
                 else:
-                    self.log(f"  - Got {actual_days} days history from {entity_id} from {df.index[0].strftime(DATE_TIME_FORMAT_SHORT)} to {df.index[-1].strftime(DATE_TIME_FORMAT_SHORT)}")
+                    self.log(
+                        f"  - Got {actual_days} days history from {entity_id} from {df.index[0].strftime(DATE_TIME_FORMAT_SHORT)} to {df.index[-1].strftime(DATE_TIME_FORMAT_SHORT)}"
+                    )
 
             else:
                 actual_days = 0
