@@ -13,7 +13,7 @@ import pandas as pd
 import pvpy as pv
 from numpy import nan
 
-VERSION = "5.0.0"
+VERSION = "5.0.1"
 
 UNITS = {
     "current": "A",
@@ -3453,7 +3453,7 @@ class PVOpt(hass.Hass):
 
             # End time is 30 minutes after the start time, unless partway through a slot
             # x["end"] = x.index.tz_convert(self.tz) + pd.Timedelta(30, "minutes")
-            x["end"] = x.index.tz_convert(self.tz) + pd.to_timedelta((x["dt_hours"] * 60), unit="m").round("min")
+            x["end"] = x.index.tz_convert(self.tz) + pd.to_timedelta((x["dt_hours"] * 60), unit="m").dt.round("min")
             x["soc"] = x["soc"].round(0).astype(int)
             x["soc_end"] = x["soc_end"].round(0).astype(int)
 
@@ -3480,7 +3480,7 @@ class PVOpt(hass.Hass):
             x = self.opt[self.opt["forced"] < 0].copy()
             x["start"] = x.index.tz_convert(self.tz)
             # x["end"] = x.index.tz_convert(self.tz) + pd.Timedelta(30, "minutes")
-            x["end"] = x.index.tz_convert(self.tz) + pd.to_timedelta((x["dt_hours"] * 60), unit="m").round("min")
+            x["end"] = x.index.tz_convert(self.tz) + pd.to_timedelta((x["dt_hours"] * 60), unit="m").dt.round("min")
 
             if self.debug and "W" in self.debug_cat:
                 self.log("")
@@ -3807,11 +3807,16 @@ class PVOpt(hass.Hass):
         )
 
     def _write_output(self):
-        if self.get_config("id_consumption_today") > 0:
-            unit_cost_today = round(
-                self._cost_actual().sum() / self.get_config("id_consumption_today"),
-                1,
-            )
+
+        if self.entity_exists(self.config["id_consumption_today"]):
+
+            if self.get_config("id_consumption_today") > 0:
+                unit_cost_today = round(
+                    self._cost_actual().sum() / self.get_config("id_consumption_today"),
+                    1,
+                )
+            else:
+                unit_cost_today = 0
         else:
             unit_cost_today = 0
 
@@ -4195,9 +4200,16 @@ class PVOpt(hass.Hass):
                         0,
                     )
                 )
-                self.log(
-                    f"  - Got {actual_days} days history from {entity_id} from {df.index[0].strftime(DATE_TIME_FORMAT_SHORT)} to {df.index[-1].strftime(DATE_TIME_FORMAT_SHORT)}"
-                )
+
+                if len(entity_ids) > 0:
+                    self.log(
+                        f"  - Got {actual_days} days history from {entity_ids} from {df.index[0].strftime(DATE_TIME_FORMAT_SHORT)} to {df.index[-1].strftime(DATE_TIME_FORMAT_SHORT)}"
+                    )
+                else:
+                    self.log(
+                        f"  - Got {actual_days} days history from {entity_id} from {df.index[0].strftime(DATE_TIME_FORMAT_SHORT)} to {df.index[-1].strftime(DATE_TIME_FORMAT_SHORT)}"
+                    )
+
             else:
                 actual_days = 0
                 self.log(f"  - Got no consumption history")
