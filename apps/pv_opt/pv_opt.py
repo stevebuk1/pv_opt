@@ -3807,11 +3807,16 @@ class PVOpt(hass.Hass):
         )
 
     def _write_output(self):
-        if self.get_config("id_consumption_today") > 0:
-            unit_cost_today = round(
-                self._cost_actual().sum() / self.get_config("id_consumption_today"),
-                1,
-            )
+
+        if self.entity_exists(self.config["id_consumption_today"]):
+
+            if self.get_config("id_consumption_today") > 0:
+                unit_cost_today = round(
+                    self._cost_actual().sum() / self.get_config("id_consumption_today"),
+                    1,
+                )
+            else:
+                unit_cost_today = 0
         else:
             unit_cost_today = 0
 
