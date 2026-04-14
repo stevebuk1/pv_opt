@@ -4290,19 +4290,28 @@ class PVOpt(hass.Hass):
                 if days >= 7:
 
                     # Alternative way of finding data from a week ago, needs test
-
                     # start_last_week = pd.Timestamp.utcnow().floor("30min") - timedelta(days=7)
                     # end_last_week = start_last_week + timedelta(days=2)
                     # consumption_dow = self.get_config("day_of_week_weighting") * dfx.iloc[start_last_week, end_last_week]
 
-                    # this line is aligned to time now
-                    # dfx is index of time and date, 7 days long.
-                    # it does not extract the correct day if days >7, as it just selects the first 2 days.
-                    consumption_dow = pd.DataFrame(self.get_config("day_of_week_weighting") * dfx.iloc[: len(temp)])
+                    #Code in 5.0.1, commented out:
+                    #consumption_dow = pd.DataFrame(self.get_config("day_of_week_weighting") * dfx.iloc[: len(temp)])
+                    #consumption_dow.columns = ["consumption_dow"]
+                    #consumption_dow.index = consumption_dow.index + pd.Timedelta(days=days)
+
+                    #trial code: 
+                    start_dow = (pd.Timestamp.now(tz="UTC") - pd.Timedelta(days=7)).normalize()
+                    consumption_dow = pd.DataFrame(
+                    self.get_config("day_of_week_weighting") * dfx.loc[start_dow : start_dow + pd.Timedelta(hours=47, minutes=30)]
+                    )
                     consumption_dow.columns = ["consumption_dow"]
 
-                    # shift it forward by 7 days (only works if days = 7)
+                    # shift forward exactly 7 days to align with today
                     consumption_dow.index = consumption_dow.index + pd.Timedelta(days=7)
+
+
+                    # self.log(f">>> consumption_dow index after shift: {consumption_dow.index[0]} to {consumption_dow.index[-1]}")
+                    #  self.log(f">>> consumption_mean index: {consumption_mean.index[0]} to {consumption_mean.index[-1]}")
 
                     # Add extra entries to consumption_dow so it starts at midnight, then remove time column and change Nans to 0 (they are in the past)
                     consumption_dow2 = pd.concat([temp, consumption_dow], axis=1).drop(["time"], axis=1).fillna(0)
