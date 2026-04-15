@@ -4292,7 +4292,11 @@ class PVOpt(hass.Hass):
                     dow_slices = []
                     index_dow = None
                     for week in range(1, days // 7 + 1):
-                        start_dow_n = (pd.Timestamp.now(tz="UTC") - pd.Timedelta(days=7 * week)).normalize()
+                        # start_dow_n = (pd.Timestamp.now(tz="UTC") - pd.Timedelta(days=7 * week)).normalize()
+                        start_dow_n = pd.Timestamp.now(tz="UTC").normalize() - pd.Timedelta(days=7 * week)
+
+
+
                         slice_n = dfx.loc[start_dow_n : start_dow_n + pd.Timedelta(hours=47, minutes=30)]
                         if len(slice_n) == 48:
                             dow_slices.append(slice_n.values)
