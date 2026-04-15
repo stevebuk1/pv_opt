@@ -2641,8 +2641,8 @@ class PVOpt(hass.Hass):
         self.t0 = pd.Timestamp.now()
         self.pv_system.static_flows = pd.DataFrame(
             index=pd.date_range(
-                pd.Timestamp.utcnow().normalize(),
-                pd.Timestamp.utcnow().normalize() + pd.Timedelta(days=2),
+                pd.Timestamp.now(tz="UTC").normalize(),
+                pd.Timestamp.now(tz="UTC").normalize() + pd.Timedelta(days=2),
                 freq="30min",
                 inclusive="left",
             ),
@@ -2657,8 +2657,8 @@ class PVOpt(hass.Hass):
             return
 
         consumption = self.load_consumption(
-            pd.Timestamp.utcnow().normalize(),
-            pd.Timestamp.utcnow().normalize() + pd.Timedelta(days=2),
+            pd.Timestamp.now(tz="UTC").normalize(),
+            pd.Timestamp.now(tz="UTC").normalize() + pd.Timedelta(days=2),
         )
 
         if consumption is None:
@@ -2667,7 +2667,7 @@ class PVOpt(hass.Hass):
             return
 
         self.pv_system.static_flows = pd.concat([solcast, consumption], axis=1)
-        self.time_now = pd.Timestamp.utcnow().floor("1min")
+        self.time_now = pd.Timestamp.now(tz="UTC").floor("1min")
 
         self.pv_system.static_flows = self.pv_system.static_flows[self.time_now.floor("30min") :].fillna(0)
         self.pv_system.static_flows.index = [self.time_now] + list(self.pv_system.static_flows.index[1:])
