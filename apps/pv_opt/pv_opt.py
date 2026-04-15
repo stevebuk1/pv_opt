@@ -4310,26 +4310,28 @@ class PVOpt(hass.Hass):
 
 
                     # trial code for days = any
+
                     dow_slices = []
+                    index_dow = None
                     for week in range(1, days // 7 + 1):
                         start_dow_n = (pd.Timestamp.now(tz="UTC") - pd.Timedelta(days=7 * week)).normalize()
                         slice_n = dfx.loc[start_dow_n : start_dow_n + pd.Timedelta(hours=47, minutes=30)]
                         if len(slice_n) == 48:
                             dow_slices.append(slice_n.values)
+                            if index_dow is None:
+                                index_dow = slice_n.index  # capture the 7-days-ago index
+
+                    self.log(f">>> dow_slices count: {len(dow_slices)}, index_dow: {index_dow[0] if index_dow is not None else 'None'}")
+
 
                     if dow_slices:
                         averaged = sum(dow_slices) / len(dow_slices)
-                        consumption_dow = pd.DataFrame(averaged, index=slice_n.index)
+                        consumption_dow = pd.DataFrame(averaged, index=index_dow)
                     else:
                         # fallback - should not happen if days >= 7
                         consumption_dow = pd.DataFrame(dfx.iloc[:48])
 
                     consumption_dow = consumption_dow * self.get_config("day_of_week_weighting")
-                    consumption_dow.columns = ["consumption_dow"]
-
-                    # shift forward exactly 7 days to align with today
-                    consumption_dow.index = consumption_dow.index + pd.Timedelta(days=7)
-
 
                     # self.log(f">>> consumption_dow index after shift: {consumption_dow.index[0]} to {consumption_dow.index[-1]}")
                     #  self.log(f">>> consumption_mean index: {consumption_mean.index[0]} to {consumption_mean.index[-1]}")
