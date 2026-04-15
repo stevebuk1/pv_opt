@@ -19,8 +19,7 @@ import pandas as pd
 import pvpy as pv
 from numpy import nan
 
-
-VERSION = "5.1.0-Beta-1"
+VERSION = "5.0.2-Beta-2"
 
 UNITS = {
     "current": "A",
@@ -2649,8 +2648,8 @@ class PVOpt(hass.Hass):
         self.t0 = pd.Timestamp.now()
         self.pv_system.static_flows = pd.DataFrame(
             index=pd.date_range(
-                pd.Timestamp.utcnow().normalize(),
-                pd.Timestamp.utcnow().normalize() + pd.Timedelta(days=2),
+                pd.Timestamp.now(tz="UTC").normalize(),
+                pd.Timestamp.now(tz="UTC").normalize() + pd.Timedelta(days=2),
                 freq="30min",
                 inclusive="left",
             ),
@@ -2665,8 +2664,8 @@ class PVOpt(hass.Hass):
             return
 
         consumption = self.load_consumption(
-            pd.Timestamp.utcnow().normalize(),
-            pd.Timestamp.utcnow().normalize() + pd.Timedelta(days=2),
+            pd.Timestamp.now(tz="UTC").normalize(),
+            pd.Timestamp.now(tz="UTC").normalize() + pd.Timedelta(days=2),
         )
 
         if consumption is None:
@@ -2675,7 +2674,7 @@ class PVOpt(hass.Hass):
             return
 
         self.pv_system.static_flows = pd.concat([solcast, consumption], axis=1)
-        self.time_now = pd.Timestamp.utcnow().floor("1min")
+        self.time_now = pd.Timestamp.now(tz="UTC").floor("1min")
 
         self.pv_system.static_flows = self.pv_system.static_flows[self.time_now.floor("30min") :].fillna(0)
         self.pv_system.static_flows.index = [self.time_now] + list(self.pv_system.static_flows.index[1:])
@@ -3474,7 +3473,7 @@ class PVOpt(hass.Hass):
 
             # End time is 30 minutes after the start time, unless partway through a slot
             # x["end"] = x.index.tz_convert(self.tz) + pd.Timedelta(30, "minutes")
-            x["end"] = x.index.tz_convert(self.tz) + pd.to_timedelta((x["dt_hours"] * 60), unit="m").round("min")
+            x["end"] = x.index.tz_convert(self.tz) + pd.to_timedelta((x["dt_hours"] * 60), unit="m").dt.round("min")
             x["soc"] = x["soc"].round(0).astype(int)
             x["soc_end"] = x["soc_end"].round(0).astype(int)
 
@@ -3501,7 +3500,7 @@ class PVOpt(hass.Hass):
             x = self.opt[self.opt["forced"] < 0].copy()
             x["start"] = x.index.tz_convert(self.tz)
             # x["end"] = x.index.tz_convert(self.tz) + pd.Timedelta(30, "minutes")
-            x["end"] = x.index.tz_convert(self.tz) + pd.to_timedelta((x["dt_hours"] * 60), unit="m").round("min")
+            x["end"] = x.index.tz_convert(self.tz) + pd.to_timedelta((x["dt_hours"] * 60), unit="m").dt.round("min")
 
             if self.debug and "W" in self.debug_cat:
                 self.log("")
@@ -3833,11 +3832,16 @@ class PVOpt(hass.Hass):
         )
 
     def _write_output(self):
-        if self.get_config("id_consumption_today") > 0:
-            unit_cost_today = round(
-                self._cost_actual().sum() / self.get_config("id_consumption_today"),
-                1,
-            )
+
+        if self.entity_exists(self.config["id_consumption_today"]):
+
+            if self.get_config("id_consumption_today") > 0:
+                unit_cost_today = round(
+                    self._cost_actual().sum() / self.get_config("id_consumption_today"),
+                    1,
+                )
+            else:
+                unit_cost_today = 0
         else:
             unit_cost_today = 0
 
@@ -4241,9 +4245,16 @@ class PVOpt(hass.Hass):
                         0,
                     )
                 )
-                self.log(
-                    f"  - Got {actual_days} days history from {entity_id} from {df.index[0].strftime(DATE_TIME_FORMAT_SHORT)} to {df.index[-1].strftime(DATE_TIME_FORMAT_SHORT)}"
-                )
+
+                if len(entity_ids) > 0:
+                    self.log(
+                        f"  - Got {actual_days} days history from {entity_ids} from {df.index[0].strftime(DATE_TIME_FORMAT_SHORT)} to {df.index[-1].strftime(DATE_TIME_FORMAT_SHORT)}"
+                    )
+                else:
+                    self.log(
+                        f"  - Got {actual_days} days history from {entity_id} from {df.index[0].strftime(DATE_TIME_FORMAT_SHORT)} to {df.index[-1].strftime(DATE_TIME_FORMAT_SHORT)}"
+                    )
+
             else:
                 actual_days = 0
                 self.log(f"  - Got no consumption history")
@@ -4323,20 +4334,34 @@ class PVOpt(hass.Hass):
 
                 if days >= 7:
 
-                    # Alternative way of finding data from a week ago, needs test
+                    dow_slices = []
+                    index_dow = None
+                    for week in range(1, days // 7 + 1):
+                        start_dow_n = (pd.Timestamp.now(tz="UTC") - pd.Timedelta(days=7 * week)).normalize()
+                        slice_n = dfx.loc[start_dow_n : start_dow_n + pd.Timedelta(hours=47, minutes=30)]
+                        if len(slice_n) == 48:
+                            dow_slices.append(slice_n.values)
+                            if index_dow is None:
+                                index_dow = slice_n.index  # capture the 7-days-ago index
 
-                    # start_last_week = pd.Timestamp.utcnow().floor("30min") - timedelta(days=7)
-                    # end_last_week = start_last_week + timedelta(days=2)
-                    # consumption_dow = self.get_config("day_of_week_weighting") * dfx.iloc[start_last_week, end_last_week]
+                    self.log(f">>> dow_slices count: {len(dow_slices)}, index_dow: {index_dow[0] if index_dow is not None else 'None'}")
 
-                    # this line is aligned to time now
-                    # dfx is index of time and date, 7 days long.
-                    # it does not extract the correct day if days >7, as it just selects the first 2 days.
-                    consumption_dow = pd.DataFrame(self.get_config("day_of_week_weighting") * dfx.iloc[: len(temp)])
+
+                    if dow_slices:
+                        averaged = sum(dow_slices) / len(dow_slices)
+                        consumption_dow = pd.DataFrame(averaged, index=index_dow)
+                    else:
+                        # fallback - should not happen if days >= 7
+                        consumption_dow = pd.DataFrame(dfx.iloc[:48])
+
+                    consumption_dow = consumption_dow * self.get_config("day_of_week_weighting")
                     consumption_dow.columns = ["consumption_dow"]
 
-                    # shift it forward by 7 days (only works if days = 7)
+                    # shift forward exactly 7 days to align with today
                     consumption_dow.index = consumption_dow.index + pd.Timedelta(days=7)
+
+                    # self.log(f">>> consumption_dow index after shift: {consumption_dow.index[0]} to {consumption_dow.index[-1]}")
+                    #  self.log(f">>> consumption_mean index: {consumption_mean.index[0]} to {consumption_mean.index[-1]}")
 
                     # Add extra entries to consumption_dow so it starts at midnight, then remove time column and change Nans to 0 (they are in the past)
                     consumption_dow2 = pd.concat([temp, consumption_dow], axis=1).drop(["time"], axis=1).fillna(0)
