@@ -214,8 +214,8 @@ pv_opt:
   # Uncomment the next two entries if using this integration. 
 
   # inverter_type: SOLIS_SOLAX_MODBUS
-  device_name: solis_inverter
-  hmi_firmware_fb00_plus: True
+  # device_name: solis_inverter
+  # hmi_firmware_fb00_plus: True
 
   # battery_voltage: sensor.{device_name}_battery_voltage
   # update_cycle_seconds: 15
