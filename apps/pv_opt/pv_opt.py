@@ -4289,28 +4289,6 @@ class PVOpt(hass.Hass):
 
                 if days >= 7:
 
-                    # Alternative way of finding data from a week ago, needs test
-                    # start_last_week = pd.Timestamp.utcnow().floor("30min") - timedelta(days=7)
-                    # end_last_week = start_last_week + timedelta(days=2)
-                    # consumption_dow = self.get_config("day_of_week_weighting") * dfx.iloc[start_last_week, end_last_week]
-
-                    #Code in 5.0.1, commented out:
-                    #consumption_dow = pd.DataFrame(self.get_config("day_of_week_weighting") * dfx.iloc[: len(temp)])
-                    #consumption_dow.columns = ["consumption_dow"]
-                    #consumption_dow.index = consumption_dow.index + pd.Timedelta(days=days)
-
-                    #trial code for days = 7, 14, 21: 
-                    #start_dow = (pd.Timestamp.now(tz="UTC") - pd.Timedelta(days=7)).normalize()
-                    #consumption_dow = pd.DataFrame(
-                    #self.get_config("day_of_week_weighting") * dfx.loc[start_dow : start_dow + pd.Timedelta(hours=47, minutes=30)]
-                    #)
-                    #consumption_dow.columns = ["consumption_dow"]
-                    # shift forward exactly 7 days to align with today
-                    #consumption_dow.index = consumption_dow.index + pd.Timedelta(days=7)
-
-
-                    # trial code for days = any
-
                     dow_slices = []
                     index_dow = None
                     for week in range(1, days // 7 + 1):
@@ -4332,6 +4310,10 @@ class PVOpt(hass.Hass):
                         consumption_dow = pd.DataFrame(dfx.iloc[:48])
 
                     consumption_dow = consumption_dow * self.get_config("day_of_week_weighting")
+                    consumption_dow.columns = ["consumption_dow"]
+
+                    # shift forward exactly 7 days to align with today
+                    consumption_dow.index = consumption_dow.index + pd.Timedelta(days=7)
 
                     # self.log(f">>> consumption_dow index after shift: {consumption_dow.index[0]} to {consumption_dow.index[-1]}")
                     #  self.log(f">>> consumption_mean index: {consumption_mean.index[0]} to {consumption_mean.index[-1]}")
