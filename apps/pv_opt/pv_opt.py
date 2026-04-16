@@ -4291,18 +4291,15 @@ class PVOpt(hass.Hass):
 
                     dow_slices = []
                     index_dow = None
+                    now_floor = pd.Timestamp.now(tz="UTC").floor("30min")
                     for week in range(1, days // 7 + 1):
-                        
-                        now_floor = pd.Timestamp.now(tz="UTC").floor("30min")
                         start_dow_n = now_floor - pd.Timedelta(days=7 * week)
                         slice_n = dfx.loc[start_dow_n : start_dow_n + pd.Timedelta(hours=47, minutes=30)].iloc[:48]
-                        # self.log(f">>> week={week}, start_dow_n={start_dow_n}, slice len={len(slice_n)}, first={slice_n.index[0] if len(slice_n) > 0 else 'empty'}")    
+                        
                         if len(slice_n) > 40:
                             dow_slices.append(slice_n.values)
                             if index_dow is None:
                                 index_dow = slice_n.index  # capture the 7-days-ago index
-
-                    # self.log(f">>> dow_slices count: {len(dow_slices)}, index_dow: {index_dow[0] if index_dow is not None else 'None'}")
 
                     if dow_slices:
                         averaged = sum(dow_slices) / len(dow_slices)
