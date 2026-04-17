@@ -13,7 +13,7 @@ import pandas as pd
 import pvpy as pv
 from numpy import nan
 
-VERSION = "5.0.2-Beta-2"
+VERSION = "5.0.2-Beta-3"
 
 UNITS = {
     "current": "A",
@@ -3423,11 +3423,17 @@ class PVOpt(hass.Hass):
 
         tolerance = self.get_config("forced_power_group_tolerance")
 
-        # Increment "period" if charge power varies by more than half the power tolerance OR non-contiguous car slot detected (when charge power = 0).
+        # Increment "period" if 
+        #    charge power varies by more than half the power tolerance 
+        #    OR non-contiguous car slot detected (when charge power = 0).
+        #    OR cross from 0 to positive/negative value (otherwise windows of very low values will get joined together). 
+        
+        forced_diff = self.opt["forced"].diff()
 
         self.opt["period"] = (
-            (self.opt["forced"].diff().abs() > (tolerance / 2))
-            | ((self.opt["carslot"].diff() > 0) & (self.opt["forced"] == 0))
+            (forced_diff.abs() > (tolerance / 2))                          # significant power change
+            | ((forced_diff != 0) & ((self.opt["forced"] == 0) | (self.opt["forced"].shift() == 0)))  # any transition to/from zero
+            | ((self.opt["carslot"].diff() > 0) & (self.opt["forced"] == 0))  # new car slot with no charge
         ).cumsum()
 
         if self.debug and "O" in self.debug_cat:
