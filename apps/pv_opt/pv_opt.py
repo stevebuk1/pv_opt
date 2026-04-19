@@ -4299,6 +4299,15 @@ class PVOpt(hass.Hass):
                     df = self._subtract_zappi_from_grid(ev_power, df)
 
                 # Add consumption margin
+
+                df_no_margin = df.copy()  # <-- ADD THIS
+
+                # Log historical daily consumption
+                daily_totals = df_no_margin.groupby(df_no_margin.index.date).sum() / 2000
+                self.log(f"  - Historical consumption per day ({actual_days} days):")
+                for date, total in daily_totals.items():
+                    self.log(f"      {date}: {total:0.1f} kWh")
+
                 df = df * (1 + self.get_config("consumption_margin") / 100)
                 if self.debug and "Q" in self.debug_cat:
                     self.log("Df after adding consumption margin is.......")
@@ -4387,6 +4396,14 @@ class PVOpt(hass.Hass):
                     if self.debug and "P" in self.debug_cat:
                         self.log(">>> Consumption New:")
                         self.log(f">>> {consumption_new.to_string()}")
+
+                    consumption_margin_factor = 1 + self.get_config("consumption_margin") / 100
+                    forecast_pre_margin = consumption_new["total"] / consumption_margin_factor
+                    forecast_daily = forecast_pre_margin.groupby(forecast_pre_margin.index.date).sum() / 2000
+                    self.log(f"  - Forecast consumption per day (weighted, pre-margin):")
+                    for date, total in forecast_daily.items():
+                        self.log(f"      {date}: {total:0.1f} kWh")
+
 
                     consumption["consumption"] += pd.Series(
                         consumption_new["total"].to_numpy(), index=consumption_mean.index
