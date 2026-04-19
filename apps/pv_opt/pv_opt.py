@@ -19,7 +19,7 @@ import pandas as pd
 import pvpy as pv
 from numpy import nan
 
-VERSION = "5.1.0-Beta-1"
+VERSION = "5.1.2-Beta-2"
 
 UNITS = {
     "current": "A",
@@ -3443,11 +3443,17 @@ class PVOpt(hass.Hass):
 
         tolerance = self.get_config("forced_power_group_tolerance")
 
-        # Increment "period" if charge power varies by more than half the power tolerance OR non-contiguous car slot detected (when charge power = 0).
+        # Increment "period" if 
+        #    charge power varies by more than half the power tolerance 
+        #    OR non-contiguous car slot detected (when charge power = 0).
+        #    OR cross from 0 to positive/negative value (otherwise windows of very low values will get joined together). 
+        
+        forced_diff = self.opt["forced"].diff()
 
         self.opt["period"] = (
-            (self.opt["forced"].diff().abs() > (tolerance / 2))
-            | ((self.opt["carslot"].diff() > 0) & (self.opt["forced"] == 0))
+            (forced_diff.abs() > (tolerance / 2))                          # significant power change
+            | ((forced_diff != 0) & ((self.opt["forced"] == 0) | (self.opt["forced"].shift() == 0)))  # any transition to/from zero
+            | ((self.opt["carslot"].diff() > 0) & (self.opt["forced"] == 0))  # new car slot with no charge
         ).cumsum()
 
         if self.debug and "O" in self.debug_cat:
@@ -4336,16 +4342,15 @@ class PVOpt(hass.Hass):
 
                     dow_slices = []
                     index_dow = None
+                    now_floor = pd.Timestamp.now(tz="UTC").floor("30min")
                     for week in range(1, days // 7 + 1):
-                        start_dow_n = (pd.Timestamp.now(tz="UTC") - pd.Timedelta(days=7 * week)).normalize()
-                        slice_n = dfx.loc[start_dow_n : start_dow_n + pd.Timedelta(hours=47, minutes=30)]
-                        if len(slice_n) == 48:
+                        start_dow_n = now_floor - pd.Timedelta(days=7 * week)
+                        slice_n = dfx.loc[start_dow_n : start_dow_n + pd.Timedelta(hours=47, minutes=30)].iloc[:48]
+                        
+                        if len(slice_n) > 40:
                             dow_slices.append(slice_n.values)
                             if index_dow is None:
                                 index_dow = slice_n.index  # capture the 7-days-ago index
-
-                    self.log(f">>> dow_slices count: {len(dow_slices)}, index_dow: {index_dow[0] if index_dow is not None else 'None'}")
-
 
                     if dow_slices:
                         averaged = sum(dow_slices) / len(dow_slices)
