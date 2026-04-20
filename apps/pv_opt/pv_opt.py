@@ -19,7 +19,7 @@ import pandas as pd
 import pvpy as pv
 from numpy import nan
 
-VERSION = "5.1.2-Beta-2"
+VERSION = "5.1.2-Beta-3"
 
 UNITS = {
     "current": "A",
@@ -5005,7 +5005,7 @@ class PVOpt(hass.Hass):
                 self.call_service("select/select_option", entity_id=entity_id, option=state)
                 self.rlog(f"Setting {entity_id} to {state}")
 
-    def get_state_retry(self, *args, **kwargs):
+    def get_state_retry(self, *args, allow_none=False, **kwargs):
         retries = 0
         state = None
 
@@ -5013,11 +5013,14 @@ class PVOpt(hass.Hass):
 
         while not valid_state and retries < GET_STATE_RETRIES:
             state = self.get_state(*args, **kwargs)
-            valid_state = (
-                (("attribute" in kwargs) and (isinstance(state, dict)))
-                or (state not in ["unknown", "unavailable", "", None, nan])
-                or (len(args) == 1)
-            )
+            if allow_none:
+                valid_state = True
+            else:
+                valid_state = (
+                    (("attribute" in kwargs) and (isinstance(state, dict)))
+                    or (state not in ["unknown", "unavailable", "", None, nan])
+                    or (len(args) == 1)
+                )
 
             if not valid_state:
                 retries += 1

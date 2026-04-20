@@ -179,8 +179,8 @@ class InverterController:
             retries += 1
             time.sleep(1)
             self.log(f"Checking for {entity_id} to be empty")
-            content = self._host.get_state_retry(entity_id=entity_id)
-            empty = content == None
+            content = self._host.get_state_retry(entity_id=entity_id, allow_none=True)
+            empty = content in [None, ""]
 
     def enable_timed_mode(self):
         self.log("Entered enable_timed_mode")
