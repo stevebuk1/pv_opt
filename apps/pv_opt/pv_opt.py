@@ -4300,13 +4300,17 @@ class PVOpt(hass.Hass):
 
                 # Add consumption margin
 
-                df_no_margin = df.copy()  # <-- ADD THIS
+                df_no_margin = df.copy() 
 
-                # Log historical daily consumption
+                # Log historical daily consumption - skip partial first day
                 daily_totals = df_no_margin.groupby(df_no_margin.index.date).sum() / 2000
-                self.log(f"  - Historical consumption per day ({actual_days} days):")
+                daily_counts = df_no_margin.groupby(df_no_margin.index.date).count()
+                self.log(f"  - Historical house consumption per day ({actual_days} days):")
                 for date, total in daily_totals.items():
-                    self.log(f"      {date}: {total:0.1f} kWh")
+                    if daily_counts.loc[date] >= 48:  # only log complete days (48 x 30min slots)
+                        self.log(f"      {pd.Timestamp(date).strftime('%d-%b-%Y')} ({pd.Timestamp(date).strftime('%a')}): {total:0.1f} kWh")
+                    else:
+                        self.log(f"      {pd.Timestamp(date).strftime('%d-%b-%Y')} ({pd.Timestamp(date).strftime('%a')}): {total:0.1f} kWh  (partial day - {daily_counts.loc[date]} slots)")
 
                 df = df * (1 + self.get_config("consumption_margin") / 100)
                 if self.debug and "Q" in self.debug_cat:
@@ -4397,13 +4401,27 @@ class PVOpt(hass.Hass):
                         self.log(">>> Consumption New:")
                         self.log(f">>> {consumption_new.to_string()}")
 
+                    # Log forecast (pre-margin) daily totals - actuals so far + forecast for remainder
                     consumption_margin_factor = 1 + self.get_config("consumption_margin") / 100
                     forecast_pre_margin = consumption_new["total"] / consumption_margin_factor
-                    forecast_daily = forecast_pre_margin.groupby(forecast_pre_margin.index.date).sum() / 2000
-                    self.log(f"  - Forecast consumption per day (weighted, pre-margin):")
-                    for date, total in forecast_daily.items():
-                        self.log(f"      {date}: {total:0.1f} kWh")
 
+                    now_floor = pd.Timestamp.now(tz="UTC").floor("30min")
+                    today = now_floor.date()
+
+                    # Actual consumption so far today from raw history
+                    actual_today = df_no_margin[df_no_margin.index.date == today].sum() / 2000
+
+                    # Forecast for remaining slots today (from now onwards)
+                    forecast_today_remaining = forecast_pre_margin[forecast_pre_margin.index >= now_floor]
+                    forecast_today_remaining = forecast_today_remaining[forecast_today_remaining.index.date == today].sum() / 2000
+
+                    # Tomorrow is pure forecast
+                    forecast_tomorrow = forecast_pre_margin[forecast_pre_margin.index.date > today].sum() / 2000
+                    tomorrow = (now_floor + pd.Timedelta(days=1)).date()
+
+                    self.log(f"  - Forecast consumption per day (weighted, pre-margin):")
+                    self.log(f"      {pd.Timestamp(today).strftime('%d-%b-%Y')} ({pd.Timestamp(today).strftime('%a')}): {actual_today + forecast_today_remaining:0.1f} kWh  ({actual_today:0.1f} kWh actual + {forecast_today_remaining:0.1f} kWh forecast)")
+                    self.log(f"      {pd.Timestamp(tomorrow).strftime('%d-%b-%Y')} ({pd.Timestamp(tomorrow).strftime('%a')}): {forecast_tomorrow:0.1f} kWh  (forecast)")
 
                     consumption["consumption"] += pd.Series(
                         consumption_new["total"].to_numpy(), index=consumption_mean.index
@@ -4444,17 +4462,6 @@ class PVOpt(hass.Hass):
             self.log("  - Consumption estimated OK")
 
         self.log("")
-
-        ### This next section prints a consumption based on two days worth, as predicted from the last 7 days
-        # What we want is a predicted consumption for the next day, so we can compare it to fixed consumption
-        # problems:
-        # Not sure where two days is created from  (as df is definitley one day)
-        # Each of the two days has different, so its not a straight double generated from the one day df
-
-        self.log(
-            f"    Total consumption from {consumption.index[0].strftime(DATE_TIME_FORMAT_SHORT)} to {consumption.index[-1].strftime(DATE_TIME_FORMAT_SHORT)}:"
-        )
-        self.log(f"    Total consumption: {(consumption['consumption'].sum() / 2000):0.1f} kWh")
 
         if self.debug and "P" in self.debug_cat:
             self.log("Printing final result of routine load_consumption.....")
