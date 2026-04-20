@@ -4358,9 +4358,9 @@ class PVOpt(hass.Hass):
                     now_floor = pd.Timestamp.now(tz="UTC").floor("30min")
                     for week in range(1, days // 7 + 1):
                         start_dow_n = now_floor - pd.Timedelta(days=7 * week)
-                        slice_n = dfx.loc[start_dow_n : start_dow_n + pd.Timedelta(hours=47, minutes=30)].iloc[:48]
+                        slice_n = dfx.loc[start_dow_n : start_dow_n + pd.Timedelta(hours=95, minutes=30)].iloc[:96]
                         
-                        if len(slice_n) > 40:
+                        if len(slice_n) > 80:
                             dow_slices.append(slice_n.values)
                             if index_dow is None:
                                 index_dow = slice_n.index  # capture the 7-days-ago index
@@ -4416,7 +4416,12 @@ class PVOpt(hass.Hass):
                     forecast_today_remaining = forecast_today_remaining[forecast_today_remaining.index.date == today].sum() / 2000
 
                     # Tomorrow is pure forecast
-                    forecast_tomorrow = forecast_pre_margin[forecast_pre_margin.index.date > today].sum() / 2000
+                    tomorrow_start = pd.Timestamp(today, tz="UTC") + pd.Timedelta(days=1)
+                    tomorrow_end = tomorrow_start + pd.Timedelta(hours=23, minutes=30)
+                    forecast_tomorrow = forecast_pre_margin[
+                        (forecast_pre_margin.index >= tomorrow_start) & (forecast_pre_margin.index <= tomorrow_end)
+                    ].sum() / 2000
+                    
                     tomorrow = (now_floor + pd.Timedelta(days=1)).date()
 
                     self.log(f"  - Forecast consumption per day (weighted, pre-margin):")
