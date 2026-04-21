@@ -143,6 +143,7 @@ class InverterController:
                 current_json = json.loads(current_state) if current_state not in [None, ""] else {}
             except (json.JSONDecodeError, TypeError):
                 self.log("Json decode or type error detected")
+                self.log(f"Current state = {current_state}")
                 current_json = {}
         else:
             self.log(f"Entity not detected, entity_id read was {entity_id}")
