@@ -228,7 +228,7 @@ class Tariff:
             return max([pd.Timestamp(x["valid_to"]) for x in self.unit])
 
     def to_df(self, start=None, end=None, **kwargs):
-        if self.host.debug and "T" in self.host.debug_cat:
+        if self.host.debug and "V" in self.host.debug_cat:
             self.log(f">>> {self.name}")
             self.log(f">>> Start: {start.strftime(TIME_FORMAT)} End: {end.strftime(TIME_FORMAT)}")
 

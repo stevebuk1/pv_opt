@@ -134,10 +134,18 @@ class InverterController:
         raise Exception(e)
 
     def _solarsynk_set_helper(self, **kwargs):
-        if self._host.get_config("id_control_helper") is not None:
+        entity_id = self._host.config.get("id_control_helper", None)
+        if entity_id is not None:
             self.log("About to read Json")
-            current_json = json.loads(self._host.get_config("id_control_helper"))
+            self._host.call_service("homeassistant/update_entity", entity_id=entity_id)
+            current_state = self._host.get_state(entity_id)
+            try:
+                current_json = json.loads(current_state) if current_state not in [None, ""] else {}
+            except (json.JSONDecodeError, TypeError):
+                self.log("Json decode or type error detected")
+                current_json = {}
         else:
+            self.log(f"Entity not detected, entity_id read was {entity_id}")
             current_json = {}
 
         # Convert numpy/pandas types to native Python types
@@ -164,14 +172,11 @@ class InverterController:
         updated_json = current_json | converted_kwargs
         new_json = json.dumps(updated_json)
 
-        # entity_id = self._host.config("id_control_helper")
-        self.log("About to get entity id")
-        entity_id = self._host.config.get("id_control_helper", None)
+        self.log(f"Setting SolarSynk input helper {entity_id} to {new_json}  (currently commented out)")
+        #  self._host.set_state(entity_id=entity_id, state=new_json)       
+        #  self._host.call_service("input_text/set_value", entity_id=entity_id, value=new_json)
 
-        self.log(f"Setting SolarSynk input helper {entity_id} to {new_json}")
-        #  self._host.set_state(entity_id=entity_id, state=new_json)
-
-        # Wait until text input helper is empty (i.e is written to the Cloud)
+        # Wait until text input helper is empty (i.e. value has been picked up and written to the Cloud)
         # Max wait time of 10 seconds
         empty = False
         retries = 0
@@ -179,7 +184,8 @@ class InverterController:
             retries += 1
             time.sleep(1)
             self.log(f"Checking for {entity_id} to be empty")
-            content = self._host.get_state_retry(entity_id=entity_id, allow_none=True)
+            self._host.call_service("homeassistant/update_entity", entity_id=entity_id)
+            content = self._host.get_state(entity_id)
             empty = content in [None, ""]
 
     def enable_timed_mode(self):
