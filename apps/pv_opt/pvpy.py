@@ -1455,7 +1455,9 @@ class PVsystemModel:
             df = df.set_index("Start")
             df = df.groupby(level=0).sum()
             self.log("")
-            self.log(f"Interim Slot Summary:\n{df.to_string()}")
+
+            if self.host.debug and "C" in self.host.debug_cat:
+                self.log(f"Interim Slot Summary:\n{df.to_string()}")
 
 
 # %%
