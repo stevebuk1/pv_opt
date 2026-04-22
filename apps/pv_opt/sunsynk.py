@@ -134,23 +134,29 @@ class InverterController:
         raise Exception(e)
 
     def _solarsynk_set_helper(self, **kwargs):
+    
         entity_id = self._host.config.get("id_control_helper", None)
         if entity_id is not None:
-            self.log("About to read Json")
+            self.log("About to read current helper state")
             self._host.call_service("homeassistant/update_entity", entity_id=entity_id)
             current_state = self._host.get_state(entity_id)
             try:
-                current_json = json.loads(current_state) if current_state not in [None, ""] else {}
-            except (json.JSONDecodeError, TypeError):
-                self.log("Json decode or type error detected")
-                self.log(f"Current state = {current_state}")
-                current_json = {}
+                # Parse existing v2# format back to dict to support FIFO merging
+                if current_state not in [None, ""] and current_state.startswith("v2#"):
+                    current_dict = dict(
+                        pair.split(":", 1) for pair in current_state[3:].split(";") if ":" in pair
+                    )
+                else:
+                    current_dict = {}
+            except Exception:
+                self.log("Error parsing current helper state, starting fresh")
+                self.log(f"Current state was set to {current_state}")
+                current_dict = {}
         else:
             self.log(f"Entity not detected, entity_id read was {entity_id}")
-            current_json = {}
+            current_dict = {}
 
         # Convert numpy/pandas types to native Python types
-
         converted_kwargs = {}
         for key, value in kwargs.items():
             if isinstance(value, (np.integer, np.int64)):
@@ -170,12 +176,12 @@ class InverterController:
             else:
                 converted_kwargs[key] = value
 
-        updated_json = current_json | converted_kwargs
-        new_json = json.dumps(updated_json)
+        # Merge pending settings with new ones and serialise to v2# format
+        updated_dict = current_dict | converted_kwargs
+        new_value = "v2#" + ";".join(f"{k}:{v}" for k, v in updated_dict.items())
 
-        self.log(f"Setting SolarSynk input helper {entity_id} to {new_json}  (currently commented out)")
-        #  self._host.set_state(entity_id=entity_id, state=new_json)       
-        #  self._host.call_service("input_text/set_value", entity_id=entity_id, value=new_json)
+        self.log(f"***Currently disabled *****  Setting SolarSynk input helper {entity_id} to {new_value}")
+        #  self._host.call_service("input_text/set_value", entity_id=entity_id, value=new_value)
 
         # Wait until text input helper is empty (i.e. value has been picked up and written to the Cloud)
         # Max wait time of 10 seconds
@@ -188,6 +194,7 @@ class InverterController:
             self._host.call_service("homeassistant/update_entity", entity_id=entity_id)
             content = self._host.get_state(entity_id)
             empty = content in [None, ""]
+
 
     def enable_timed_mode(self):
         self.log("Entered enable_timed_mode")
