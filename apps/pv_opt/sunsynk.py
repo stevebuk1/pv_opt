@@ -193,6 +193,7 @@ class InverterController:
             self.log(f"Checking for {entity_id} to be empty")
             self._host.call_service("homeassistant/update_entity", entity_id=entity_id)
             content = self._host.get_state(entity_id)
+            self.log(f"Value of helper is {content}")
             empty = content in [None, ""]
 
 
