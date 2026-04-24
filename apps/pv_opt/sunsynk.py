@@ -88,7 +88,6 @@ INVERTER_DEFS = {
         "brand_config": {
             "battery_voltage": "sensor.instantaneous_battery_i_o",
             "battery_current": "sensor.instantaneous_battery_i_o",
-            "inverter_serial": "",
             "json_work_mode": "sysWorkMode",
             "json_priority_load": "energyMode",
             "json_grid_charge": "sdChargeOn",
@@ -577,9 +576,9 @@ class SolarSunsynkInverter(SunsynkBaseInverter):
             dict: Settings data dict (e.g. sellTime1, cap1, time1on etc.)
                   Returns empty dict on failure.
         """
-        sn = self._brand_config.get("inverter_serial")
+        sn = self._inverter_sn
         if not sn:
-            self.log("inverter_serial not set in brand_config", level="ERROR")
+            self.log("inverter_sn not set in config.yaml", level="ERROR")
             return {}
 
         token = self._authenticate()
@@ -610,7 +609,7 @@ class SolarSunsynkInverter(SunsynkBaseInverter):
 
     def _set_inverter(self, **kwargs):
         converted = self._convert_kwargs(kwargs)
-        sn = self._brand_config.get("inverter_serial")
+        sn = self._inverter_sn
         self.log(
             f"Calling solar_sunsynk.set_solar_settings for inverter {sn} with {converted}"
         )
