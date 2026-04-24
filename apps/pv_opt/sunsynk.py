@@ -1,10 +1,17 @@
+import base64
+import hashlib
 import json
 import time
+from datetime import datetime, timedelta
 from abc import ABC, abstractmethod
 from time import sleep
 
 import numpy as np
 import pandas as pd
+import requests
+from cryptography.hazmat.primitives.asymmetric.padding import PKCS1v15
+from cryptography.hazmat.primitives.serialization import load_pem_public_key
+
 
 TIMEFORMAT = "%H:%M"
 
@@ -82,16 +89,6 @@ INVERTER_DEFS = {
             "battery_voltage": "sensor.instantaneous_battery_i_o",
             "battery_current": "sensor.instantaneous_battery_i_o",
             "inverter_serial": "",
-            "id_use_timer": "sensor.setting_average_state_of_charge_capacity",
-            "id_priority_load": "sensor.setting_average_state_of_charge_capacity",
-            "id_timed_charge_start": "sensor.setting_average_state_of_charge_capacity",
-            "id_timed_charge_end": "sensor.setting_average_state_of_charge_capacity",
-            "id_timed_charge_enable": "sensor.setting_average_state_of_charge_capacity",
-            "id_timed_charge_capacity": "sensor.setting_average_state_of_charge_capacity",
-            "id_timed_discharge_start": "sensor.setting_average_state_of_charge_capacity",
-            "id_timed_discharge_end": "sensor.setting_average_state_of_charge_capacity",
-            "id_timed_dicharge_enable": "sensor.setting_average_state_of_charge_capacity",
-            "id_timed_discharge_capacity": "sensor.setting_average_state_of_charge_capacity",
             "json_work_mode": "sysWorkMode",
             "json_priority_load": "energyMode",
             "json_grid_charge": "sdChargeOn",
@@ -260,40 +257,6 @@ class SunsynkBaseInverter(SunsynkInverterController):
     def hold_soc(self, enable, soc=None):
         pass
 
-    @property
-    def status(self):
-        time_now = pd.Timestamp.now(tz=self.tz)
-        charge_start = pd.Timestamp(self._host.get_config("id_timed_charge_start"), tz=self.tz)
-        charge_end = pd.Timestamp(self._host.get_config("id_timed_charge_end"), tz=self.tz)
-        discharge_start = pd.Timestamp(self._host.get_config("id_timed_discharge_start"), tz=self.tz)
-        discharge_end = pd.Timestamp(self._host.get_config("id_timed_discharge_end"), tz=self.tz)
-
-        return {
-            "timer mode": self._host.get_config("id_use_timer"),
-            "priority load": self._host.get_config("id_priority_load"),
-            "charge": {
-                "start": charge_start,
-                "end": charge_end,
-                "active": self._host.get_config("id_timed_charge_enable")
-                and (time_now >= charge_start)
-                and (time_now < charge_end),
-                "target_soc": self._host.get_config("id_timed_charge_target_soc"),
-            },
-            "discharge": {
-                "start": discharge_start,
-                "end": discharge_end,
-                "active": self._host.get_config("id_timed_discharge_enable")
-                and (time_now >= discharge_start)
-                and (time_now < discharge_end),
-                "target_soc": self._host.get_config("id_timed_discharge_target_soc"),
-            },
-            "hold_soc": {
-                "active": False,
-                "soc": 0.0,
-            },
-        }
-
-
 class SolarSynkV3Inverter(SunsynkBaseInverter):
     """Controller for the martinville/solarsynkv3 Home Assistant Add-On.
 
@@ -390,6 +353,40 @@ class SolarSynkV3Inverter(SunsynkBaseInverter):
                 self._brand_config["json_gen_discharge_enable"]: True,
             }
             self._set_inverter(**params)
+
+    @property
+    def status(self):
+        """Read current inverter status from HA entities exposed by the martinville/solarsynkv3 addon."""
+        time_now = pd.Timestamp.now(tz=self.tz)
+        charge_start = pd.Timestamp(self._host.get_config("id_timed_charge_start"), tz=self.tz)
+        charge_end = pd.Timestamp(self._host.get_config("id_timed_charge_end"), tz=self.tz)
+        discharge_start = pd.Timestamp(self._host.get_config("id_timed_discharge_start"), tz=self.tz)
+        discharge_end = pd.Timestamp(self._host.get_config("id_timed_discharge_end"), tz=self.tz)
+
+        return {
+            "timer mode": self._host.get_config("id_use_timer"),
+            "priority load": self._host.get_config("id_priority_load"),
+            "charge": {
+                "start": charge_start,
+                "end": charge_end,
+                "active": self._host.get_config("id_timed_charge_enable")
+                and (time_now >= charge_start)
+                and (time_now < charge_end),
+                "target_soc": self._host.get_config("id_timed_charge_target_soc"),
+            },
+            "discharge": {
+                "start": discharge_start,
+                "end": discharge_end,
+                "active": self._host.get_config("id_timed_discharge_enable")
+                and (time_now >= discharge_start)
+                and (time_now < discharge_end),
+                "target_soc": self._host.get_config("id_timed_discharge_target_soc"),
+            },
+            "hold_soc": {
+                "active": False,
+                "soc": 0.0,
+            },
+        }
 
     def _set_inverter(self, **kwargs):
         converted = self._convert_kwargs(kwargs)
@@ -501,6 +498,116 @@ class SolarSunsynkInverter(SunsynkBaseInverter):
 
         self._set_inverter(**params)
 
+    def _authenticate(self) -> str:
+        """Authenticate with the Sunsynk API and return a Bearer token.
+
+        Uses RSA public key encryption for the password, matching the
+        authentication flow in the Solar-Sunsynk integration.
+
+        Returns:
+            str: Bearer token on success, empty string on failure.
+        """
+        base_url = "https://api.sunsynk.net"
+        username = self._host.get_config("sunsynk_username")
+        password = self._host.get_config("sunsynk_password")
+
+        if not username or not password:
+            self.log("sunsynk_username or sunsynk_password not set in config", level="ERROR")
+            return ""
+
+        try:
+            # Fetch RSA public key
+            nonce = str(int(time.time() * 1000))
+            sign = hashlib.md5(f"nonce={nonce}&source=sunsynkPOWER_VIEW".encode()).hexdigest()
+            resp = requests.get(
+                f"{base_url}/anonymous/publicKey",
+                params={"source": "sunsynk", "nonce": nonce, "sign": sign},
+                timeout=10,
+            )
+            resp.raise_for_status()
+            public_key_string = str(resp.json()["data"])
+
+            # Encrypt password with RSA public key
+            pem = (
+                "-----BEGIN PUBLIC KEY-----\n"
+                + public_key_string
+                + "\n-----END PUBLIC KEY-----"
+            )
+            public_key = load_pem_public_key(pem.encode())
+            encrypted_password = base64.b64encode(
+                public_key.encrypt(password.encode(), PKCS1v15())
+            ).decode()
+
+            # Obtain Bearer token
+            token_nonce = str(int(time.time() * 1000))
+            token_sign = hashlib.md5(
+                f"nonce={token_nonce}&source=sunsynk{public_key_string[:10]}".encode()
+            ).hexdigest()
+
+            resp = requests.post(
+                f"{base_url}/oauth/token/new",
+                json={
+                    "client_id": "csp-web",
+                    "grant_type": "password",
+                    "password": encrypted_password,
+                    "source": "sunsynk",
+                    "username": username,
+                    "nonce": token_nonce,
+                    "sign": token_sign,
+                },
+                timeout=10,
+            )
+            resp.raise_for_status()
+            resp_json = resp.json()
+
+            if resp_json.get("msg") != "Success":
+                self.log(f"Sunsynk authentication failed: {resp_json.get('msg')}", level="ERROR")
+                return ""
+
+            return str(resp_json["data"]["access_token"])
+
+        except Exception as e:
+            self.log(f"Sunsynk authentication error: {e}", level="ERROR")
+            return ""
+
+    def _get_inverter_settings(self) -> dict:
+        """Fetch current inverter settings directly from the Sunsynk cloud API.
+
+        Returns:
+            dict: Settings data dict (e.g. sellTime1, cap1, time1on etc.)
+                  Returns empty dict on failure.
+        """
+        sn = self._brand_config.get("inverter_serial")
+        if not sn:
+            self.log("inverter_serial not set in brand_config", level="ERROR")
+            return {}
+
+        token = self._authenticate()
+        if not token:
+            return {}
+
+        try:
+            resp = requests.get(
+                f"https://api.sunsynk.net/api/v1/common/setting/{sn}/read",
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Content-Type": "application/json",
+                },
+                timeout=10,
+            )
+            resp.raise_for_status()
+            resp_json = resp.json()
+
+            if resp_json.get("msg") != "Success":
+                self.log(f"Sunsynk settings fetch failed: {resp_json.get('msg')}", level="ERROR")
+                return {}
+
+            return resp_json.get("data", {})
+
+        except Exception as e:
+            self.log(f"Sunsynk settings fetch error: {e}", level="ERROR")
+            return {}
+
     def _set_inverter(self, **kwargs):
         converted = self._convert_kwargs(kwargs)
         sn = self._brand_config.get("inverter_serial")
@@ -512,6 +619,63 @@ class SolarSunsynkInverter(SunsynkBaseInverter):
             sn=sn,
             **converted,
         )
+
+    @property
+    def status(self):
+        """Read current inverter status directly from the Sunsynk cloud API."""
+        time_now = pd.Timestamp.now(tz=self.tz)
+        bc = self._brand_config
+
+        self.log("Fetching inverter settings from Sunsynk API for status check")
+        settings = self._get_inverter_settings()
+
+        if not settings:
+            self.log("Unable to fetch inverter settings — returning empty status", level="WARNING")
+            return None
+
+        def _parse_time(t):
+            try:
+                return pd.Timestamp(
+                    f"{pd.Timestamp.now(tz=self.tz).date()} {t}", tz=self.tz
+                )
+            except Exception:
+                return None
+
+        charge_start   = _parse_time(settings.get(bc["json_timed_charge_start"], "00:00"))
+        charge_end     = _parse_time(settings.get(bc["json_timed_charge_end"], "00:00"))
+        discharge_start = _parse_time(settings.get(bc["json_timed_discharge_start"], "00:00"))
+        discharge_end   = _parse_time(settings.get(bc["json_timed_discharge_end"], "00:00"))
+        charge_enable   = settings.get(bc["json_timed_charge_enable"], False)
+        discharge_enable = settings.get(bc["json_timed_discharge_enable"], False)
+
+        return {
+            "timer mode": settings.get(bc["json_use_timer"]),
+            "priority load": settings.get(bc["json_priority_load"]),
+            "charge": {
+                "start": charge_start,
+                "end": charge_end,
+                "active": charge_enable
+                and charge_start is not None
+                and charge_end is not None
+                and (time_now >= charge_start)
+                and (time_now < charge_end),
+                "target_soc": settings.get(bc["json_timed_charge_target_soc"]),
+            },
+            "discharge": {
+                "start": discharge_start,
+                "end": discharge_end,
+                "active": discharge_enable
+                and discharge_start is not None
+                and discharge_end is not None
+                and (time_now >= discharge_start)
+                and (time_now < discharge_end),
+                "target_soc": settings.get(bc["json_timed_discharge_target_soc"]),
+            },
+            "hold_soc": {
+                "active": False,
+                "soc": 0.0,
+            },
+        }
 
 
 # Legacy compatibility: InverterController is kept as an alias so any existing
