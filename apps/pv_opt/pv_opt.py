@@ -5062,16 +5062,34 @@ if __name__ == "__main__":
     import asyncio
     import json
     import logging
+    import logging.handlers
     import os
     import sys
 
     import yaml
 
+    LOG_FORMAT = "%(asctime)s  %(levelname)-8s %(message)s"
+    LOG_DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
+
+    # ── Console handler (captured by HA Supervisor → Add-On Log tab) ─────────
     logging.basicConfig(
         level=logging.INFO,
-        format="%(asctime)s  %(levelname)-8s %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
+        format=LOG_FORMAT,
+        datefmt=LOG_DATE_FORMAT,
     )
+
+    # ── Persistent file handler (/data survives Add-On restarts) ─────────────
+    LOG_FILE = "/data/pv_opt.log"
+    os.makedirs("/data", exist_ok=True)
+    file_handler = logging.handlers.RotatingFileHandler(
+        LOG_FILE,
+        maxBytes=5 * 1024 * 1024,   # 5 MB per file
+        backupCount=3,               # keep pv_opt.log + 3 rotated copies
+        encoding="utf-8",
+    )
+    file_handler.setFormatter(logging.Formatter(fmt=LOG_FORMAT, datefmt=LOG_DATE_FORMAT))
+    logging.getLogger().addHandler(file_handler)
+    logging.info(f"Logging to file: {LOG_FILE}")
 
     # ── Load Add-On UI options (MQTT credentials, log level, etc.) ────────────
     OPTIONS_FILE = "/data/options.json"
