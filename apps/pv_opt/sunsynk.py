@@ -680,14 +680,39 @@ class SolarSunsynkInverter(SunsynkBaseInverter):
 # Legacy compatibility: InverterController is kept as an alias so any existing
 # code that instantiates InverterController directly continues to work.
 # New code should use create_inverter_controller() instead.
-class InverterController(SunsynkBaseInverter):
-    """Legacy entry point — delegates to SunsynkBaseInverter.
+class InverterController(SunsynkInverterController):
+    """Legacy entry point — wraps the correct subclass for the inverter type."""
 
-    Use create_inverter_controller() for new integrations.
-    """
+    def __init__(self, inverter_type: str, host) -> None:
+        self._delegate = create_inverter_controller(inverter_type=inverter_type, host=host)
+        super().__init__(inverter_type=inverter_type, host=host)
 
     def _set_inverter(self, **kwargs):
-        if self._type == "SUNSYNK_SOLARSUNSYNK":
-            SolarSunsynkInverter._set_inverter(self, **kwargs)
-        else:
-            SolarSynkV3Inverter._set_inverter(self, **kwargs)
+        self._delegate._set_inverter(**kwargs)
+
+    def enable_timed_mode(self):
+        self._delegate.enable_timed_mode()
+
+    def control_charge(self, enable, **kwargs):
+        self._delegate.control_charge(enable, **kwargs)
+
+    def control_discharge(self, enable, **kwargs):
+        self._delegate.control_discharge(enable, **kwargs)
+
+    def hold_soc(self, enable, soc=None):
+        self._delegate.hold_soc(enable, soc=soc)
+
+    @property
+    def status(self):
+        return self._delegate.status
+
+    @property
+    def is_online(self):
+        return self._delegate.is_online
+
+    @property
+    def timed_mode(self):
+        return self._delegate.timed_mode
+
+    def clear_hold_status(self):
+        self._delegate.clear_hold_status()

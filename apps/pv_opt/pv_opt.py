@@ -1354,8 +1354,8 @@ class PVOpt(hass.Hass):
         if self.inverter_type in INVERTER_TYPES:
             inverter_brand = self.inverter_type.split("_")[0].lower()
             self.log(f"Inverter type: {self.inverter_type}: inverter module: {inverter_brand}.py")
-            if inverter_brand == "solis":
-                # for now only Solis uses the new setup
+            if inverter_brand in ("solis", "sunsynk"):
+                # for now Solis and Sunsynk use the new setup
                 create_inverter_controller = importName(f"{inverter_brand}", "create_inverter_controller")
                 self.inverter = create_inverter_controller(inverter_type=self.inverter_type, host=self)
             else:
