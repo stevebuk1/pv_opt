@@ -5078,9 +5078,12 @@ if __name__ == "__main__":
         datefmt=LOG_DATE_FORMAT,
     )
 
-    # ── Persistent file handler (/data survives Add-On restarts) ─────────────
-    LOG_FILE = "/data/pv_opt.log"
-    os.makedirs("/data", exist_ok=True)
+    # ── Persistent file handlers (/config/pv_opt mirrors AppDaemon log location) ─
+    PV_OPT_DIR = "/config/pv_opt"
+    os.makedirs(PV_OPT_DIR, exist_ok=True)
+
+    # Main log — all levels
+    LOG_FILE = f"{PV_OPT_DIR}/pv_opt.log"
     file_handler = logging.handlers.RotatingFileHandler(
         LOG_FILE,
         maxBytes=5 * 1024 * 1024,   # 5 MB per file
@@ -5089,9 +5092,22 @@ if __name__ == "__main__":
     )
     file_handler.setFormatter(logging.Formatter(fmt=LOG_FORMAT, datefmt=LOG_DATE_FORMAT))
     logging.getLogger().addHandler(file_handler)
-    logging.info(f"Logging to file: {LOG_FILE}")
 
-    # ── Load Add-On UI options (MQTT credentials, log level, etc.) ────────────
+    # Error log — WARNING and above only (mirrors AppDaemon's error.log)
+    ERROR_LOG_FILE = f"{PV_OPT_DIR}/error.log"
+    error_handler = logging.handlers.RotatingFileHandler(
+        ERROR_LOG_FILE,
+        maxBytes=1 * 1024 * 1024,   # 1 MB per file
+        backupCount=3,
+        encoding="utf-8",
+    )
+    error_handler.setLevel(logging.WARNING)
+    error_handler.setFormatter(logging.Formatter(fmt=LOG_FORMAT, datefmt=LOG_DATE_FORMAT))
+    logging.getLogger().addHandler(error_handler)
+
+    logging.info(f"Logging to {LOG_FILE} and {ERROR_LOG_FILE}")
+
+    # ── Load Add-On UI options (MQTT credentials, log level, etc.) ─────────
     OPTIONS_FILE = "/data/options.json"
     if not os.path.exists(OPTIONS_FILE):
         logging.warning(f"{OPTIONS_FILE} not found — using empty Add-On options")
@@ -5100,15 +5116,16 @@ if __name__ == "__main__":
         with open(OPTIONS_FILE) as f:
             addon_options = json.load(f)
 
-    # ── Load pv_opt config.yaml (the main app configuration) ─────────────────
-    # Default location mirrors the AppDaemon path inside the container.
-    # Users can override by setting config_path in the Add-On UI.
-    CONFIG_FILE = addon_options.get("config_path", "/config/pv_opt/config.yaml")
+    # ── Load pv_opt config.yaml (the main app configuration) ─────────────
+    # Defaults to /config/pv_opt/config.yaml — written by run.sh on first start.
+    # Users can find and edit this via the HA File Editor, consistent with
+    # where AppDaemon stores its files.
+    # Override by setting config_path in the Add-On UI if needed.
+    CONFIG_FILE = addon_options.get("config_path", f"{PV_OPT_DIR}/config.yaml")
     if not os.path.exists(CONFIG_FILE):
         logging.warning(
             f"pv_opt config.yaml not found at {CONFIG_FILE} — "
-            f"running with Add-On UI options only. "
-            f"Copy your config.yaml to {CONFIG_FILE} to configure pv_opt."
+            f"running with Add-On UI options only."
         )
         pv_opt_config = {}
     else:
@@ -5134,3 +5151,4 @@ if __name__ == "__main__":
     asyncio.run(app._run())
 
 # %%
+
