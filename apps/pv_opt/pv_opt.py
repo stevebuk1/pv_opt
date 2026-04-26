@@ -9,10 +9,12 @@ try:
     import appdaemon.adbase as ad
     import appdaemon.plugins.hass.hassapi as hass
     import appdaemon.plugins.mqtt.mqttapi as mqtt
+
     APPDAEMON = True
 except ImportError:
     import ha_interface.ha_interface as ad
     import ha_interface.ha_interface as hass
+
     APPDAEMON = False
 import numpy as np
 import pandas as pd
@@ -3443,16 +3445,18 @@ class PVOpt(hass.Hass):
 
         tolerance = self.get_config("forced_power_group_tolerance")
 
-        # Increment "period" if 
-        #    charge power varies by more than half the power tolerance 
+        # Increment "period" if
+        #    charge power varies by more than half the power tolerance
         #    OR non-contiguous car slot detected (when charge power = 0).
-        #    OR cross from 0 to positive/negative value (otherwise windows of very low values will get joined together). 
-        
+        #    OR cross from 0 to positive/negative value (otherwise windows of very low values will get joined together).
+
         forced_diff = self.opt["forced"].diff()
 
         self.opt["period"] = (
-            (forced_diff.abs() > (tolerance / 2))                          # significant power change
-            | ((forced_diff != 0) & ((self.opt["forced"] == 0) | (self.opt["forced"].shift() == 0)))  # any transition to/from zero
+            (forced_diff.abs() > (tolerance / 2))  # significant power change
+            | (
+                (forced_diff != 0) & ((self.opt["forced"] == 0) | (self.opt["forced"].shift() == 0))
+            )  # any transition to/from zero
             | ((self.opt["carslot"].diff() > 0) & (self.opt["forced"] == 0))  # new car slot with no charge
         ).cumsum()
 
@@ -4300,7 +4304,7 @@ class PVOpt(hass.Hass):
 
                 # Add consumption margin
 
-                df_no_margin = df.copy() 
+                df_no_margin = df.copy()
 
                 # Log historical daily consumption - skip partial first day
                 daily_totals = df_no_margin.groupby(df_no_margin.index.date).sum() / 2000
@@ -4308,9 +4312,13 @@ class PVOpt(hass.Hass):
                 self.log(f"  - Historical house consumption per day ({actual_days} days):")
                 for date, total in daily_totals.items():
                     if daily_counts.loc[date] >= 48:  # only log complete days (48 x 30min slots)
-                        self.log(f"      {pd.Timestamp(date).strftime('%d-%b-%Y')} ({pd.Timestamp(date).strftime('%a')}): {total:0.1f} kWh")
+                        self.log(
+                            f"      {pd.Timestamp(date).strftime('%d-%b-%Y')} ({pd.Timestamp(date).strftime('%a')}): {total:0.1f} kWh"
+                        )
                     else:
-                        self.log(f"      {pd.Timestamp(date).strftime('%d-%b-%Y')} ({pd.Timestamp(date).strftime('%a')}): {total:0.1f} kWh  (partial day - {daily_counts.loc[date]} slots)")
+                        self.log(
+                            f"      {pd.Timestamp(date).strftime('%d-%b-%Y')} ({pd.Timestamp(date).strftime('%a')}): {total:0.1f} kWh  (partial day - {daily_counts.loc[date]} slots)"
+                        )
 
                 df = df * (1 + self.get_config("consumption_margin") / 100)
                 if self.debug and "Q" in self.debug_cat:
@@ -4359,7 +4367,7 @@ class PVOpt(hass.Hass):
                     for week in range(1, days // 7 + 1):
                         start_dow_n = now_floor - pd.Timedelta(days=7 * week)
                         slice_n = dfx.loc[start_dow_n : start_dow_n + pd.Timedelta(hours=95, minutes=30)].iloc[:96]
-                        
+
                         if len(slice_n) > 80:
                             dow_slices.append(slice_n.values)
                             if index_dow is None:
@@ -4413,20 +4421,29 @@ class PVOpt(hass.Hass):
 
                     # Forecast for remaining slots today (from now onwards)
                     forecast_today_remaining = forecast_pre_margin[forecast_pre_margin.index >= now_floor]
-                    forecast_today_remaining = forecast_today_remaining[forecast_today_remaining.index.date == today].sum() / 2000
+                    forecast_today_remaining = (
+                        forecast_today_remaining[forecast_today_remaining.index.date == today].sum() / 2000
+                    )
 
                     # Tomorrow is pure forecast
                     tomorrow_start = pd.Timestamp(today, tz="UTC") + pd.Timedelta(days=1)
                     tomorrow_end = tomorrow_start + pd.Timedelta(hours=23, minutes=30)
-                    forecast_tomorrow = forecast_pre_margin[
-                        (forecast_pre_margin.index >= tomorrow_start) & (forecast_pre_margin.index <= tomorrow_end)
-                    ].sum() / 2000
-                    
+                    forecast_tomorrow = (
+                        forecast_pre_margin[
+                            (forecast_pre_margin.index >= tomorrow_start) & (forecast_pre_margin.index <= tomorrow_end)
+                        ].sum()
+                        / 2000
+                    )
+
                     tomorrow = (now_floor + pd.Timedelta(days=1)).date()
 
                     self.log(f"  - Forecast consumption per day (weighted, pre-margin):")
-                    self.log(f"      {pd.Timestamp(today).strftime('%d-%b-%Y')} ({pd.Timestamp(today).strftime('%a')}): {actual_today + forecast_today_remaining:0.1f} kWh  ({actual_today:0.1f} kWh actual + {forecast_today_remaining:0.1f} kWh forecast)")
-                    self.log(f"      {pd.Timestamp(tomorrow).strftime('%d-%b-%Y')} ({pd.Timestamp(tomorrow).strftime('%a')}): {forecast_tomorrow:0.1f} kWh  (forecast)")
+                    self.log(
+                        f"      {pd.Timestamp(today).strftime('%d-%b-%Y')} ({pd.Timestamp(today).strftime('%a')}): {actual_today + forecast_today_remaining:0.1f} kWh  ({actual_today:0.1f} kWh actual + {forecast_today_remaining:0.1f} kWh forecast)"
+                    )
+                    self.log(
+                        f"      {pd.Timestamp(tomorrow).strftime('%d-%b-%Y')} ({pd.Timestamp(tomorrow).strftime('%a')}): {forecast_tomorrow:0.1f} kWh  (forecast)"
+                    )
 
                     consumption["consumption"] += pd.Series(
                         consumption_new["total"].to_numpy(), index=consumption_mean.index
@@ -5058,6 +5075,7 @@ class PVOpt(hass.Hass):
         if item is not None:
             return DEFAULT_CONFIG[item]["default"]
 
+
 if __name__ == "__main__":
     import asyncio
     import json
@@ -5090,7 +5108,7 @@ if __name__ == "__main__":
     LOG_FILE = f"{PV_OPT_DIR}/pv_opt.log"
     file_handler = logging.handlers.RotatingFileHandler(
         LOG_FILE,
-        maxBytes=5 * 1024 * 1024,   # 5 MB per file
+        maxBytes=5 * 1024 * 1024,  # 5 MB per file
         backupCount=3,
         encoding="utf-8",
     )
@@ -5101,7 +5119,7 @@ if __name__ == "__main__":
     ERROR_LOG_FILE = f"{PV_OPT_DIR}/error.log"
     error_handler = logging.handlers.RotatingFileHandler(
         ERROR_LOG_FILE,
-        maxBytes=1 * 1024 * 1024,   # 1 MB per file
+        maxBytes=1 * 1024 * 1024,  # 1 MB per file
         backupCount=3,
         encoding="utf-8",
     )
@@ -5127,10 +5145,7 @@ if __name__ == "__main__":
     # Override by setting config_path in the Add-On UI if needed.
     CONFIG_FILE = addon_options.get("config_path", f"{PV_OPT_DIR}/config.yaml")
     if not os.path.exists(CONFIG_FILE):
-        logging.warning(
-            f"pv_opt config.yaml not found at {CONFIG_FILE} — "
-            f"running with Add-On UI options only."
-        )
+        logging.warning(f"pv_opt config.yaml not found at {CONFIG_FILE} — " f"running with Add-On UI options only.")
         pv_opt_config = {}
     else:
         with open(CONFIG_FILE) as f:
@@ -5153,4 +5168,3 @@ if __name__ == "__main__":
     asyncio.run(app._run())
 
 # %%
-

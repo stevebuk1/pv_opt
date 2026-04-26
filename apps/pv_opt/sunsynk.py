@@ -2,8 +2,8 @@ import base64
 import hashlib
 import json
 import time
-from datetime import datetime, timedelta
 from abc import ABC, abstractmethod
+from datetime import datetime, timedelta
 from time import sleep
 
 import numpy as np
@@ -11,7 +11,6 @@ import pandas as pd
 import requests
 from cryptography.hazmat.primitives.asymmetric.padding import PKCS1v15
 from cryptography.hazmat.primitives.serialization import load_pem_public_key
-
 
 TIMEFORMAT = "%H:%M"
 
@@ -256,6 +255,7 @@ class SunsynkBaseInverter(SunsynkInverterController):
     def hold_soc(self, enable, soc=None):
         pass
 
+
 class SolarSynkV3Inverter(SunsynkBaseInverter):
     """Controller for the martinville/solarsynkv3 Home Assistant Add-On.
 
@@ -275,9 +275,7 @@ class SolarSynkV3Inverter(SunsynkBaseInverter):
             params = {
                 self._brand_config["json_work_mode"]: 2,
                 self._brand_config["json_timed_charge_target_soc"]: kwargs.get("target_soc", 100),
-                self._brand_config["json_timed_charge_start"]: kwargs.get(
-                    "start", time_now.strftime(TIMEFORMAT)
-                ),
+                self._brand_config["json_timed_charge_start"]: kwargs.get("start", time_now.strftime(TIMEFORMAT)),
                 self._brand_config["json_timed_charge_end"]: kwargs.get(
                     "end", time_now.ceil("30min").strftime(TIMEFORMAT)
                 ),
@@ -300,9 +298,7 @@ class SolarSynkV3Inverter(SunsynkBaseInverter):
                 self._brand_config["json_timed_charge_target_soc"]: 100,
                 self._brand_config["json_timed_charge_start"]: "00:00",
                 self._brand_config["json_timed_charge_end"]: "00:00",
-                self._brand_config["json_charge_current"]: self._host.get_config(
-                    "battery_current_limit_amps"
-                ),
+                self._brand_config["json_charge_current"]: self._host.get_config("battery_current_limit_amps"),
             }
             self._set_inverter(**params)
 
@@ -321,9 +317,7 @@ class SolarSynkV3Inverter(SunsynkBaseInverter):
                 self._brand_config["json_timed_discharge_target_soc"]: kwargs.get(
                     "target_soc", self._host.get_config("maximum_dod_percent")
                 ),
-                self._brand_config["json_timed_discharge_start"]: kwargs.get(
-                    "start", time_now.strftime(TIMEFORMAT)
-                ),
+                self._brand_config["json_timed_discharge_start"]: kwargs.get("start", time_now.strftime(TIMEFORMAT)),
                 self._brand_config["json_timed_discharge_end"]: kwargs.get(
                     "end", time_now.ceil("30min").strftime(TIMEFORMAT)
                 ),
@@ -398,11 +392,7 @@ class SolarSynkV3Inverter(SunsynkBaseInverter):
             try:
                 # Parse any pending v2# settings already in the helper (FIFO merge)
                 if current_state not in [None, ""] and current_state.startswith("v2#"):
-                    current_dict = dict(
-                        pair.split(":", 1)
-                        for pair in current_state[3:].split(";")
-                        if ":" in pair
-                    )
+                    current_dict = dict(pair.split(":", 1) for pair in current_state[3:].split(";") if ":" in pair)
                 else:
                     current_dict = {}
             except Exception:
@@ -437,9 +427,7 @@ class SolarSunsynkInverter(SunsynkBaseInverter):
             params = {
                 self._brand_config["json_work_mode"]: 2,
                 self._brand_config["json_timed_charge_target_soc"]: kwargs.get("target_soc", 100),
-                self._brand_config["json_timed_charge_start"]: kwargs.get(
-                    "start", time_now.strftime(TIMEFORMAT)
-                ),
+                self._brand_config["json_timed_charge_start"]: kwargs.get("start", time_now.strftime(TIMEFORMAT)),
                 self._brand_config["json_timed_charge_end"]: kwargs.get(
                     "end", time_now.ceil("30min").strftime(TIMEFORMAT)
                 ),
@@ -456,9 +444,7 @@ class SolarSunsynkInverter(SunsynkBaseInverter):
                 self._brand_config["json_timed_charge_target_soc"]: 100,
                 self._brand_config["json_timed_charge_start"]: "00:00",
                 self._brand_config["json_timed_charge_end"]: "00:00",
-                self._brand_config["json_charge_current"]: self._host.get_config(
-                    "battery_current_limit_amps"
-                ),
+                self._brand_config["json_charge_current"]: self._host.get_config("battery_current_limit_amps"),
                 self._brand_config["json_timed_charge_enable"]: False,
                 self._brand_config["json_gen_charge_enable"]: True,
             }
@@ -474,9 +460,7 @@ class SolarSunsynkInverter(SunsynkBaseInverter):
                 self._brand_config["json_timed_discharge_target_soc"]: kwargs.get(
                     "target_soc", self._host.get_config("maximum_dod_percent")
                 ),
-                self._brand_config["json_timed_discharge_start"]: kwargs.get(
-                    "start", time_now.strftime(TIMEFORMAT)
-                ),
+                self._brand_config["json_timed_discharge_start"]: kwargs.get("start", time_now.strftime(TIMEFORMAT)),
                 self._brand_config["json_timed_discharge_end"]: kwargs.get(
                     "end", time_now.ceil("30min").strftime(TIMEFORMAT)
                 ),
@@ -527,15 +511,9 @@ class SolarSunsynkInverter(SunsynkBaseInverter):
             public_key_string = str(resp.json()["data"])
 
             # Encrypt password with RSA public key
-            pem = (
-                "-----BEGIN PUBLIC KEY-----\n"
-                + public_key_string
-                + "\n-----END PUBLIC KEY-----"
-            )
+            pem = "-----BEGIN PUBLIC KEY-----\n" + public_key_string + "\n-----END PUBLIC KEY-----"
             public_key = load_pem_public_key(pem.encode())
-            encrypted_password = base64.b64encode(
-                public_key.encrypt(password.encode(), PKCS1v15())
-            ).decode()
+            encrypted_password = base64.b64encode(public_key.encrypt(password.encode(), PKCS1v15())).decode()
 
             # Obtain Bearer token
             token_nonce = str(int(time.time() * 1000))
@@ -610,9 +588,7 @@ class SolarSunsynkInverter(SunsynkBaseInverter):
     def _set_inverter(self, **kwargs):
         converted = self._convert_kwargs(kwargs)
         sn = self._inverter_sn
-        self.log(
-            f"Calling solar_sunsynk.set_solar_settings for inverter {sn} with {converted}"
-        )
+        self.log(f"Calling solar_sunsynk.set_solar_settings for inverter {sn} with {converted}")
         self._host.call_service(
             "solar_sunsynk/set_solar_settings",
             sn=sn,
@@ -634,17 +610,15 @@ class SolarSunsynkInverter(SunsynkBaseInverter):
 
         def _parse_time(t):
             try:
-                return pd.Timestamp(
-                    f"{pd.Timestamp.now(tz=self.tz).date()} {t}", tz=self.tz
-                )
+                return pd.Timestamp(f"{pd.Timestamp.now(tz=self.tz).date()} {t}", tz=self.tz)
             except Exception:
                 return None
 
-        charge_start   = _parse_time(settings.get(bc["json_timed_charge_start"], "00:00"))
-        charge_end     = _parse_time(settings.get(bc["json_timed_charge_end"], "00:00"))
+        charge_start = _parse_time(settings.get(bc["json_timed_charge_start"], "00:00"))
+        charge_end = _parse_time(settings.get(bc["json_timed_charge_end"], "00:00"))
         discharge_start = _parse_time(settings.get(bc["json_timed_discharge_start"], "00:00"))
-        discharge_end   = _parse_time(settings.get(bc["json_timed_discharge_end"], "00:00"))
-        charge_enable   = settings.get(bc["json_timed_charge_enable"], False)
+        discharge_end = _parse_time(settings.get(bc["json_timed_discharge_end"], "00:00"))
+        charge_enable = settings.get(bc["json_timed_charge_enable"], False)
         discharge_enable = settings.get(bc["json_timed_discharge_enable"], False)
 
         return {
