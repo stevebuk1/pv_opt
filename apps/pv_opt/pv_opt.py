@@ -5066,6 +5066,10 @@ if __name__ == "__main__":
     import os
     import sys
 
+    # Ensure /app is on sys.path so importName() can find sunsynk.py,
+    # solis.py etc. when called from _load_inverter()
+    sys.path.insert(0, "/app")
+
     import yaml
 
     LOG_FORMAT = "%(asctime)s  %(levelname)-8s %(message)s"
@@ -5087,7 +5091,7 @@ if __name__ == "__main__":
     file_handler = logging.handlers.RotatingFileHandler(
         LOG_FILE,
         maxBytes=5 * 1024 * 1024,   # 5 MB per file
-        backupCount=3,               # keep pv_opt.log + 3 rotated copies
+        backupCount=3,
         encoding="utf-8",
     )
     file_handler.setFormatter(logging.Formatter(fmt=LOG_FORMAT, datefmt=LOG_DATE_FORMAT))
@@ -5142,8 +5146,6 @@ if __name__ == "__main__":
         logging.info(f"Loaded pv_opt config from {CONFIG_FILE}")
 
     # ── Merge: pv_opt config.yaml takes precedence over Add-On UI options ────
-    # Add-On UI options (MQTT, log_level, config_path) fill in anything not
-    # already set by config.yaml, so users never need to duplicate settings.
     options = {**addon_options, **pv_opt_config}
 
     app = PVOpt(options=options)
