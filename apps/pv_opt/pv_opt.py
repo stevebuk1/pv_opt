@@ -4392,7 +4392,8 @@ class PVOpt(hass.Hass):
                     #  self.log(f">>> consumption_mean index: {consumption_mean.index[0]} to {consumption_mean.index[-1]}")
 
                     # Add extra entries to consumption_dow so it starts at midnight, then remove time column and change Nans to 0 (they are in the past)
-                    consumption_dow2 = pd.concat([temp, consumption_dow], axis=1).drop(["time"], axis=1).fillna(0)
+                    consumption_dow2 = pd.concat([temp, consumption_dow], axis=1).drop(["time"], axis=1).fillna(0).infer_objects(copy=False)
+
 
                     # merge consumption_mean and consumption dow, then trim back to 48 hours long
                     consumption_new = consumption_dow2.merge(
