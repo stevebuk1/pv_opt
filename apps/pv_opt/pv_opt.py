@@ -5090,6 +5090,10 @@ if __name__ == "__main__":
 
     import yaml
 
+    # Add-On version is injected by the HA Supervisor at runtime.
+    # No need to hardcode — stays in sync with config.yaml automatically.
+    ADDON_VERSION = os.environ.get("BUILD_VERSION", "unknown")
+
     LOG_FORMAT = "%(asctime)s  %(levelname)-8s %(message)s"
     LOG_DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 
@@ -5108,7 +5112,7 @@ if __name__ == "__main__":
     LOG_FILE = f"{PV_OPT_DIR}/pv_opt.log"
     file_handler = logging.handlers.RotatingFileHandler(
         LOG_FILE,
-        maxBytes=5 * 1024 * 1024,  # 5 MB per file
+        maxBytes=5 * 1024 * 1024,
         backupCount=3,
         encoding="utf-8",
     )
@@ -5119,7 +5123,7 @@ if __name__ == "__main__":
     ERROR_LOG_FILE = f"{PV_OPT_DIR}/error.log"
     error_handler = logging.handlers.RotatingFileHandler(
         ERROR_LOG_FILE,
-        maxBytes=1 * 1024 * 1024,  # 1 MB per file
+        maxBytes=1 * 1024 * 1024,
         backupCount=3,
         encoding="utf-8",
     )
@@ -5127,6 +5131,7 @@ if __name__ == "__main__":
     error_handler.setFormatter(logging.Formatter(fmt=LOG_FORMAT, datefmt=LOG_DATE_FORMAT))
     logging.getLogger().addHandler(error_handler)
 
+    logging.info(f"*************** PV Opt Add-On Version: {ADDON_VERSION} ***************")
     logging.info(f"Logging to {LOG_FILE} and {ERROR_LOG_FILE}")
 
     # ── Load Add-On UI options (MQTT credentials, log level, etc.) ─────────
@@ -5139,21 +5144,18 @@ if __name__ == "__main__":
             addon_options = json.load(f)
 
     # ── Load pv_opt config.yaml (the main app configuration) ─────────────
-    # Defaults to /config/pv_opt/config.yaml — written by run.sh on first start.
-    # Users can find and edit this via the HA File Editor, consistent with
-    # where AppDaemon stores its files.
-    # Override by setting config_path in the Add-On UI if needed.
     CONFIG_FILE = addon_options.get("config_path", f"{PV_OPT_DIR}/config.yaml")
     if not os.path.exists(CONFIG_FILE):
-        logging.warning(f"pv_opt config.yaml not found at {CONFIG_FILE} — " f"running with Add-On UI options only.")
+        logging.warning(
+            f"pv_opt config.yaml not found at {CONFIG_FILE} — "
+            f"running with Add-On UI options only."
+        )
         pv_opt_config = {}
     else:
         with open(CONFIG_FILE) as f:
             raw = yaml.safe_load(f)
-        # AppDaemon wraps settings under a top-level 'pv_opt:' key — strip it.
         if isinstance(raw, dict) and "pv_opt" in raw:
             pv_opt_config = raw["pv_opt"]
-            # Remove AppDaemon-only keys that have no meaning here
             for ad_key in ("module", "class", "log"):
                 pv_opt_config.pop(ad_key, None)
         else:
@@ -5168,3 +5170,4 @@ if __name__ == "__main__":
     asyncio.run(app._run())
 
 # %%
+
