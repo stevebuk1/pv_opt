@@ -3805,10 +3805,10 @@ class PVOpt(hass.Hass):
         # self.log("")
         # self.log(f"\n{cost.to_string()}")
         # self.log(f"Dtype of cost_today is {cost_today.dtypes}")
-        # self.log(f"Dtype of cost is {cost.dtypes}")
+        # self.log(f"Dtype of cost is {cost.dtypes}")   
 
         # cast cost_today as float64 in case it is empty, to prevent Futurewarning "The behavior of array concatenation with empty entries is deprecated"
-        cost = pd.DataFrame(pd.concat([cost_today.astype("float64"), cost])).set_axis(["cost"], axis=1).fillna(0)
+        cost = pd.DataFrame(pd.concat([s for s in [cost_today.astype("float64"), cost] if not s.empty])).set_axis(["cost"], axis=1).fillna(0)
         cost["cumulative_cost"] = cost["cost"].cumsum()
 
         for d in [df, cost]:
