@@ -5151,10 +5151,7 @@ if __name__ == "__main__":
 
     CONFIG_FILE = addon_options.get("config_path", f"{PV_OPT_DIR}/config.yaml")
     if not os.path.exists(CONFIG_FILE):
-        logging.warning(
-            f"pv_opt config.yaml not found at {CONFIG_FILE} — "
-            f"running with Add-On UI options only."
-        )
+        logging.warning(f"pv_opt config.yaml not found at {CONFIG_FILE} — " f"running with Add-On UI options only.")
         pv_opt_config = {}
     else:
         with open(CONFIG_FILE) as f:
@@ -5176,4 +5173,3 @@ if __name__ == "__main__":
     asyncio.run(app._run())
 
 # %%
-
