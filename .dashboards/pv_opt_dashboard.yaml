@@ -21,7 +21,7 @@ views:
                 name: Solar
                 max: 5000
                 icon: mdi:solar-power-variant
-              - entity: sensor.solis_total_load
+              - entity: sensor.solis_house_load
                 name: Load
                 max: 5000
               - entity: sensor.solis_battery_soc
@@ -54,7 +54,7 @@ views:
                 name: Time
                 state: >-
                   {{(as_local(as_datetime(states('sensor.date_time_iso')))|string)[11:16]}}
-              - entity: button.solis_sync_rtc
+              - entity: button.solis_inverter_sync_rtc
           - type: markdown
             content: >
               <h3><u>Cost Summary (GBP)</u></h3>
@@ -142,61 +142,6 @@ views:
                 {{as_local(as_datetime(a['end_local'])).strftime(tf)}}
                 |{%endfor%}
               title: Car Charging
-          - type: conditional
-            conditions:
-              - condition: state
-                entity: sensor.pvopt_tariff
-                state: agile
-              - condition: state
-                entity: select.pvopt_ev_charger
-                state_not: None
-            card:
-              type: markdown
-              content: >
-
-                <h3><u> Candidate Car Charging Plan</u></h3>
-
-
-                | Start | | | End |||       Energy  ||| Price (p)   |
-
-                |:--------|--|--|:-----------|--|--|:------------------:|--|--|:-----|{%
-                for a in state_attr('sensor.pvopt_candidate_car_slots',
-                'windows') %}
-
-                {% set tf = '%H:%M'%} | 
-                {{as_local(as_datetime(a['start_local'])).strftime(tf)}}    |||
-                {{as_local(as_datetime(a['end_local'])).strftime(tf)}} |||
-                {{a['charge_in_kwh'] | float | round(2)}}kWh ||| {{a['import'] |
-                float | round(2)}}p |{%endfor%}
-
-
-                Total Charge Added (kWh) =
-                {{'%8.2f'|format(state_attr('sensor.pvopt_candidate_car_slots','ev_total_charge')
-                | float)}}
-
-                Total Cost (p) =
-                {{'%8.0f'|format(state_attr('sensor.pvopt_candidate_car_slots','ev_total_cost')
-                | float)}}
-
-                <h3><u> Active Car Charging Plan</u></h3>
-
-
-                | Start | | | End |||       Energy  ||| Price (p)   |
-
-                |:--------|--|--|:-----------|--|--|:------------------:|--|--|:-----|{%
-                for a in state_attr('sensor.pvopt_car_slots', 'windows') %}
-
-                {% set tf = '%H:%M'%} | 
-                {{as_local(as_datetime(a['start_local'])).strftime(tf)}}    |||
-                {{as_local(as_datetime(a['end_local'])).strftime(tf)}} |||
-                {{a['charge_in_kwh'] | float | round(2)}}kWh ||| {{a['import'] |
-                float | round(2)}}p |{%endfor%}
-
-
-                Total Charge to add =
-                {{'%8.2f'|format(state_attr('sensor.pvopt_car_slots','ev_total_charge')
-                | float)}} kWh
-              title: Car Charging
       - type: custom:stack-in-card
         title: Optimised Charging
         cards:
@@ -237,6 +182,8 @@ views:
               entities:
                 - entity: switch.pvopt_allow_cyclic
                   name: Allow Cyclic Charge/Discharge
+                - entity: switch.pvopt_fill_first
+                  name: Fill First during Optimise Discharge
           - type: markdown
             content: <h3>Solar
           - type: entities
@@ -365,7 +312,7 @@ views:
             span:
               start: day
             series:
-              - entity: sensor.solis_total_load
+              - entity: sensor.solis_house_load
                 float_precision: 0
                 extend_to: now
                 group_by:
@@ -720,3 +667,4 @@ views:
                 show:
                   legend_value: false
                 extend_to: false
+
