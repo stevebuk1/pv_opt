@@ -2563,6 +2563,8 @@ class PVOpt(hass.Hass):
     def optimise_time(self, cb_args):
         self.log(f"Optimiser triggered by Scheduler ")
         self.log(f"Version: v{VERSION}")
+        if not APPDAEMON:
+            self.log(f"Add-On Version: {getattr(self, 'addon_version', 'unknown')}")
         self.optimise()
 
     @ad.app_lock
@@ -5094,6 +5096,7 @@ if __name__ == "__main__":
     # No need to hardcode — stays in sync with config.yaml automatically.
     ADDON_VERSION = os.environ.get("BUILD_VERSION", "unknown")
 
+
     LOG_FORMAT = "%(asctime)s  %(levelname)-8s %(message)s"
     LOG_DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
 
@@ -5169,6 +5172,7 @@ if __name__ == "__main__":
     options = {**addon_options, **pv_opt_config}
 
     app = PVOpt(options=options)
+    app.addon_version = ADDON_VERSION
 
     asyncio.run(app._run())
 
