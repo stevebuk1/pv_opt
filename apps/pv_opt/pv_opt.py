@@ -21,7 +21,7 @@ import pandas as pd
 import pvpy as pv
 from numpy import nan
 
-VERSION = "5.1.2-Beta-4"
+VERSION = "5.1.2-Beta-5"
 
 UNITS = {
     "current": "A",
@@ -4392,8 +4392,7 @@ class PVOpt(hass.Hass):
                     #  self.log(f">>> consumption_mean index: {consumption_mean.index[0]} to {consumption_mean.index[-1]}")
 
                     # Add extra entries to consumption_dow so it starts at midnight, then remove time column and change Nans to 0 (they are in the past)
-                    consumption_dow2 = pd.concat([temp, consumption_dow], axis=1).drop(["time"], axis=1).fillna(0).infer_objects(copy=False)
-
+                    consumption_dow2 = pd.concat([temp, consumption_dow], axis=1).drop(["time"], axis=1).astype("float64").fillna(0)
 
                     # merge consumption_mean and consumption dow, then trim back to 48 hours long
                     consumption_new = consumption_dow2.merge(
