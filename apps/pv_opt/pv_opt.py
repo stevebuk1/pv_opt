@@ -1121,9 +1121,13 @@ class PVOpt(hass.Hass):
 
         i = 0
         for entity_id in self.zappi_consumption_entities:
-            i += 1
             df = self._get_hass_power_from_daily_kwh(entity_id, start=start, end=end, log=log)
 
+            if df is None or df.empty:
+                self.log(f"No Zappi power data for {entity_id} — skipping", level="WARNING")
+                continue
+
+            i += 1
             if i == 1:
                 df_all = df.copy()
             if i > 1:  # If more than one charger, add data as extra column
@@ -1135,6 +1139,11 @@ class PVOpt(hass.Hass):
                 self.log(f">>> Value of i = {i}")
                 self.rlog(">>> df_all")
                 self.log(f">>>\n{df_all.to_string()}")
+
+        if i == 0:
+            # No valid Zappi data found for any entity
+            self.log("No valid Zappi power data found for any entity", level="WARNING")
+            return pd.DataFrame()
 
         df_all = df_all.fillna(0)  # fill any missing values with 0
         if i == 1:
@@ -4148,6 +4157,10 @@ class PVOpt(hass.Hass):
         )
 
         if df is not None:
+
+            if df.empty:
+                self.log(f"No data returned for {entity_id} — skipping", level="WARNING")
+                return df
 
             if self.debug and "Q" in self.debug_cat:
                 self.log(f"power: kWh data from {entity_id} is")
