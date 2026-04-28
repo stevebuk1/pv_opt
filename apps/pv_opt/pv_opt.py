@@ -21,7 +21,7 @@ import pandas as pd
 import pvpy as pv
 from numpy import nan
 
-VERSION = "5.1.2-Beta-5"
+VERSION = "5.1.2-Beta-6"
 
 UNITS = {
     "current": "A",
@@ -2571,9 +2571,9 @@ class PVOpt(hass.Hass):
     @ad.app_lock
     def optimise_time(self, cb_args):
         self.log(f"Optimiser triggered by Scheduler ")
-        self.log(f"Version: v{VERSION}")
         if not APPDAEMON:
-            self.log(f"Add-On Version: {getattr(self, 'addon_version', 'unknown')}")
+            self.log(f"App/AddOn Version: {getattr(self, 'addon_version', 'unknown')}")
+        self.log(f"Pv_opt Version: v{VERSION}")
         self.optimise()
 
     @ad.app_lock
