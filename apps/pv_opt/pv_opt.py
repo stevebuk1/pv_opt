@@ -155,6 +155,7 @@ DEFAULT_CONFIG = {
     "include_export": {"default": True, "domain": "switch"},
     "forced_discharge": {"default": True, "domain": "switch"},
     "allow_cyclic": {"default": False, "domain": "switch"},
+    "charge_to_100": {"default": False, "domain": "switch"},
     "fill_first": {"default": False, "domain": "switch"},
     "use_solar": {"default": True, "domain": "switch"},
     "ev_part_of_house_load": {"default": True, "domain": "switch"},

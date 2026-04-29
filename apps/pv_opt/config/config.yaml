@@ -52,6 +52,7 @@ pv_opt:
   read_only: false # If true the inverter will not be controlled
   forced_discharge: false # Enable forced discharging
   allow_cyclic: false # Enable alternate charge/discharge windows
+  charge_to_100: false # Charge to 100% SOC over cheap-rate window (not compatible with forced discharge or Agile tariff)
   fill_first: false
 
   # ========================================

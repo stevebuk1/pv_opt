@@ -969,6 +969,9 @@ class PVsystemModel:
 
         self.calculate_flows(slots=self.slots)
 
+        self._charge_to_100(log=log)
+
+
         # df.index = pd.to_datetime(df.index)
 
         if (not self.host.get_config("allow_cyclic")) and (len(self.slots) > 0) and discharge:
@@ -1330,6 +1333,185 @@ class PVsystemModel:
         else:
             return slots
 
+
+    def _charge_to_100(self, log=True):
+        """If charge_to_100 is enabled, top up the battery evenly across all
+        cheap-rate slots so that SOC at the end of the cheap window reaches 100%.
+        Unlike _low_cost_charging this is not cost-gated: the whole point is to
+        accept the (usually tiny) extra cost in exchange for a full battery.
+
+        This is intended for import-only tariffs (e.g. Octopus Go) where there is no
+        export revenue to justify arbitrage. The optimiser will otherwise leave the
+        battery deliberately low just before the cheap window to minimise cost, which
+        is unhelpful in winter when consumption is unpredictable.
+
+        For users with an export tariff, Fill First is the correct alternative - it
+        works within the discharge optimiser and is aware of arbitrage value.
+
+        Not compatible with: forced_discharge, fill_first, or variable-rate tariffs
+        such as Octopus Agile where no distinct cheap window exists.
+        """
+
+        if not self.host.get_config("charge_to_100"):
+            return
+
+        if self.host.get_config("forced_discharge"):
+            if log:
+                self.log("")
+                self.log("Charge to 100%")
+                self.log("--------------")
+                self.log("")
+                self.log(
+                    "Charge to 100% skipped: forced discharge is enabled. "
+                    "Use Fill First for optimised overnight charging when discharge is active."
+                )
+            return
+
+        if log:
+            self.log("")
+            self.log("Charge to 100%")
+            self.log("--------------")
+            self.log("")
+
+        # Identify the cheap-rate window: a contiguous block of slots at the
+        # minimum import price that is long enough to represent a genuine overnight
+        # cheap period (not an isolated Agile bargain slot).
+        MIN_CHEAP_WINDOW_MINUTES = 60
+
+        min_import_price = self.flows["import"].min()
+        median_import_price = self.flows["import"].median()
+
+        # Guard 1: cheap rate must be meaningfully below the median (rules out Agile
+        # where the "cheapest" slot is only marginally cheaper than the rest).
+        if median_import_price > 0 and min_import_price >= 0.5 * median_import_price:
+            if log:
+                self.log(
+                    f"Charge to 100% skipped: min import price ({min_import_price:.2f}p/kWh) is not "
+                    f"sufficiently below median ({median_import_price:.2f}p/kWh) - tariff does not "
+                    f"appear to have a distinct cheap-rate window (e.g. Agile)."
+                )
+            return
+
+        cheap_mask = self.flows["import"] == min_import_price
+
+        # Guard 2: the contiguous cheap block must be long enough to be a real window.
+        # Find the largest contiguous run of cheap slots and use that as the window.
+        cheap_groups = cheap_mask.ne(cheap_mask.shift()).cumsum()
+        largest_group = (
+            cheap_mask[cheap_mask]
+            .groupby(cheap_groups[cheap_mask])
+            .apply(lambda g: g.index)
+        )
+        window_durations = {
+            grp: (idx[-1] - idx[0] + self.flows["dt_hours"].loc[idx[0]] * pd.Timedelta("1h"))
+            for grp, idx in largest_group.items()
+        }
+        best_group = max(window_durations, key=lambda g: window_durations[g])
+        best_duration = window_durations[best_group]
+
+        if best_duration < pd.Timedelta(minutes=MIN_CHEAP_WINDOW_MINUTES):
+            if log:
+                self.log(
+                    f"Charge to 100% skipped: longest contiguous cheap-rate block is only "
+                    f"{best_duration.total_seconds()/60:.0f} min "
+                    f"(minimum is {MIN_CHEAP_WINDOW_MINUTES} min). "
+                    f"Enable this feature only with a tariff that has a fixed overnight cheap window."
+                )
+            return
+
+        # Use only the largest contiguous cheap block as the window.
+        cheap_window_index = largest_group[best_group]
+        cheap_mask = self.flows.index.isin(cheap_window_index)
+        cheap_slots = self.flows[cheap_mask]
+
+        if cheap_slots.empty:
+            if log:
+                self.log("No cheap-rate slots found - skipping.")
+            return
+
+        # What SOC does the optimiser leave us with at the end of the cheap window?
+        soc_end_of_window = cheap_slots["soc_end"].iloc[-1]
+        deficit_pct = 100.0 - soc_end_of_window
+
+        if log:
+            self.log(
+                f"Cheap-rate window: {cheap_slots.index[0].strftime(TIME_FORMAT)} - "
+                f"{cheap_slots.index[-1].strftime(TIME_FORMAT)}  "
+                f"({len(cheap_slots)} slots @ {min_import_price:.2f}p/kWh)"
+            )
+            self.log(f"SOC at end of cheap window: {soc_end_of_window:.1f}%  Deficit: {deficit_pct:.1f}%")
+
+        if deficit_pct <= 0:
+            if log:
+                self.log("Battery already at 100% at end of cheap window - nothing to do.")
+            return
+
+        # Energy needed to fill from current plan end-SOC to 100% (Wh, at the battery terminals).
+        # We account for charger efficiency: more grid energy is needed than battery energy stored.
+        energy_deficit_wh = (deficit_pct / 100.0) * self.battery.capacity
+
+        # How much extra power can each cheap slot absorb?  Cap at (charger_power - solar - existing forced).
+        max_charger = min(self.battery.max_charge_power, self.inverter.charger_power)
+        cheap_headroom = (
+            max_charger
+            - cheap_slots["forced"]
+            - cheap_slots["solar"]
+        ).clip(lower=0)
+
+        total_headroom_wh = (cheap_headroom * cheap_slots["dt_hours"]).sum()
+
+        if total_headroom_wh <= 0:
+            if log:
+                self.log("WARNING: No headroom in cheap-rate slots - cannot add charge.")
+            return
+
+        if log:
+            self.log(f"Energy deficit: {energy_deficit_wh:.0f} Wh  Total headroom: {total_headroom_wh:.0f} Wh")
+
+        if total_headroom_wh < energy_deficit_wh:
+            shortfall_pct = ((energy_deficit_wh - total_headroom_wh) / self.battery.capacity) * 100
+            if log:
+                self.log(
+                    f"WARNING: Cheap-rate window has insufficient headroom to reach 100%. "
+                    f"Maximum achievable SOC is approximately "
+                    f"{soc_end_of_window + (total_headroom_wh / self.battery.capacity * 100):.1f}% "
+                    f"({shortfall_pct:.1f}% short). Consider a longer charge window or higher charger power."
+                )
+
+        # Distribute the deficit evenly (in power terms) across all cheap slots,
+        # capped per slot by its individual headroom.
+        n_slots = len(cheap_slots)
+        extra_power_per_slot = energy_deficit_wh / (cheap_slots["dt_hours"].sum())  # W, if spread perfectly flat
+
+        slots = [slot for slot in self.slots]
+
+        for t in cheap_slots.index:
+            headroom = float(cheap_headroom.loc[t])
+            if headroom <= 0:
+                continue
+            added_power = min(extra_power_per_slot, headroom)
+            if added_power > 0:
+                slots.append((t, added_power))
+
+        self.calculate_flows(slots=slots)
+
+        soc_end_new = self.flows[cheap_mask]["soc_end"].iloc[-1]
+        cost_delta = self.net_cost - self.best_cost
+
+        if log:
+            self.log(
+                f"New SOC at end of cheap window: {soc_end_new:.1f}%  "
+                f"Cost delta: +{cost_delta:.1f}p"
+            )
+
+        # Always accept: the user has explicitly asked for this, cost is not the gate.
+        self.slots = slots
+        self.best_cost = self.net_cost
+
+        if log:
+            self.log("Charge to 100% slots accepted.")
+
+  
     def _discharging(self, log=True, fill_first=False):
         # -----------
         # Discharging
