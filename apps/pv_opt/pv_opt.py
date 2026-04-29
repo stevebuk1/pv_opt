@@ -13,7 +13,7 @@ import pandas as pd
 import pvpy as pv
 from numpy import nan
 
-VERSION = "5.0.2"
+VERSION = "5.0.3"
 
 UNITS = {
     "current": "A",
@@ -1693,8 +1693,10 @@ class PVOpt(hass.Hass):
                 # SVB debugging line to force export tariff
                 # self.contract.tariffs["export"] = pv.Tariff("None", export=True, unit=15, octopus=False, host=self)
             self.rlog("")
-            self._load_saving_events()
-            self._load_free_electricity_events()
+            # self._load_saving_events()
+            self._load_saving_events_new()  # Resolves Issue #418.
+            # self._load_free_electricity_events()
+            self._load_free_electricity_events_new()  # Resolves Issue #418
 
         self.log("")
         self.log("Finished loading contract")
