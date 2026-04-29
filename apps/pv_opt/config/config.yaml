@@ -2,14 +2,9 @@
 pv_opt:
   module: pv_opt
   class: PVOpt
-  # dependencies:
-  #   - pvpy
-  #   - solis
-  #   # - inverters
-
   log: pv_opt_log
   prefix: pvopt
-  debug: false
+  debug: true
 
   # User configuration ---  EDIT AWAY! ---
   # ========================================
@@ -26,9 +21,9 @@ pv_opt:
   #=======================================
   #Logging Category Control
   #=======================================
-  #Defines Logging subjects to add to logfile
-  #If commented out, everything is logged
-  #Ignored if "debug" is set to False above
+  # Defines Logging subjects to add to logfile
+  # If commented out, everything is logged
+  # Ignored if "debug" is set to false above
   #
   # S = Startup/Initialisation Logging
   # T = Tariff loading Logging
@@ -49,15 +44,15 @@ pv_opt:
 
   # Letters can be added to "debug_categories" in any order
 
-  debug_categories: OW
+  debug_categories: O
 
   # ========================================
   # Basic parameters
   # ========================================
   read_only: false # If true the inverter will not be controlled
-  forced_discharge: true # Enable forced discharging
+  forced_discharge: false # Enable forced discharging
   allow_cyclic: false # Enable alternate charge/discharge windows
-  fill_first: true
+  fill_first: false
 
   # ========================================
   # Plant parameters
@@ -89,8 +84,8 @@ pv_opt:
   # ========================================
   #
   # use_consumption_history: false
-  # # consumption_history_days: 6
-  # #
+  # consumption_history_days: 6
+  # 
   daily_consumption_kwh: 17
   shape_consumption_profile: true
   consumption_shape:
@@ -118,8 +113,28 @@ pv_opt:
   # octopus_account: !secret octopus_account
   # octopus_api_key: !secret octopus_api_key
 
+  # The following Can be omitted if either of the above options is working correctly:
+
+  # octopus_import_tariff_code: E-2R-VAR-22-11-01-G
+  # octopus_export_tariff_code: E-1R-AGILE-OUTGOING-19-05-13-G
+
+  # octopus_import_tariff_code: E-1R-AGILE-23-12-06-G
+  # # octopus_export_tariff_code: E-1R-OUTGOING-LITE-FIX-12M-23-09-12-G
+  octopus_export_tariff_code: E-1R-OUTGOING-FIX-12M-19-05-13-G
+
+  # octopus_import_tariff_code: E-1R-FLUX-IMPORT-23-02-14-G
+  # octopus_export_tariff_code: E-1R-FLUX-EXPORT-23-02-14-G
+
+  octopus_import_tariff_code: E-1R-GO-VAR-22-10-14-G
+  # octopus_export_tariff_code: E-1R-OUTGOING-LITE-FIX-12M-23-09-12-N
+
+  # ========================================
+  # Manual Tariff Parameters
+  # ========================================
+  # If not using Octopus set a manual tariff here
+  #
   # manual_import_tariff: True
-  # manual_import_tariff_name: Test Importe
+  # manual_import_tariff_name: Test Import
   # manual_import_tariff_tz: GB
   # manual_import_tariff_standing: 43
   # manual_import_tariff_unit:
@@ -144,22 +159,7 @@ pv_opt:
   #     price: 50.0
   #   - period_start: "14:00"
   #     price: 0.0
-
-  # The following Can be omitted if either of the above options is working correctly:
-
-  # octopus_import_tariff_code: E-2R-VAR-22-11-01-G
-  # octopus_export_tariff_code: E-1R-AGILE-OUTGOING-19-05-13-G
-
-  # octopus_import_tariff_code: E-1R-AGILE-23-12-06-G
-  # # octopus_export_tariff_code: E-1R-OUTGOING-LITE-FIX-12M-23-09-12-G
-  octopus_export_tariff_code: E-1R-OUTGOING-FIX-12M-19-05-13-G
-
-  # octopus_import_tariff_code: E-1R-FLUX-IMPORT-23-02-14-G
-  # octopus_export_tariff_code: E-1R-FLUX-EXPORT-23-02-14-G
-
-  octopus_import_tariff_code: E-1R-GO-VAR-22-10-14-G
-  # octopus_export_tariff_code: E-1R-OUTGOING-LITE-FIX-12M-23-09-12-N
-
+  #
   # ========================================
   # EV parameters
   # ========================================
@@ -167,7 +167,7 @@ pv_opt:
   # If you have a Zappi Charger, uncomment next line to allow Pv_opt to detect car plugin status
   # for use with the Octopus Intelligent / Agile tariff and to allow EV consumption data to be read (if needed).
   #
-  # ev_charger: Zappi   # Default = None
+  # ev_charger: Zappi   # Default = Not fitted
   #
   #  
   # Required Zappi entities are autodeted. For multiple Zappis (or entity names changed from the MyEnergi Integration defaults), it may be necessary to manually set
@@ -409,35 +409,54 @@ pv_opt:
   # 
   # Uncomment the next three entries if using this integration. 
   
-  inverter_type: SUNSYNK_SOLARSYNKV3
-  device_name: solarsynkv3
-  inverter_sn: 2207112425a  # enter {sunsynk_serial} from solarsynkv3 addon
+  # inverter_type: SUNSYNK_SOLARSYNKV3
+  # device_name: solarsynkv3
+  # inverter_sn: 2207112425a  # enter {sunsynk_serial} from solarsynkv3 addon
 
   # These are the default entities used with the Sunsynk Solarsynkv3 integration. You can change them here and over-ride the defaults
 
-  id_use_timer: sensor.{device_name}_{inverter_sn}_peakandvallery
-  id_priority_load: sensor.{device_name}_{inverter_sn}_energymode 
-  id_control_helper: input_text.{device_name}_{inverter_sn}_settings
+  # id_use_timer: sensor.{device_name}_{inverter_sn}_peakandvallery
+  # id_priority_load: sensor.{device_name}_{inverter_sn}_energymode 
+  # id_control_helper: input_text.{device_name}_{inverter_sn}_settings
 
-  id_timed_charge_start: sensor.{device_name}_{inverter_sn}_selltime1
-  id_timed_charge_end: sensor.{device_name}_{inverter_sn}_selltime2
-  id_timed_charge_enable: sensor.{device_name}_{inverter_sn}_gentime1on
-  id_timed_charge_target_soc: sensor.{device_name}_{inverter_sn}_cap1
+  # id_timed_charge_start: sensor.{device_name}_{inverter_sn}_selltime1
+  # id_timed_charge_end: sensor.{device_name}_{inverter_sn}_selltime2
+  # id_timed_charge_enable: sensor.{device_name}_{inverter_sn}_gentime1on
+  # id_timed_charge_target_soc: sensor.{device_name}_{inverter_sn}_cap1
 
-  id_timed_discharge_start: sensor.{device_name}_{inverter_sn}_selltime3
-  id_timed_discharge_end: sensor.{device_name}_{inverter_sn}_selltime4
-  id_timed_discharge_enable: sensor.{device_name}_{inverter_sn}_gentime3on
-  id_timed_discharge_target_soc: sensor.{device_name}_{inverter_sn}_cap3
+  # id_timed_discharge_start: sensor.{device_name}_{inverter_sn}_selltime3
+  # id_timed_discharge_end: sensor.{device_name}_{inverter_sn}_selltime4
+  # id_timed_discharge_enable: sensor.{device_name}_{inverter_sn}_gentime3on
+  # id_timed_discharge_target_soc: sensor.{device_name}_{inverter_sn}_cap3
   
-  id_battery_soc:  sensor.{device_name}_{inverter_sn}_battery_soc
-  battery_voltage: sensor.{device_name}_{inverter_sn}_battery_voltage
-  id_consumption_today: sensor.{device_name}_{inverter_sn}_load_daily_used
-  id_grid_import_today: sensor.sensor.{device_name}_{inverter_sn}_grid_etoday_from
-  id_grid_export_today: sensor.{device_name}_{inverter_sn}_grid_etoday_to
+  # id_battery_soc:  sensor.{device_name}_{inverter_sn}_battery_soc
+  # battery_voltage: sensor.{device_name}_{inverter_sn}_battery_voltage
+  # id_consumption_today: sensor.{device_name}_{inverter_sn}_load_daily_used
+  # id_grid_import_today: sensor.sensor.{device_name}_{inverter_sn}_grid_etoday_from
+  # id_grid_export_today: sensor.{device_name}_{inverter_sn}_grid_etoday_to
 
-  maximum_dod_percent:  20
-  supports_hold_soc: false
-  update_cycle_seconds: 0
+  # maximum_dod_percent:  20
+  # supports_hold_soc: false
+  # update_cycle_seconds: 0
+
+
+  # ===============================================================================================================
+  # Brand / Integration Specific Config: SUNSYNK_SOLAR_SUNSYNK: https://github.com/MorneSaunders360/Solar-Sunsynk
+  # ===============================================================================================================
+  # 
+  # Uncomment the next three entries if using this integration. 
+  
+  # inverter_type: SUNSYNK_SOLARSUNSYNK
+  # device_name: solarsunsynk
+  # inverter_sn: 2207112425a  # enter {sunsynk_serial} from Solar Sunskynk integration
+
+  # These are the default entities used with the Sunsynk Solarsynkv3 integration. You can change them here and over-ride the defaults
+
+
+  
+  # maximum_dod_percent:  20
+  # supports_hold_soc: false
+  # update_cycle_seconds: 0
 
   # ===============================================================================================================
   # Brand / Integration Specific Config: SOLIS_CLOUD: https://github.com/hultenvp/solis-sensor
@@ -496,7 +515,7 @@ pv_opt:
   
   # battery_voltage: sensor.{device_name}_battery_voltage_2
   # maximum_dod_percent: sensor.{device_name}_force_discharge_soc
-  id_battery_current: sensor.solis_battery_current_2  # Debug purposes only
+  # id_battery_current: sensor.solis_battery_current_2  # Debug purposes only
   # id_consumption_today: sensor.{device_name}_daily_grid_energy_used
   # # id_consumption:
   # #   - sensor.{device_name}_total_consumption_power
@@ -526,19 +545,16 @@ pv_opt:
   # ===============================================================================================================
   # Tariff comparison
   # ===============================================================================================================
+  # If necessary, uncomment id_daily_solar or id_solar_power from the Brand / Integration specific config above.
 
-  # id_daily_solar: sensor.{device_name}_power_generation_today
-  id_solar_power:
-    - sensor.{device_name}_pv_power_1
-    - sensor.{device_name}_pv_power_2
   # alt_tariffs:
   #   - name: Agile_Fix
   #     octopus_import_tariff_code: E-1R-AGILE-23-12-06-G
   #     octopus_export_tariff_code: E-1R-OUTGOING-FIX-12M-19-05-13-G
 
-  #   #   - name: Eco7_Fix
-  #   #     octopus_import_tariff_code: E-2R-VAR-22-11-01-G
-  #   #     octopus_export_tariff_code: E-1R-OUTGOING-FIX-12M-19-05-13-G
+  #   - name: Eco7_Fix
+  #     octopus_import_tariff_code: E-2R-VAR-22-11-01-G
+  #     octopus_export_tariff_code: E-1R-OUTGOING-FIX-12M-19-05-13-G
 
   #   - name: Flux
   #     octopus_import_tariff_code: E-1R-FLUX-IMPORT-23-02-14-G

@@ -20,10 +20,10 @@ INVERTER_DEFS = {
         "default_config": {
             "maximum_dod_percent": 20,
             "id_battery_soc": "sensor.{device_name}_{inverter_sn}_battery_soc",
-            "id_consumption_today": "sensor.{device_name}_{inverter_sn}_day_load_energy",
-            "id_consumption": "sensor.{device_name}_{inverter_sn}_load_power",
-            "id_grid_import_today": "sensor.{device_name}_{inverter_sn}_day_grid_import",
-            "id_grid_export_today": "sensor.{device_name}_{inverter_sn}_day_grid_export",
+            "id_consumption_today": "sensor.{device_name}_{inverter_sn}_load_daily_used",
+            "id_consumption": "sensor.{device_name}_{inverter_sn}_load_power",   # not believed used
+            "id_grid_import_today": "sensor.{device_name}_{inverter_sn}_grid_etoday_from",
+            "id_grid_export_today": "sensor.{device_name}_{inverter_sn}_grid_etoday_to",
             "id_solar_power": [
                 "sensor.{device_name}_{inverter_sn}_pv1_power",
                 "sensor.{device_name}_{inverter_sn}_pv2_power",
@@ -35,18 +35,20 @@ INVERTER_DEFS = {
         # from the config.yaml file but not required outside of this module
         "brand_config": {
             "battery_voltage": "sensor.{device_name}_{inverter_sn}_battery_voltage",
-            "battery_current": "sensor.{device_name}_{inverter_sn}_battery_current",
-            "id_control_helper": "input_text.{device_name}_{inverter_sn}_settings",
-            "id_use_timer": "sensor.{device_name}_{inverter_sn}_use_timer",
-            "id_priority_load": "sensor.{device_name}_{inverter_sn}_priority_load",
-            "id_timed_charge_start": "sensor.{device_name}_{inverter_sn}_prog1_time",
-            "id_timed_charge_end": "sensor.{device_name}_{inverter_sn}_prog2_time",
-            "id_timed_charge_enable": "sensor.{device_name}_{inverter_sn}_prog1_charge",
-            "id_timed_charge_capacity": "sensor.{device_name}_{inverter_sn}_prog1_capacity",
-            "id_timed_discharge_start": "sensor.{device_name}_{inverter_sn}_prog3_time",
-            "id_timed_discharge_end": "sensor.{device_name}_{inverter_sn}_prog4_time",
-            "id_timed_dicharge_enable": "sensor.{device_name}_{inverter_sn}_prog3_charge",
-            "id_timed_discharge_capacity": "sensor.{device_name}_{inverter_sn}_prog3_capacity",
+            "battery_current": "sensor.{device_name}_{inverter_sn}_battery_current",   # not believed used
+            "id_control_helper": "input_text.{device_name}_{inverter_sn}_settings", 
+            "id_use_timer": "sensor.{device_name}_{inverter_sn}_peakandvallery",    
+            "id_priority_load": "sensor.{device_name}_{inverter_sn}_energymode",    
+            "id_timed_charge_start": "sensor.{device_name}_{inverter_sn}_selltime1", 
+            "id_timed_charge_end": "sensor.{device_name}_{inverter_sn}_selltime2",   
+            "id_timed_charge_enable": "sensor.{device_name}_{inverter_sn}_gentime1on",  
+            "id_timed_charge_target_soc": "sensor.{device_name}_{inverter_sn}_cap1",  
+            "id_timed_charge_capacity": "sensor.{device_name}_{inverter_sn}_prog1_capacity",  # not believed used
+            "id_timed_discharge_start": "sensor.{device_name}_{inverter_sn}_selltime3",
+            "id_timed_discharge_end": "sensor.{device_name}_{inverter_sn}_selltime4",
+            "id_timed_dicharge_enable": "sensor.{device_name}_{inverter_sn}_gentime3on", 
+            "id_timed_discharge_target_soc": "sensor.{device_name}_{inverter_sn}_cap3", 
+            "id_timed_discharge_capacity": "sensor.{device_name}_{inverter_sn}_prog3_capacity",   # not believed used
             "json_work_mode": "sysWorkMode",
             "json_priority_load": "energyMode",
             "json_grid_charge": "sdChargeOn",
