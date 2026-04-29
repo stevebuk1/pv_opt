@@ -58,17 +58,17 @@ pv_opt:
   # Plant parameters
   # ========================================
 
-  # All parameters can be a number or point to an entity UNLESS they start with 'id_'. All of
-  # these are required but will be defaulted if not specified
+  # All parameters can be a number or point to an entity UNLESS they start with 'id_'. 
+  # All of these are required, but will be defaulted if not specified
 
   battery_capacity_wh: 20000
   # inverter_efficiency_percent: 97 # Default: 97
   # charger_efficiency_percent: 91 # Default: 91
-  # maximum_dod_percent: 15
-  # charger_power_watts: 3500
-  # inverter_power_watts: 3600
-  # inverter_loss_watts: 100
-  # battery_current_limit_amps: 50
+  # maximum_dod_percent: 15 # Default 15
+  # charger_power_watts: 3500 # Default 3500
+  # inverter_power_watts: 3600  # Default 3600
+  # inverter_loss_watts: 100  # Default 100
+  # battery_current_limit_amps: 50  #Default 50
 
   # ========================================
   # Solcast configuration
@@ -84,7 +84,7 @@ pv_opt:
   # ========================================
   #
   # use_consumption_history: false
-  # consumption_history_days: 6
+  # consumption_history_days: 7
   # 
   daily_consumption_kwh: 17
   shape_consumption_profile: true
@@ -131,7 +131,7 @@ pv_opt:
   # ========================================
   # Manual Tariff Parameters
   # ========================================
-  # If not using Octopus set a manual tariff here
+  # If not using Octopus set a manual tariff here.
   #
   # manual_import_tariff: True
   # manual_import_tariff_name: Test Import
@@ -183,8 +183,9 @@ pv_opt:
   # ev_part_of_house_load: False     # Default = True
   #
   #
-  # EV charge plan input values for Agile and IOG. On IOG, these parameters are passed to the Octopus API and will be
-  # mirrored in the Octopus App after Pv_opt start. 
+  # EV charge plan input values for Agile and IOG. 
+  # On IOG, these parameters are passed to the Octopus API and will be mirrored in the Octopus App after Pv_opt start. If you want to control these using the 
+  # Octopus App on your phone, leave these commented out (Pv_opt will pick up the values from Octopus)
   #
   # car_charging_ready_by: 06:30 # Default 06:30
   # ev_charge_target_percent: 30  # Default 30%
@@ -199,9 +200,9 @@ pv_opt:
   # EV/Charger Parameters for EV charging on Agile. Uncomment to overide the defaults if needed for your car/EV charger. 
   # These parameters are not needed for IOG, as they are already defined by Octopus. 
   #
-  # ev_battery_capacity_kwh: 60 # Default 60kWh
-  # ev_charger_efficiency_percent : 92  # Default 92%
-  # ev_charger_power_watts: 7000 # Default 7000W (7kW)
+  # ev_battery_capacity_kwh: 60 # Default 60 (kWh)
+  # ev_charger_efficiency_percent : 92  # Default 92
+  # ev_charger_power_watts: 7000 # Default 7000 (7kW)
   #
   # Max slot price for Agile charging. Note, setting a low value may mean the car does not achieve its target SOC. 
   # To disable, uncomment and set to 0. 
@@ -215,6 +216,8 @@ pv_opt:
 
   # inverter_type: SOLIS_SOLAX_MODBUS
   # device_name: solis_inverter
+
+  # If your inverter has 6 slot firmware, uncomment this line. 
   # hmi_firmware_fb00_plus: True
 
   # battery_voltage: sensor.{device_name}_battery_voltage
@@ -253,11 +256,8 @@ pv_opt:
   # id_timed_charge_discharge_button: button.{device_name}_update_charge_discharge_times
   # id_inverter_mode: select.{device_name}_energy_storage_control_switch
 
-
-  # The following do not have defaults stored within Pv_opt so require uncommenting if used:
-
   # Required for Tariff Comparison, see end of file. 
-
+  # They do not have defaults stored within Pv_opt so require uncommenting if used:
   # id_solar_power: sensor.{device_name}_pv_total_power
   # OR 
   # id_solar_power: 
@@ -306,53 +306,15 @@ pv_opt:
   # id_inverter_mode: sensor.{device_name}_energy_storage_control_switch
 
 
-  # The following do not have defaults stored within Pv_opt so require uncommenting if used:
 
   # Required for Tariff Comparison, see end of file. 
+  # They do not have defaults stored within Pv_opt so require uncommenting if used:
 
   # id_solar_power: sensor.{device_name}_pv_total_power
   #  OR
   # id_solar_power: 
   #   - sensor.{device_name}_pv_power_1
   #   - sensor.{device_name}_pv_power_2
-
-  # ==============================================================================================================
-  # Brand / Integration Specific Config: SOLIS_SOLARMAN: https://github.com/StephanJoubert/home_assistant_solarman
-  # Note: for legacy installs only. Use SOLIS_SOLARMAN_V2 for new installs. 
-  # ==============================================================================================================
-  #
-  # Uncomment the next two entries if using this integration. 
-
-  # inverter_type: SOLIS_SOLARMAN
-  # device_name: solis
-
-  # These are the default entities used with the Solis Solarman integration. You can change them here and over-ride the defaults
-
-  # battery_voltage: sensor.{device_name}_battery_voltage
-  # maximum_dod_percent: 15
-  # update_cycle_seconds: 60
-
-  # id_consumption_today: sensor.{device_name}_daily_house_backup_consumption
-
-  # id_grid_power: sensor.{device_name}_meter_active_power
-  # id_grid_import_today: sensor.{device_name}_daily_energy_imported
-  # id_inverter_ac_power": sensor.{device_name}_inverter_ac_power
-  # id_battery_soc: sensor.{device_name}_battery_soc
-  # id_backup_mode_soc:
-
-  # id_timed_charge_start_hours: sensor.{device_name}_timed_charge_start_hour
-  # id_timed_charge_start_minutes: sensor.{device_name}_timed_charge_start_minute
-  # id_timed_charge_end_hours: sensor.{device_name}_timed_charge_end_hour
-  # id_timed_charge_end_minutes: sensor.{device_name}_timed_charge_end_minute
-  # id_timed_charge_current: sensor.{device_name}_timed_charge_current
-
-  # id_timed_discharge_start_hours: sensor.{device_name}_timed_discharge_start_hour
-  # id_timed_discharge_start_minutes: sensor.{device_name}_timed_discharge_start_minute
-  # id_timed_discharge_end_hours: sensor.{device_name}_timed_discharge_end_hour
-  # id_timed_discharge_end_minutes: sensor.{device_name}_timed_discharge_end_minute
-  # id_timed_discharge_current: sensor.{device_name}_timed_discharge_current
-
-  # id_inverter_mode: sensor.{device_name}_storage_control_mode
 
 
   # ==============================================================================================================
@@ -395,9 +357,8 @@ pv_opt:
 
   # id_inverter_mode: select.{device_name}_storage_control_mode
 
-  # The following do not have defaults stored within Pv_opt so require uncommenting if used:
-
-  # Required for Tariff Comparison, see end of file. Can be commented out if not using. 
+  # Required for Tariff Comparison, see end of file. 
+  # They do not have defaults stored within Pv_opt so require uncommenting if used:
   # id_solar_power:
   #   - sensor.{device_name}_power_pv1
   #   - sensor.{device_name}_power_pv2
@@ -495,7 +456,8 @@ pv_opt:
   # id_timed_discharge_button: button.{device_name}_update_timed_discharge_1
   # id_timed_charge_discharge_button: button.{device_name}_update_timed_charge_discharge_1
 
-  # Required for Tariff Comparison, see end of file. Can be commented out if not using. 
+  # Required for Tariff Comparison, see end of file. 
+  # They do not have defaults stored within Pv_opt so require uncommenting if used:
   #  id_solar_power:
   #  - sensor.{device_name}_dc_power_pv1
   #  - sensor.{device_name}_dc_power_pv2
