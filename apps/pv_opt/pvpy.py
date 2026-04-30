@@ -1415,7 +1415,7 @@ class PVsystemModel:
                     f"Charge to 100% skipped: longest contiguous cheap-rate block is only "
                     f"{best_duration.total_seconds()/60:.0f} min "
                     f"(minimum is {MIN_CHEAP_WINDOW_MINUTES} min). "
-                    f"Enable this feature only with a tariff that has a fixed cheap window(s) e.g. Cosy, Go, IOG."
+                    f"Enable this feature only with a tariff that has a fixed cheap window(s) e.g. Cosy, Go, Flux, IOG."
                 )
             return
 
@@ -1480,7 +1480,7 @@ class PVsystemModel:
 
         # Distribute the deficit evenly (in power terms) across all cheap slots,
         # capped per slot by its individual headroom.
-        n_slots = len(cheap_slots)
+
         extra_power_per_slot = energy_deficit_wh / (cheap_slots["dt_hours"].sum())  # W, if spread perfectly flat
 
         slots = [slot for slot in self.slots]
