@@ -1415,7 +1415,7 @@ class PVsystemModel:
                     f"Charge to 100% skipped: longest contiguous cheap-rate block is only "
                     f"{best_duration.total_seconds()/60:.0f} min "
                     f"(minimum is {MIN_CHEAP_WINDOW_MINUTES} min). "
-                    f"Enable this feature only with a tariff that has a fixed overnight cheap window."
+                    f"Enable this feature only with a tariff that has a fixed cheap window(s) e.g. Cosy, Go, IOG."
                 )
             return
 
