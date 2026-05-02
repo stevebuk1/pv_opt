@@ -636,6 +636,10 @@ class SolisInverter(BaseInverterController):
             current = 0
             target_soc = None
 
+            # Already disabled - nothing to do
+            if self.status[direction]["start"] == self.status[direction]["end"]:
+                return
+
         if target_soc is None and self._hmi_fb00:
             self.log("Pv opt is configured for 6 slot firmware, setting initial value of target_soc")
             if direction == "charge":
