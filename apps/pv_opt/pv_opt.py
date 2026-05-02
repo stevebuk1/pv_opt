@@ -3274,13 +3274,10 @@ class PVOpt(hass.Hass):
                         ):  #  not sure what this line will report
                             self.log("....but status is not hold")
                             self.log(f"  Enabling SOC hold at SOC of {self.hold[0]['soc']:0.0f}%")
-                            # self.inverter.hold_soc_old(enable=True, soc=self.hold[0]["soc"])
-                            self.inverter.hold_soc(enable=True, target_soc=self.hold[0]["soc"])
+                            self.inverter.hold_soc(enable=True, target_soc=self.hold[0]["soc"], start=self.charge_start_datetime, end=self.charge_end_datetime)
                         else:
                             self.log(f"  Inverter already holding SOC of {self.hold[0]['soc']:0.0f}%")
-                            start = None
-                            end = self.charge_end_datetime
-                            self.inverter.hold_soc(enable=True, target_soc=self.hold[0]["soc"])
+                            self.inverter.hold_soc(enable=True, target_soc=self.hold[0]["soc"], start=None, end=self.charge_end_datetime)
 
                     else:  # if already in Car slot, this bit should run
                         self.log(f"Current charge/discharge window ends in {time_to_slot_end:0.1f} minutes.")
