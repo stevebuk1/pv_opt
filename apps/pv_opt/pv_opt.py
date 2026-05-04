@@ -432,23 +432,11 @@ DEFAULT_CONFIG = {
     #     "attributes": {"options": ["Solcast", "Solcast_p10", "Solcast_p90", "Weighted"]},
     #     "domain": "select",
     # },
-"id_solcast_today": {"default": "sensor.solcast_pv_forecast_forecast_today"},
+    "id_solcast_today": {"default": "sensor.solcast_pv_forecast_forecast_today"},
     "id_solcast_tomorrow": {"default": "sensor.solcast_pv_forecast_forecast_tomorrow"},
     "id_axle_start_time": {"default": "sensor.axle_vpp_axle_start_time"},
     "id_axle_end_time": {"default": "sensor.axle_vpp_axle_end_time"},
     "id_axle_1hr_before": {"default": "binary_sensor.axle_vpp_event_1_hour_before"},
-    "axle_discharge_rate_w": {
-        "default": 3500,
-        "domain": "number",
-        "attributes": {
-            "min": 500,
-            "max": 10000,
-            "step": 100,
-            "unit_of_measurement": "W",
-            "device_class": "power",
-            "mode": "slider",
-        },
-    },
     "axle_export_rate_p": {
         "default": 100,
         "domain": "number",
@@ -2801,28 +2789,6 @@ class PVOpt(hass.Hass):
         self.pv_system.static_flows = self.pv_system.static_flows[self.time_now.floor("30min") :].fillna(0)
         self.pv_system.static_flows.index = [self.time_now] + list(self.pv_system.static_flows.index[1:])
 
-        # Inject Axle VPP export event as synthetic consumption so the optimiser
-        # plans a charge-up beforehand. Rate is capped to what the inverter can
-        # actually discharge, matching the constraint used in _discharging().
-        if self.axle_event is not None:
-            axle_rate_w = min(
-                self.get_config("axle_discharge_rate_w"),
-                self.get_config("inverter_power_watts"),
-                self.pv_system.battery.max_discharge_power,
-            )
-            event_start = self.axle_event["start"].floor("30min")
-            event_end = self.axle_event["end"].ceil("30min")
-            mask = (
-                (self.pv_system.static_flows.index >= event_start)
-                & (self.pv_system.static_flows.index < event_end)
-            )
-            if mask.any():
-                self.pv_system.static_flows.loc[mask, "consumption"] += axle_rate_w
-                self.log(
-                    f"  Axle VPP: added {axle_rate_w:.0f}W synthetic load to consumption "
-                    f"for {event_start.strftime(DATE_TIME_FORMAT_SHORT)} - {event_end.strftime(DATE_TIME_FORMAT_SHORT)}"
-                )
-
         soc_now = self.get_config("id_battery_soc")
 
         self.pv_system.initial_soc = soc_now
@@ -2897,6 +2863,29 @@ class PVOpt(hass.Hass):
         # SVB debugging
         # self.log("Self.prices is")
         # self.log(self.prices.to_string())
+
+        # Inject Axle VPP export rate into prices for event slots so the optimiser
+        # correctly values the event and plans a charge-up beforehand.
+        if self.axle_event is not None and "export" in self.prices.columns:
+            axle_rate_p = self.get_config("axle_export_rate_p")
+            event_start = self.axle_event["start"].floor("30min")
+            event_end = self.axle_event["end"].ceil("30min")
+            mask = (
+                (self.prices.index >= event_start)
+                & (self.prices.index < event_end)
+            )
+            if mask.any():
+                self.prices.loc[mask, "export"] = axle_rate_p
+                self.pv_system.prices = self.prices
+                self.log(
+                    f"  Axle VPP: set export rate to {axle_rate_p}p/kWh for "
+                    f"{event_start.strftime(DATE_TIME_FORMAT_SHORT)} - {event_end.strftime(DATE_TIME_FORMAT_SHORT)}"
+                )
+
+
+
+
+
 
         self.pv_system.calculate_flows()
         self.flows = {"Base": self.pv_system.flows}
