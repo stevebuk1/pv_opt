@@ -436,7 +436,6 @@ DEFAULT_CONFIG = {
     "id_solcast_tomorrow": {"default": "sensor.solcast_pv_forecast_forecast_tomorrow"},
     "id_axle_start_time": {"default": "sensor.axle_vpp_axle_start_time"},
     "id_axle_end_time": {"default": "sensor.axle_vpp_axle_end_time"},
-    "id_axle_1hr_before": {"default": "binary_sensor.axle_vpp_event_1_hour_before"},
     "axle_export_rate_p": {
         "default": 100,
         "domain": "number",
@@ -2054,14 +2053,14 @@ class PVOpt(hass.Hass):
 
     def _axle_writes_suspended(self):
         """Return True if we are within the Axle write-suppression window.
-        The window extends one optimiser run before event start to one optimiser
-        run after event end, ensuring pv_opt never fights Axle/Enode at the
-        boundaries regardless of the configured optimiser frequency."""
+        Suppression begins 1 hour before event start (so the optimiser has time
+        to plan and write the pre-event state) and ends one optimiser run after
+        event end, ensuring pv_opt never fights Axle/Enode at the boundaries."""
         if self.axle_event is None:
             return False
         now = pd.Timestamp.now(tz="UTC")
         freq = pd.Timedelta(minutes=self.get_config("optimise_frequency_minutes"))
-        window_start = self.axle_event["start"] - freq
+        window_start = self.axle_event["start"] - pd.Timedelta(hours=1)
         window_end = self.axle_event["end"] + freq
         return window_start <= now <= window_end
 
@@ -2090,8 +2089,7 @@ class PVOpt(hass.Hass):
         self.log("")
         self.log("  Checking for Axle Energy VPP events:")
 
-        # Only proceed if the 1-hour-before flag is on, or we are already inside the window
-        trigger_state = self.get_state_retry(trigger_entity) if self.entity_exists(trigger_entity) else "off"
+ 
         start_state = self.get_state_retry(start_entity)
         end_state = self.get_state_retry(end_entity) if self.entity_exists(end_entity) else None
 
@@ -2112,10 +2110,6 @@ class PVOpt(hass.Hass):
             self.log("    Axle event found but it is in the past — ignoring.")
             return
 
-        if trigger_state != "on" and event_start > now:
-            self.log(f"    Axle event found ({event_start.strftime(DATE_TIME_FORMAT_SHORT)} - {event_end.strftime(DATE_TIME_FORMAT_SHORT)}) but not within 1 hour — skipping synthetic load.")
-            return
-
         rate_p = self.get_config("axle_export_rate_p")
         self.axle_event = {
             "start": event_start,
@@ -2126,6 +2120,7 @@ class PVOpt(hass.Hass):
             f"    Axle export event loaded: {event_start.strftime(DATE_TIME_FORMAT_SHORT)} - "
             f"{event_end.strftime(DATE_TIME_FORMAT_SHORT)} at {rate_p}p/kWh"
         )
+
 
 
     def get_ha_value(self, entity_id):
