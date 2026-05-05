@@ -434,6 +434,7 @@ DEFAULT_CONFIG = {
     # },
     "id_solcast_today": {"default": "sensor.solcast_pv_forecast_forecast_today"},
     "id_solcast_tomorrow": {"default": "sensor.solcast_pv_forecast_forecast_tomorrow"},
+    "axle_allow_pvopt_writes": {"default": False, "domain": "switch"},
     "id_axle_start_time": {"default": "sensor.axle_vpp_axle_start_time"},
     "id_axle_end_time": {"default": "sensor.axle_vpp_axle_end_time"},
     "axle_export_rate_p": {
@@ -2052,17 +2053,20 @@ class PVOpt(hass.Hass):
 
 
     def _axle_writes_suspended(self):
-        """Return True if we are within the Axle write-suppression window.
-        Suppression begins one optimiser run before event start and ends one optimiser run after
-        event end, ensuring pv_opt never fights Axle/Enode at the boundaries."""
+
+        """Return True if inverter writes should be suppressed during the Axle
+        event window. Controlled by the axle_suspend_writes config option — set
+        to False if pv_opt's planned discharge is trusted to align with Axle/Enode
+        and write suppression is not needed."""
         if self.axle_event is None:
+            return False
+        if not self.get_config("allow_axle_pvopt_writes"):
             return False
         now = pd.Timestamp.now(tz="UTC")
         freq = pd.Timedelta(minutes=self.get_config("optimise_frequency_minutes"))
         window_start = self.axle_event["start"] - freq
         window_end = self.axle_event["end"] + freq
         return window_start <= now <= window_end
-
 
     def _load_axle_event(self):
         """

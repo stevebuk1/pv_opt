@@ -503,7 +503,26 @@ pv_opt:
   #  id_solar_power:
   #  - sensor.{device_name}_dc_power_pv1
   #  - sensor.{device_name}_dc_power_pv2
+  #
+  #
+  # ==============================================================================================
+  # Axle Energy Integration
+  # ==============================================================================================
+  # These are the default entities used with the Axle VPP Integration 
+  # You can change them here and over-ride the defaults.
 
+  # id_axle_start_time: sensor.axle_vpp_axle_start_time
+  # id_axle_end_time: sensor.axle_vpp_axle_end_time
+
+  # Axle Energy Controls your inverter during a discharge event. Pv_opt should also schedule#
+  # a discharge during this time, given the export price. Setting the next line to True will allow 
+  # Pv_opt to set a discharge. As Axle can either set a discharge late or not at all, it is 
+  # recommended to set this to True. 
+
+  # axle_allow_pvopt_writes: True 
+
+  # Axles export price. This is not available on the Axle API. Uncomment if no longer £1. 
+  # axle_export_rate_p: 100
 
   # ===============================================================================================================
   # Tariff comparison
