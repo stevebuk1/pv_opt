@@ -2053,14 +2053,13 @@ class PVOpt(hass.Hass):
 
     def _axle_writes_suspended(self):
         """Return True if we are within the Axle write-suppression window.
-        Suppression begins 1 hour before event start (so the optimiser has time
-        to plan and write the pre-event state) and ends one optimiser run after
+        Suppression begins one optimiser run before event start and ends one optimiser run after
         event end, ensuring pv_opt never fights Axle/Enode at the boundaries."""
         if self.axle_event is None:
             return False
         now = pd.Timestamp.now(tz="UTC")
         freq = pd.Timedelta(minutes=self.get_config("optimise_frequency_minutes"))
-        window_start = self.axle_event["start"] - pd.Timedelta(hours=1)
+        window_start = self.axle_event["start"] - freq
         window_end = self.axle_event["end"] + freq
         return window_start <= now <= window_end
 
