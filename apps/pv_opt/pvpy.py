@@ -1430,8 +1430,8 @@ class PVsystemModel:
             return
 
         # What SOC does the optimiser leave us with at the end of the cheap window?
-        soc_end_of_window = cheap_slots["soc_end"].iloc[-1]
-        deficit_pct = 100.0 - soc_end_of_window
+        soc_start_of_window = cheap_slots["soc"].iloc[0]
+        deficit_pct = 100.0 - soc_start_of_window
 
         if log:
             self.log(
@@ -1439,7 +1439,7 @@ class PVsystemModel:
                 f"{cheap_slots.index[-1].strftime(TIME_FORMAT)}  "
                 f"({len(cheap_slots)} slots @ {min_import_price:.2f}p/kWh)"
             )
-            self.log(f"SOC at end of cheap window: {soc_end_of_window:.1f}%  Deficit: {deficit_pct:.1f}%")
+            self.log(f"SOC at start of cheap window: {soc_start_of_window:.1f}%  Deficit: {deficit_pct:.1f}%")
 
         if deficit_pct <= 0:
             if log:
@@ -1481,21 +1481,35 @@ class PVsystemModel:
         # Distribute the deficit evenly (in power terms) across all cheap slots,
         # capped per slot by its individual headroom.
 
-        extra_power_per_slot = energy_deficit_wh / (cheap_slots["dt_hours"].sum())  # W, if spread perfectly flat
+        # Distribute charge iteratively across cheap slots, recalculating after each
+        # slot addition so that consumption within the window is naturally accounted for.
+        # At each step, spread the remaining deficit evenly across remaining slot-hours.
 
         slots = [slot for slot in self.slots]
+        total_slot_hours = cheap_slots["dt_hours"].sum()
+        flat_power = (energy_deficit_wh / self.inverter.charger_efficiency) / total_slot_hours
 
         for t in cheap_slots.index:
             headroom = float(cheap_headroom.loc[t])
             if headroom <= 0:
                 continue
-            added_power = min(extra_power_per_slot, headroom)
+            added_power = min(flat_power, headroom)
             if added_power > 0:
                 slots.append((t, added_power))
 
         self.calculate_flows(slots=slots)
 
         soc_end_new = self.flows[cheap_mask]["soc_end"].iloc[-1]
+
+        if soc_end_new < 99.5:
+            shortfall_pct = 100.0 - soc_end_new
+            if log:
+                self.log(
+                    f"WARNING: Cheap-rate window has insufficient headroom to reach 100%. "
+                    f"Maximum achievable SOC is approximately {soc_end_new:.1f}% "
+                    f"({shortfall_pct:.1f}% short). Consider a longer charge window or higher charger power."
+                )
+
         cost_delta = self.net_cost - self.best_cost
 
         if log:
@@ -1504,7 +1518,7 @@ class PVsystemModel:
                 f"Cost delta: +{cost_delta:.1f}p"
             )
 
-        # Always accept: the user has explicitly asked for this, cost is not the gate.
+
         self.slots = slots
         self.best_cost = self.net_cost
 
