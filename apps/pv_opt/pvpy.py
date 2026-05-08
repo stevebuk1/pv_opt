@@ -897,7 +897,6 @@ class PVsystemModel:
         self,
         log=True,
         discharge=False,
-        use_export=True,
         fill_first=False,
         max_iters=MAX_ITERS,
     ):
@@ -913,12 +912,6 @@ class PVsystemModel:
             [t for t in self.contract.tariffs.keys() if self.contract.tariffs[t] is not None],
             axis=1,
         )
-
-        if not use_export:
-            if log:
-                self.log(f"Ignoring export pricing because Use Export is turned off")
-            discharge = False
-            self.prices["export"] = 0
 
         if log and (self.host.debug and "B" in self.host.debug_cat):
             self.log("")
@@ -939,7 +932,32 @@ class PVsystemModel:
         if log:
             self.log(f"Base cost:  {self.base_cost}")
 
-        self._high_cost_swaps(log=log)
+        # Run high cost swaps ignoring export pricing, then with real export pricing.
+        # Keep whichever produces the lower cost.
+        real_export_prices = self.prices["export"].copy()
+
+        self.prices["export"] = 0
+        self._high_cost_swaps(log=False)
+        slots_no_export = list(self.slots)
+        cost_no_export = self.best_cost
+
+        self.prices["export"] = real_export_prices
+        self._high_cost_swaps(log=False)
+        slots_with_export = list(self.slots)
+        cost_with_export = self.best_cost
+
+        if cost_no_export < cost_with_export:
+            if log:
+                self.log(f"High Cost Swaps: export-unaware plan is cheaper ({cost_no_export:.1f}p vs {cost_with_export:.1f}p), using that")
+            self.slots = slots_no_export
+            self.best_cost = cost_no_export
+        else:
+            if log:
+                self.log(f"High Cost Swaps: export-aware plan is cheaper ({cost_with_export:.1f}p vs {cost_no_export:.1f}p), using that")
+            self.slots = slots_with_export
+            self.best_cost = cost_with_export
+
+        self.calculate_flows(slots=self.slots)
 
         # Only do the rest if there is an export tariff:
         # self.log(f"Sum of Export Prices = {prices['export'].sum()}")

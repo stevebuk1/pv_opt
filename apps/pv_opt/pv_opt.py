@@ -152,7 +152,6 @@ DOMAIN_ATTRIBUTES = {
 
 DEFAULT_CONFIG = {
     "read_only": {"default": True, "domain": "switch"},
-    "include_export": {"default": True, "domain": "switch"},
     "forced_discharge": {"default": True, "domain": "switch"},
     "allow_cyclic": {"default": False, "domain": "switch"},
     "charge_to_100": {"default": False, "domain": "switch"},
@@ -2927,32 +2926,21 @@ class PVOpt(hass.Hass):
 
         cases = {
             "Optimised Charging": {
-                "export": False,
-                "discharge": False,
-                "fill_first": False,
-            },
-            "Optimised PV Export": {
-                "export": True,
                 "discharge": False,
                 "fill_first": False,
             },
             "Forced Discharge": {
-                "export": True,
                 "discharge": True,
                 "fill_first": False,
             },
             "Forced Discharge Fill First": {
-                "export": True,
                 "discharge": True,
                 "fill_first": True,
             },
         }
 
-        if not self.get_config("include_export"):
+        if not self.get_config("forced_discharge"):
             self.selected_case = "Optimised Charging"
-
-        elif not self.get_config("forced_discharge"):
-            self.selected_case = "Optimised PV Export"
 
         elif self.get_config("fill_first"):
             self.selected_case = "Forced Discharge Fill First"
@@ -2972,7 +2960,6 @@ class PVOpt(hass.Hass):
 
                 self.flows[case] = self.pv_system.optimised_force(
                     log=True,
-                    use_export=cases[case]["export"],
                     discharge=cases[case]["discharge"],
                     fill_first=cases[case]["fill_first"],
                 )
@@ -2987,7 +2974,6 @@ class PVOpt(hass.Hass):
             for case in cases:
                 self.flows[case] = self.pv_system.optimised_force(
                     log=(case == self.selected_case),
-                    use_export=cases[case]["export"],
                     discharge=cases[case]["discharge"],
                     fill_first=cases[case]["fill_first"],
                 )
