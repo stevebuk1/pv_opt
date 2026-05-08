@@ -941,6 +941,12 @@ class PVsystemModel:
         slots_no_export = list(self.slots)
         cost_no_export = self.best_cost
 
+        # Reset state fully before second run
+        self.calculate_flows()
+        self.base_cost = self.net_cost
+        self.best_cost = self.base_cost
+        self.slots = []
+
         self.prices["export"] = real_export_prices
         self._high_cost_swaps(log=False)
         slots_with_export = list(self.slots)
