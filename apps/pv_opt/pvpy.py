@@ -897,7 +897,6 @@ class PVsystemModel:
         self,
         log=True,
         discharge=False,
-        fill_first=False,
         max_iters=MAX_ITERS,
     ):
 
@@ -988,10 +987,37 @@ class PVsystemModel:
             if discharge:
                 self._discharging(log=log)
 
-            if fill_first:
-                self._discharging(log=log, fill_first=fill_first)
-
         self.calculate_flows(slots=self.slots)
+
+        # If discharge is enabled, also try fill_first and keep whichever is cheaper
+        if discharge:
+            slots_normal = list(self.slots)
+            cost_normal = self.best_cost
+
+            # Reset and re-run with fill_first
+            self.calculate_flows()
+            self.base_cost = self.net_cost
+            self.best_cost = self.base_cost
+            self.slots = []
+            self.slots_added = 999
+            j = 0
+
+            while (self.slots_added > 0) and (j < max_iters):
+                j += 1
+                self._low_cost_charging(log=False)
+                self._discharging(log=False, fill_first=True)
+
+            self.calculate_flows(slots=self.slots)
+            cost_fill_first = self.best_cost
+
+            if cost_normal <= cost_fill_first:
+                if log:
+                    self.log(f"Fill First: standard discharge is cheaper ({cost_normal:.1f}p vs {cost_fill_first:.1f}p), using that")
+                self.slots = slots_normal
+                self.best_cost = cost_normal
+            else:
+                if log:
+                    self.log(f"Fill First: fill first discharge is cheaper ({cost_fill_first:.1f}p vs {cost_normal:.1f}p), using that")
 
         self._charge_to_100(log=log)
 

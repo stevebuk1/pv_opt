@@ -155,7 +155,6 @@ DEFAULT_CONFIG = {
     "forced_discharge": {"default": True, "domain": "switch"},
     "allow_cyclic": {"default": False, "domain": "switch"},
     "charge_to_100": {"default": False, "domain": "switch"},
-    "fill_first": {"default": False, "domain": "switch"},
     "use_solar": {"default": True, "domain": "switch"},
     "ev_part_of_house_load": {"default": True, "domain": "switch"},
     "prevent_discharge": {"default": False, "domain": "switch"},
@@ -2081,6 +2080,8 @@ class PVOpt(hass.Hass):
 
         start_entity = self.config["id_axle_start_time"]
         end_entity = self.config["id_axle_end_time"]
+        trigger_entity = self.config["id_axle_1hr_before"]
+
 
         # Silently skip if the integration is not installed
         if not self.entity_exists(start_entity):
@@ -2925,23 +2926,14 @@ class PVOpt(hass.Hass):
         cases = {
             "Optimised Charging": {
                 "discharge": False,
-                "fill_first": False,
             },
             "Forced Discharge": {
                 "discharge": True,
-                "fill_first": False,
-            },
-            "Forced Discharge Fill First": {
-                "discharge": True,
-                "fill_first": True,
             },
         }
 
         if not self.get_config("forced_discharge"):
             self.selected_case = "Optimised Charging"
-
-        elif self.get_config("fill_first"):
-            self.selected_case = "Forced Discharge Fill First"
 
         else:
             self.selected_case = "Forced Discharge"
@@ -2959,7 +2951,6 @@ class PVOpt(hass.Hass):
                 self.flows[case] = self.pv_system.optimised_force(
                     log=True,
                     discharge=cases[case]["discharge"],
-                    fill_first=cases[case]["fill_first"],
                 )
 
                 self.optimised_cost[case] = self.contract.net_cost(self.flows[case], sum=False)
@@ -2973,7 +2964,6 @@ class PVOpt(hass.Hass):
                 self.flows[case] = self.pv_system.optimised_force(
                     log=(case == self.selected_case),
                     discharge=cases[case]["discharge"],
-                    fill_first=cases[case]["fill_first"],
                 )
 
                 self.optimised_cost[case] = self.contract.net_cost(self.flows[case], sum=False)
