@@ -2080,8 +2080,6 @@ class PVOpt(hass.Hass):
 
         start_entity = self.config["id_axle_start_time"]
         end_entity = self.config["id_axle_end_time"]
-        trigger_entity = self.config["id_axle_1hr_before"]
-
 
         # Silently skip if the integration is not installed
         if not self.entity_exists(start_entity):
