@@ -2060,7 +2060,7 @@ class PVOpt(hass.Hass):
         and write suppression is not needed."""
         if self.axle_event is None:
             return False
-        if not self.get_config("allow_axle_pvopt_writes"):
+        if not self.get_config("axle_allow_pvopt_writes"):
             return False
         now = pd.Timestamp.now(tz="UTC")
         freq = pd.Timedelta(minutes=self.get_config("optimise_frequency_minutes"))
