@@ -1022,6 +1022,7 @@ class PVsystemModel:
                     self.log(f"    Standard discharge is cheaper ({cost_normal:.1f}p vs {cost_fill_first:.1f}p), using that")
                 self.slots = slots_normal
                 self.best_cost = cost_normal
+                self.calculate_flows(slots=self.slots)
             else:
                 if log:
                     self.log(f"    Fill first discharge is cheaper ({cost_fill_first:.1f}p vs {cost_normal:.1f}p), using that")
