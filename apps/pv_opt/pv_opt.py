@@ -21,7 +21,7 @@ import pandas as pd
 import pvpy as pv
 from numpy import nan
 
-VERSION = "5.1.2-Beta-7"
+VERSION = "5.1.0-Beta-1"
 
 UNITS = {
     "current": "A",
@@ -3370,7 +3370,8 @@ class PVOpt(hass.Hass):
                             self.inverter.hold_soc(enable=True, target_soc=self.hold[0]["soc"], start=self.charge_start_datetime, end=self.charge_end_datetime)
                         else:
                             self.log(f"  Inverter already holding SOC of {self.hold[0]['soc']:0.0f}%")
-                            self.inverter.hold_soc(enable=True, target_soc=self.hold[0]["soc"], start=None, end=self.charge_end_datetime)
+                            # Next line commented out - if its already holding there is nothing to update (there used to be when using backup mode)
+                            # self.inverter.hold_soc(enable=True, target_soc=self.hold[0]["soc"], start=None, end=self.charge_end_datetime)
 
                     else:  # if already in Car slot, this bit should run
                         self.log(f"Current charge/discharge window ends in {time_to_slot_end:0.1f} minutes.")
@@ -5084,7 +5085,7 @@ class PVOpt(hass.Hass):
 
         return (changed, written)
 
-    def write_and_poll_value(self, entity_id, value: int | float, tolerance=0.0, verbose=True):
+    def write_and_poll_value(self, entity_id, value: int | float, tolerance=0.0, verbose=False):
         changed = False
         written = False
         if tolerance == -1:

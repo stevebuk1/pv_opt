@@ -953,12 +953,12 @@ class PVsystemModel:
 
         if cost_no_export < cost_with_export:
             if log:
-                self.log(f"High Cost Swaps: export-unaware plan is cheaper ({cost_no_export:.1f}p vs {cost_with_export:.1f}p), using that")
+                self.log(f"High Cost Swaps: export-unaware plan is cheaper than export-aware plan ({cost_no_export:.1f}p vs {cost_with_export:.1f}p), using that")
             self.slots = slots_no_export
             self.best_cost = cost_no_export
         else:
             if log:
-                self.log(f"High Cost Swaps: export-aware plan is cheaper ({cost_with_export:.1f}p vs {cost_no_export:.1f}p), using that")
+                self.log(f"High Cost Swaps: export-aware plan ({cost_with_export:.1f}p is cheaper or equal to than export-unaware plan {cost_no_export:.1f}p), using that")
             self.slots = slots_with_export
             self.best_cost = cost_with_export
 
