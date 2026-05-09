@@ -1684,7 +1684,7 @@ class PVOpt(hass.Hass):
                         self.rlog(f"Trying to load tariff codes: Export: {self.config['octopus_export_tariff_code']}")
                         tariffs["export"] = pv.Tariff(
                             self.config[f"octopus_export_tariff_code"],
-                            export=False,
+                            export=True,
                             host=self,
                         )
                     elif self.get_config("manual_export_tariff", False):

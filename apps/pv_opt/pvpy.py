@@ -933,10 +933,14 @@ class PVsystemModel:
 
         # Run high cost swaps ignoring export pricing, then with real export pricing.
         # Keep whichever produces the lower cost.
+
+        if log:
+            self.log("High Cost Swaps: running with export pricing and then again but ignoring export pricing")
+
         real_export_prices = self.prices["export"].copy()
 
         self.prices["export"] = 0
-        self._high_cost_swaps(log=False)
+        self._high_cost_swaps(log=log)
         slots_no_export = list(self.slots)
         cost_no_export = self.best_cost
 
@@ -947,10 +951,10 @@ class PVsystemModel:
         self.slots = []
 
         self.prices["export"] = real_export_prices
-        self._high_cost_swaps(log=False)
+        self._high_cost_swaps(log=log)
         slots_with_export = list(self.slots)
         cost_with_export = self.best_cost
-
+        
         if cost_no_export < cost_with_export:
             if log:
                 self.log(f"High Cost Swaps: export-unaware plan is cheaper than export-aware plan ({cost_no_export:.1f}p vs {cost_with_export:.1f}p), using that")
@@ -958,7 +962,7 @@ class PVsystemModel:
             self.best_cost = cost_no_export
         else:
             if log:
-                self.log(f"High Cost Swaps: export-aware plan ({cost_with_export:.1f}p is cheaper or equal to than export-unaware plan {cost_no_export:.1f}p), using that")
+                self.log(f"High Cost Swaps: export-aware plan ({cost_with_export:.1f})p is cheaper or equal to than export-unaware plan ({cost_no_export:.1f}p), using that")
             self.slots = slots_with_export
             self.best_cost = cost_with_export
 
@@ -1010,14 +1014,17 @@ class PVsystemModel:
             self.calculate_flows(slots=self.slots)
             cost_fill_first = self.best_cost
 
+            if log:
+                self.log("Running Discharging, but with filling slots first ('Fill First')")
+
             if cost_normal <= cost_fill_first:
                 if log:
-                    self.log(f"Fill First: standard discharge is cheaper ({cost_normal:.1f}p vs {cost_fill_first:.1f}p), using that")
+                    self.log(f"    Standard discharge is cheaper ({cost_normal:.1f}p vs {cost_fill_first:.1f}p), using that")
                 self.slots = slots_normal
                 self.best_cost = cost_normal
             else:
                 if log:
-                    self.log(f"Fill First: fill first discharge is cheaper ({cost_fill_first:.1f}p vs {cost_normal:.1f}p), using that")
+                    self.log(f"    Fill first discharge is cheaper ({cost_fill_first:.1f}p vs {cost_normal:.1f}p), using that")
 
         self._charge_to_100(log=log)
 
