@@ -1646,7 +1646,8 @@ class PVsystemModel:
                     -min(
                         min(
                             self.battery.max_discharge_power,
-                            self.inverter.charger_power,
+                            # self.inverter.charger_power,  (incorrect, discharging could be using solar as well)
+                            self.inverter.inverter_power,
                         )
                         - x["solar"].loc[start_window],
                         ((x["soc_end"].loc[start_window] - self.battery.max_dod) / 100 * self.battery.capacity)
