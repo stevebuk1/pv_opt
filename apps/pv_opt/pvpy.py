@@ -1613,7 +1613,8 @@ class PVsystemModel:
             if log:
                 self.log(f"Added {charging_slots_added} charging slots. Best cost with charging = {best_cost:6.1f}p")
 
-            self._log_slots(slots=slots)
+            if log:
+                self._log_slots(slots=slots)
             slots_added += charging_slots_added
 
         # Check how many slots which aren't full are at an export price less than any import price:
