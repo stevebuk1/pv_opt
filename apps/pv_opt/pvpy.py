@@ -934,12 +934,16 @@ class PVsystemModel:
         # Run high cost swaps ignoring export pricing, then with real export pricing.
         # Keep whichever produces the lower cost.
 
-        if log:
-            self.log("High Cost Swaps: running with export pricing and then again but ignoring export pricing")
-
         real_export_prices = self.prices["export"].copy()
 
         self.prices["export"] = 0
+
+        if log:
+            self.log("")
+            self.log("High Cost Usage Swaps (export prices excluded/ignored)")
+            self.log("---------------------")
+            self.log("")
+
         self._high_cost_swaps(log=log)
         slots_no_export = list(self.slots)
         cost_no_export = self.best_cost
@@ -951,6 +955,13 @@ class PVsystemModel:
         self.slots = []
 
         self.prices["export"] = real_export_prices
+
+        if log:
+            self.log("")
+            self.log("High Cost Usage Swaps (export prices included)")
+            self.log("---------------------")
+            self.log("")
+
         self._high_cost_swaps(log=log)
         slots_with_export = list(self.slots)
         cost_with_export = self.best_cost
@@ -1084,17 +1095,12 @@ class PVsystemModel:
         # --------------------------------------------------------------------------------------------
         #  Charging 1st Pass
         # --------------------------------------------------------------------------------------------
-        if log:
-            self.log("")
-            self.log("High Cost Usage Swaps")
-            self.log("---------------------")
-            self.log("")
 
-            if log and (self.host.debug and "C" in self.host.debug_cat):
-                self.log(
-                    "SPR = Slot Power Required, SCPA = Slot Charger Power Available, SAC = Slot Available Capacity, RSC = Remaining Slot Capacity"
-                )
-                self.log("")
+        if log and (self.host.debug and "C" in self.host.debug_cat):
+            self.log(
+                "SPR = Slot Power Required, SCPA = Slot Charger Power Available, SAC = Slot Available Capacity, RSC = Remaining Slot Capacity"
+            )
+            self.log("")
 
         done = False
         i = 0
