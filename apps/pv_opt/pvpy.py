@@ -821,7 +821,7 @@ class PVsystemModel:
 
         self.flows = self.static_flows.copy()[[solar_id, consumption_id]].set_axis(["solar", "consumption"], axis=1)
         self.flows["dt_hours"] = get_dt_hours(self.flows)
-        self.flows["battery_grid_requirement"] = self.flows["consumption"] - self.flows["solar"]
+        self.flows["batt_grid_req"] = self.flows["consumption"] - self.flows["solar"]
         self.flows["forced"] = 0
         self.flows["battery_temp"] = self.flows["consumption"] - self.flows["solar"]
         # forced_charge = pd.Series(index=self.flows.index, data=0)
@@ -878,7 +878,7 @@ class PVsystemModel:
             self.flows["battery"] * self.inverter.inverter_efficiency
         )
         self.flows.loc[self.flows["battery"] < 0, "battery"] = self.flows["battery"] / self.inverter.charger_efficiency
-        self.flows["grid"] = (self.flows["battery_grid_requirement"] - self.flows["battery"]).round(0)
+        self.flows["grid"] = (self.flows["batt_grid_req"] - self.flows["battery"]).round(0)
         self.flows["soc"] = (self.flows["chg"] / self.battery.capacity) * 100
         self.flows["soc_end"] = (self.flows["chg_end"] / self.battery.capacity) * 100
 
@@ -1155,6 +1155,20 @@ class PVsystemModel:
                             slot_power_required = (
                                 round_trip_energy_required * 1000 / search_window["dt_hours"].loc[window].sum()
                             )
+
+                            # If the charge rate is really low, just use the last 2 slots to charge instead of all of the cheap slots
+                            # Note, will only invoke for cheap rates that last for 3.5 hours or more. (Go, IOG, Eco7)
+
+                            tolerance = self.host.get_config("forced_power_group_tolerance")
+                            window_hours = search_window["dt_hours"].loc[window].sum()
+                            if slot_power_required < (tolerance / 2) and window_hours > 3.5:
+                                window = window[-2:]
+                                slot_power_required = (
+                                    round_trip_energy_required * 1000 / search_window["dt_hours"].loc[window].sum()
+                                )
+                                start_window = window[0]
+                                end_window = window[-1]
+
 
                             if round(cost_at_min_price, 1) < round(max_import_cost, 1):
                                 slots_added = 0

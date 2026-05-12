@@ -3092,8 +3092,13 @@ class PVOpt(hass.Hass):
                         car_on.iat[i] = 1
 
         # Read "prevent_discharge" switch to set a car slot in the current slot and next slot
+        # Also check if Zappi is actively charging (covers non-smart charging sessions)
+        zappi_charging = (
+            self.zappi_plug_entity is not None
+            and self.get_state(self.zappi_plug_entity) == "Charging"
+        )
 
-        if self.get_config("prevent_discharge"):
+        if self.get_config("prevent_discharge") or zappi_charging:
             car_on.iat[0] = 1
             car_on.iat[1] = 1
 
@@ -3568,7 +3573,15 @@ class PVOpt(hass.Hass):
         if self.debug and "O" in self.debug_cat:
             self.log("")
             self.ulog("1/2 Hour Optimsation summary")
-            self.log(f"\n{self.opt.to_string()}")
+
+            # self.log(f"\n{self.opt.round(2).to_string()}")
+
+            opt_display = self.opt.copy()
+            opt_display[["solar", "consumption", "batt_grid_req", "chg", "chg_end", "battery", "grid"]] = opt_display[["solar", "consumption", "batt_grid_req", "chg", "chg_end", "battery", "grid"]].round(0)
+            opt_display[["soc", "soc_end"]] = opt_display[["soc", "soc_end"]].round(1)
+            opt_display[["dt_hours", "import", "export"]] = opt_display[["dt_hours", "import", "export"]].round(2)
+            self.log(f"\n{opt_display.to_string()}")
+
 
         if self.debug and "W" in self.debug_cat:
             self.log("")
