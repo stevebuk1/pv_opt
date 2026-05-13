@@ -516,15 +516,15 @@ pv_opt:
 
   # Axle Energy controls your inverter during a discharge event. Pv_opt should also schedule
   # a discharge during this time, given the export price. Setting the next line to True will 
-  # allow Pv_opt to set the discharge. As Axle has been found to either set a discharge late or 
-  # not at all, but wil still honour any export made during the event, it is recommended to leave
-  # this set to True. Setting to False will automatically supress Pv_opt from inverter writes for
-  # 10 minutes before the event to 10 minutes after. 
+  # allow Pv_opt to set the discharge. Setting to False will automatically supress Pv_opt from inverter 
+  # writes for 10 minutes before the event to 10 minutes after. 
+  # As Axle has been found to either set a discharge late or not at all, but wil still honour any 
+  # export made during the event, it is recommended to leave this set to True. 
 
-  # axle_allow_pvopt_writes: True 
+  # axle_allow_pvopt_writes: True   # Default = True
 
-  # Axles export price. (This is not available on the Axle API(). Uncomment if no longer £1. 
-  # axle_export_rate_p: 100
+  # Axles export price. (as this is not available on the Axle API()). Uncomment and set if no longer £1
+  # axle_export_rate_p: 100         # Default = 100
 
   # ===============================================================================================================
   # Tariff comparison
