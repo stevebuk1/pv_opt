@@ -13,7 +13,7 @@ import pandas as pd
 import pvpy as pv
 from numpy import nan
 
-VERSION = "5.0.3"
+VERSION = "5.0.4"
 
 UNITS = {
     "current": "A",
@@ -1704,7 +1704,7 @@ class PVOpt(hass.Hass):
     def _manual_tariff(self, direction="import"):
         name = self.get_config(f"manual_{direction}_tariff_name")
         self.log(f"Trying to load manual {direction} tariff {name}")
-        tz = self.get_config(f"manual_{direction}_tariff_tz")
+        tz = self.get_config(f"manual_{direction}_tariff_tz", self.tz)
         if direction == "import":
             fixed = self.get_config(f"manual_{direction}_tariff_standing", 0.0)
         else:
@@ -1719,6 +1719,7 @@ class PVOpt(hass.Hass):
             unit=unit,
             host=self,
             manual=True,
+            tariff_tz=tz,
         )
 
     def _check_tariffs(self):
