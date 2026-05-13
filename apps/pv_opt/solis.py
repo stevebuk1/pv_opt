@@ -768,7 +768,7 @@ class SolisInverter(BaseInverterController):
 
         if entity_id is not None:
             changed, written = self.write_to_hass(
-                entity_id=entity_id, value=current, tolerance=current_tolerance, verbose=True
+                entity_id=entity_id, value=current, tolerance=current_tolerance, verbose=False
             )
 
         if changed:
@@ -909,7 +909,7 @@ class SolisSolarmanV2Inverter(SolisInverter):
 
         if entity_id is not None:
             changed, written = self.write_to_hass(
-                entity_id=entity_id, value=current, tolerance=current_tolerance, verbose=True
+                entity_id=entity_id, value=current, tolerance=current_tolerance, verbose=False
             )
 
         if changed:
