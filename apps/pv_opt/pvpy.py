@@ -294,6 +294,7 @@ class Tariff:
                 .ffill()
                 .loc[start:end]
             )
+            df.index = df.index.tz_convert("UTC")
 
         else:
             df = pd.DataFrame(self.unit).set_index("valid_from")["value_inc_vat"]
