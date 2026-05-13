@@ -118,7 +118,11 @@ This excellent integration will pull Octopus Price data in to Home Assistant. Pv
 
 <h3>5. Install the Axle Energy VPP Integration (If Required)</h3>
 
-This integration will pull Axle events into HomeAssistant. If you are signed up with Axle Energy this will allow Pv_opt to integrate the events automatically into the battery planning.
+This integration will pull Axle events into HomeAssistant. If you are signed up with Axle Energy this will allow Pv_opt to integrate events automatically into the battery planning.
+Note: curently Axle are only generating export events (not import) and Pv_opt will assume all events are export. Import events are future work. 
+
+1. Install the integation via HACS:https://github.com/deanhalllincoln/ha-axle-vpp
+2. Add the Integration via Settings: http://homeassistant.local:8123/config/integrations/dashboard, adding your Axle API token when prompted. 
 
 
 <h3>6. Install the Integration to Control Your Inverter</h3>

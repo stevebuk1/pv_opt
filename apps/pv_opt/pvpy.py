@@ -1486,7 +1486,7 @@ class PVsystemModel:
         # Identify the cheap-rate window: a contiguous block of slots at the
         # minimum import price that is long enough to represent a genuine overnight
         # cheap period (not an isolated Agile bargain slot).
-        MIN_CHEAP_WINDOW_MINUTES = 60
+        MIN_CHEAP_WINDOW_MINUTES = 150
 
         min_import_price = self.flows["import"].min()
         median_import_price = self.flows["import"].median()
