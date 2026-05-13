@@ -519,7 +519,7 @@ pv_opt:
   # allow Pv_opt to set the discharge. Setting to False will automatically supress Pv_opt from inverter 
   # writes for 10 minutes before the event to 10 minutes after. 
   # As Axle has been found to either set a discharge late or not at all, but wil still honour any 
-  # export made during the event, it is recommended to leave this set to True. 
+  # export made during the event, it is recommended to leave this set to True (i.e commented out). 
 
   # axle_allow_pvopt_writes: True   # Default = True
 
