@@ -753,9 +753,24 @@ class Contract:
         nc = imp_df["fixed"]
         nc += imp_df["unit"] * grid_imp / 1000 * dt
 
+        axle_event = getattr(self.host, "axle_event", None)
+
         if self.tariffs["export"] is not None:
             exp_df = self.tariffs["export"].to_df(start=start.floor("30min"), end=end, **kwargs)
             exp_df.index = [start] + list(exp_df.index[1:])
+        elif axle_event is not None:
+            exp_df = pd.DataFrame({"unit": 0.0, "fixed": 0.0}, index=imp_df.index)
+        else:
+            exp_df = None
+
+        if exp_df is not None:
+            if axle_event is not None:
+                axle_rate_p = self.host.get_config("axle_export_rate_p")
+                event_start = axle_event["start"].floor("30min")
+                event_end = axle_event["end"].ceil("30min")
+                mask = (exp_df.index >= event_start) & (exp_df.index < event_end)
+                exp_df.loc[mask, "unit"] += axle_rate_p
+
             nc += exp_df["unit"] * grid_exp / 1000 * dt
 
         if kwargs.get("log") and (self.host.debug and "F" in self.host.debug_cat):
