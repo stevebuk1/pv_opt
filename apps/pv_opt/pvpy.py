@@ -941,7 +941,7 @@ class PVsystemModel:
             if mask.any():
                 if "export" not in self.prices.columns:
                     self.prices["export"] = 0.0
-                self.prices.loc[mask, "export"] = axle_rate_p
+                self.prices.loc[mask, "export"] += axle_rate_p
 
 
         if log and (self.host.debug and "B" in self.host.debug_cat):
