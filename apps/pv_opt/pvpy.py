@@ -81,6 +81,7 @@ class Tariff:
         eco7_start="01:00",
         host=None,
         manual=False,
+        tariff_tz=None,
         **kwargs,
     ) -> None:
         self.name = name
@@ -94,6 +95,8 @@ class Tariff:
             self.log = host.log
             self.rlog = host.rlog
             self.tz = host.tz
+
+        self.tariff_tz = tariff_tz if tariff_tz is not None else self.tz
 
         # SVB logging
         # self.log("")
@@ -270,6 +273,8 @@ class Tariff:
             df = df["unit"].loc[start:end]
 
         elif self.manual:
+            local_start = start.tz_convert(self.tariff_tz).floor("1D")
+            local_end = end.tz_convert(self.tariff_tz).ceil("1D")
             df = (
                 pd.concat(
                     [
@@ -278,8 +283,8 @@ class Tariff:
                             data=[{"unit": x["price"]} for x in self.unit],
                         ).sort_index()
                         for midnight in pd.date_range(
-                            start.floor("1D") - pd.Timedelta("1D"),
-                            end.ceil("1D"),
+                            local_start - pd.Timedelta("1D"),
+                            local_end,
                             freq="1D",
                         )
                     ]
@@ -288,6 +293,7 @@ class Tariff:
                 .ffill()
                 .loc[start:end]
             )
+            df.index = df.index.tz_convert("UTC")
 
         else:
             df = pd.DataFrame(self.unit).set_index("valid_from")["value_inc_vat"]
