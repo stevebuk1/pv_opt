@@ -915,6 +915,20 @@ class PVsystemModel:
             axis=1,
         )
 
+        # Inject Axle VPP export rate into prices for event slots so the optimiser
+        # correctly values the event and plans a charge-up beforehand.
+
+        if self.host is not None and self.host.axle_event is not None:
+            axle_rate_p = self.host.get_config("axle_export_rate_p")
+            event_start = self.host.axle_event["start"].floor("30min")
+            event_end = self.host.axle_event["end"].ceil("30min")
+            mask = (self.prices.index >= event_start) & (self.prices.index < event_end)
+            if mask.any():
+                if "export" not in self.prices.columns:
+                    self.prices["export"] = 0.0
+                self.prices.loc[mask, "export"] = axle_rate_p
+
+
         if log and (self.host.debug and "B" in self.host.debug_cat):
             self.log("")
             self.log("Prices is")

@@ -2854,32 +2854,6 @@ class PVOpt(hass.Hass):
 
         self.pv_system.prices = self.prices
 
-        # SVB debugging
-        # self.log("Self.prices is")
-        # self.log(self.prices.to_string())
-
-        # Inject Axle VPP export rate into prices for event slots so the optimiser
-        # correctly values the event and plans a charge-up beforehand.
-
-        if self.axle_event is not None:
-            axle_rate_p = self.get_config("axle_export_rate_p")
-            event_start = self.axle_event["start"].floor("30min")
-            event_end = self.axle_event["end"].ceil("30min")
-            mask = (
-                (self.prices.index >= event_start)
-                & (self.prices.index < event_end)
-            )
-            if mask.any():
-                if "export" not in self.prices.columns:
-                    self.prices["export"] = 0.0
-                self.prices.loc[mask, "export"] = axle_rate_p
-                self.pv_system.prices = self.prices
-                self.log(
-                    f"  Axle VPP: set export rate to {axle_rate_p}p/kWh for "
-                    f"{event_start.strftime(DATE_TIME_FORMAT_SHORT)} - {event_end.strftime(DATE_TIME_FORMAT_SHORT)}"
-                )
-
-
         self.pv_system.calculate_flows()
         self.flows = {"Base": self.pv_system.flows}
         self.log("")
