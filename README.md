@@ -7,18 +7,19 @@
   - [2. Install HACS](#2-install-hacs)
   - [3. Install the Solcast PV Solar Integration (v4.1.x)](#3-install-the-solcast-pv-solar-integration-v41x)
   - [4. Install the Octopus Energy Integration (If Required)](#4-install-the-octopus-energy-integration-if-required)
-  - [5. Install the Integration to Control Your Inverter](#5-install-the-integration-to-control-your-inverter)
+  - [5. Install the Axle Energy VPP Integration (If Required)](#5-install-the-axle-energy-VPP-integration-if-required)
+  - [6. Install the Integration to Control Your Inverter](#6-install-the-integration-to-control-your-inverter)
     - [Solax Modbus](#solax-modbus)
     - [HA Core Modbus](#ha-core-modbus)
     - [Using Solis Cloud](#using-solis-cloud)
-  - [6. Install the MQTT Integration in Home Assistant](#6-install-the-mqtt-integraion-in-home-assistant)
-  - [7. Install Mosquitto MQTT Broker](#7-install-mosquitto-mqtt-broker)
-  - [8. Install File Editor](#8-install-file-editor)
-  - [9. Install Samba Share and/or Studio Code Server Add-ons If Required](#9-install-samba-share-andor-studio-code-server-add-ons-if-required)
-  - [10. Install AppDaemon](#10-install-appdaemon)
-  - [11. Configure AppDaemon](#11-configure-appdaemon)
-  - [12. Install PV Opt from HACS](#12-install-pv-opt-from-hacs)
-  - [13. Add an Automation to Restart AppDaemon when HA Restarts (Optional)](#13-add-an-automation-to-restart-appdaemon-when-ha-restarts-optional)
+  - [7. Install the MQTT Integration in Home Assistant](#7-install-the-mqtt-integraion-in-home-assistant)
+  - [8. Install Mosquitto MQTT Broker](#8-install-mosquitto-mqtt-broker)
+  - [9. Install File Editor](#9-install-file-editor)
+  - [10. Install Samba Share and/or Studio Code Server Add-ons If Required](#10-install-samba-share-andor-studio-code-server-add-ons-if-required)
+  - [11. Install AppDaemon](#11-install-appdaemon)
+  - [12. Configure AppDaemon](#12-configure-appdaemon)
+  - [13. Install PV Opt from HACS](#13-install-pv-opt-from-hacs)
+  - [14. Add an Automation to Restart AppDaemon when HA Restarts (Optional)](#14-add-an-automation-to-restart-appdaemon-when-ha-restarts-optional)
 - [Configuration](#configuration)
   - [System Parameters](#system-parameters)
   - [Control Parameters](#control-parameters)
@@ -115,7 +116,12 @@ This app is not stand-alone it requires the following:
 
 This excellent integration will pull Octopus Price data in to Home Assistant. Pv Opt pulls data from Octopus independently of this integration but will extract current tariff codes from it if they are avaiable. If not it will either use account details supplied in `secrets.yaml` or explicitly defined Octopus tariff codes set in `config.yaml`. If on Intelligent Octopus Go, this integration is required, as Pv_opt will use this to identify any slots allocated outside of 23:30 to 05:30 for use in its charge plan and managing the house battery during car charging slots.
 
-<h3>5. Install the Integration to Control Your Inverter</h3>
+<h3>5. Install the Axle Energy VPP Integration (If Required)</h3>
+
+This integration will pull Axle events into HomeAssistant. If you are signed up with Axle Energy this will allow Pv_opt to integrate the events automatically into the battery planning.
+
+
+<h3>6. Install the Integration to Control Your Inverter</h3>
 
 At present this app works directly with Solis hybrid inverters using one of the following:
 1) the Solax Modbus integration (https://github.com/wills106/homeassistant-solax-modbus)
@@ -165,13 +171,13 @@ For Solis Inverters, replace existing Solis_Hybrid.yaml with this one:
 
 https://github.com/stevebuk1/pv_opt/blob/main/files/solis_hybrid.yaml
 
-<h3>6. Install the MQTT Integraion in Home Assistant</h3>
+<h3>7. Install the MQTT Integraion in Home Assistant</h3>
 
 1. Click on the button below to add the MQTT integration:
 
     [![](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start?domain=mqtt)
 
-<h3>7. Install Mosquitto MQTT Broker</h3>
+<h3>8. Install Mosquitto MQTT Broker</h3>
 
 1. Navigate to Settings -> Addons and click "Mosquito Broker"
 
@@ -181,17 +187,17 @@ https://github.com/stevebuk1/pv_opt/blob/main/files/solis_hybrid.yaml
 
 4. Either save the MQTT username and password in your `secrets.yaml` file or make a note of them for later.
 
-<h3>8. Install File Editor</h3>
+<h3>9. Install File Editor</h3>
 
 Follow instructions here: https://github.com/home-assistant/addons/blob/master/configurator/README.md
 
 Navigate to Settings -> Apps -> File editor -> Configuration and set "Enforce Basepath" to "off".
 
-<h3>9. Install Samba Share and/or Studio Code Server Apps If Required</h3>
+<h3>10. Install Samba Share and/or Studio Code Server Apps If Required</h3>
 
 Both of these Apps make it easier to edit text files on your HA Install but aren't strictly necessary. `Samba Share` also makes it easier to access the AppDaemon log files.
 
-<h3>10. Install AppDaemon</h3>
+<h3>11. Install AppDaemon</h3>
 
 The <b>PV_Opt</b> python script currently runs under AppDaemon.
 
@@ -205,7 +211,7 @@ AppDaemon is a loosely coupled, multi-threaded, sandboxed python execution envir
 
 3. Turn on <b>Auto update</b>
 
-<h3>11. Configure AppDaemon</h3>
+<h3>12. Configure AppDaemon</h3>
 
 1.  Use `File Editor` (or one of the alternatives) to open `/addon_configs/a0d7b954_appdaemon/appdaemon.yaml`.
 
@@ -326,7 +332,7 @@ And add the `client_user` and `client_password` keys to `secrets.yaml` like this
 
 That's it. AppDaemon is up and running. There is futher documentation for the [App](https://github.com/hassio-addons/addon-appdaemon/blob/main/appdaemon/DOCS.md) and for [AppDaemon](https://appdaemon.readthedocs.io/en/latest/)
 
-<h3>12. Install PV Opt from HACS</h3>
+<h3>13. Install PV Opt from HACS</h3>
 
 0. Make sure HACS "Enable AppDaemon apps discovery & tracking" is enabled - under integrations in HA https://hacs.xyz/docs/categories/appdaemon_apps/
 1. Go to HACS
@@ -351,7 +357,7 @@ Once downloaded AppDaemon should see the app and attempt to load it using the de
 16:53:23  WARNING:     read_only           = True   Source: system default. Not in YAML.
 ```
 
-<h3>13. Add an Automation to Restart AppDAemon when HA Restarts (Optional)</h3>
+<h3>14. Add an Automation to Restart AppDAemon when HA Restarts (Optional)</h3>
 
 Restarts between Home Assistant and Apps are not synchronised so it is helpful to set up an Automation to restart AppDaemon if HA is restarted. An example is shown below and included in this repo as `ha_restart_automation.yaml`. The `wait_template` section ensures that key integrations (in this case Solcast and Solax) have numeric values before AppDaemon is started.
 
