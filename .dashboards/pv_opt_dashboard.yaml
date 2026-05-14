@@ -157,33 +157,20 @@ views:
                 name: Optimiser Freq (mins)
               - entity: switch.pvopt_read_only
                 name: Read Only Mode
-              - entity: switch.pvopt_include_export
-                name: Include Export
-          - type: conditional
-            conditions:
-              - condition: state
-                entity: switch.pvopt_include_export
-                state: 'on'
-            card:
-              type: entities
-              entities:
-                - entity: switch.pvopt_forced_discharge
-                  name: Optimise Discharging
+              - entity: switch.pvopt_charge_to_100
+                name: Charge to 100%
+              - entity: switch.pvopt_forced_discharge
+                name: Optimise Discharging
           - type: conditional
             conditions:
               - condition: state
                 entity: switch.pvopt_forced_discharge
-                state: 'on'
-              - condition: state
-                entity: switch.pvopt_include_export
                 state: 'on'
             card:
               type: entities
               entities:
                 - entity: switch.pvopt_allow_cyclic
                   name: Allow Cyclic Charge/Discharge
-                - entity: switch.pvopt_fill_first
-                  name: Fill First during Optimise Discharge
           - type: markdown
             content: <h3>Solar
           - type: entities
@@ -667,4 +654,3 @@ views:
                 show:
                   legend_value: false
                 extend_to: false
-
