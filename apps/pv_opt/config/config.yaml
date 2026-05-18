@@ -50,10 +50,9 @@ pv_opt:
   # Basic parameters
   # ========================================
   read_only: false # If true the inverter will not be controlled
+  charge_to_100: false # Overide to charge to 100% SOC over cheap-rate window (not compatible with forced discharge or Agile tariff)
   forced_discharge: false # Enable forced discharging
   allow_cyclic: false # Enable alternate charge/discharge windows
-  charge_to_100: false # Charge to 100% SOC over cheap-rate window (not compatible with forced discharge or Agile tariff)
-  fill_first: false
 
   # ========================================
   # Plant parameters
@@ -516,14 +515,14 @@ pv_opt:
 
   # Axle Energy controls your inverter during a discharge event. Pv_opt should also schedule
   # a discharge during this time, given the export price. Setting the next line to True will 
-  # allow Pv_opt to set the discharge. Setting to False will automatically supress Pv_opt from inverter 
+  # allow Pv_opt to control the inverter. Setting to False will automatically supress Pv_opt from inverter 
   # writes for 10 minutes before the event to 10 minutes after. 
   # As Axle has been found to either set a discharge late or not at all, but wil still honour any 
-  # export made during the event, it is recommended to leave this set to True (i.e commented out). 
+  # export made during the event, it is recommended for now to leave this set to True (i.e commented out). 
 
   # axle_allow_pvopt_writes: True   # Default = True
 
-  # Axles export price. (as this is not available on the Axle API()). Uncomment and set if no longer £1
+  # Axles export price. (as this is not available on the Axle API). Uncomment and set if no longer £1
   # axle_export_rate_p: 100         # Default = 100
 
   # ===============================================================================================================
