@@ -779,7 +779,7 @@ class SolisInverter(BaseInverterController):
         else:
             self.log("Inverter already at correct current")
 
-        return not (changed and not written)
+        return written
 
     def _set_target_soc(self, direction, target_soc: int = 100, forced=True) -> bool:
         entity_id = self._host.config.get(f"id_timed_{direction}_soc", None)
@@ -920,7 +920,7 @@ class SolisSolarmanV2Inverter(SolisInverter):
         else:
             self.log("Inverter already at correct current")
 
-        return not (changed and not written)
+        return written
 
 
 class SolisSolaxModbusInverter(SolisInverter):
