@@ -408,7 +408,7 @@ For the Solarman integration:
     inverter_type: SOLIS_SOLARMAN_V2
     device_name: solis
 
-The `config.yaml` file also includes all the other configuration used by PV Opt. If you are using the default setup you shouldn't need to change this but you can edit anything by un-commenting the relevant line in the file. The configuration is grouped by inverter/integration and should be self-explanatory. Once PV Opt is installed the config is stored within entities in Home Assistant. It you want these over-ritten please ensure that `overwrite_ha_on_restart` is set to `true`:
+The `config.yaml` file also includes all the other configuration used by PV Opt. If you are using the default setup (Solax Modbus) you shouldn't need to change this but you can edit anything by un-commenting the relevant line in the file. The configuration is grouped by inverter/integration and should be self-explanatory. Once PV Opt is installed the config is stored within entities in Home Assistant. It you want these over-written from config.yaml please ensure that `overwrite_ha_on_restart` is set to `true`:
 
     overwrite_ha_on_restart: true
 
@@ -487,7 +487,7 @@ These parameters set the price that PV Opt uses:
 Import and/or export tarifs can be set manually as follows. These can be combined with Octopus Account Codes (ie you could set Octopus Agile for input using `octopus_import_tariff_code` and a manual export). Manual tariffs <b>will not work</b> with either `Octopus Auto` or `Octopus Account`.
 
     manual_import_tariff: True
-    manual_import_tariff_name: Test Importe
+    manual_import_tariff_name: Test Import
     manual_import_tariff_tz: GB
     manual_import_tariff_standing: 43
     manual_import_tariff_unit:
@@ -552,9 +552,9 @@ In this example three alternatives are tested. For each tariff pair the Base and
 
 <h2>Output</h2>
 
-The app always produces a Base forecast of future battery SOC and the associated grid flow based on the forecast solar performance, the expected consumption and prices with no forced charging or discharging from the grid.. The total cost for today and tomorrow is written to `sensor.pvopt_base_cost` and the associated SOC vs time is written to the attributes of this entity allowing it to be graphes using `apex-charts`.
-
-If `Optimise Charging` is enabled, an optimsised charging plan is calculated and writtemt to `sensor.pvopt_opt_cost`. This will also include a list of forced charge and discharge windows.
+The app always produces: 
+1) a Base forecast of future battery SOC and the associated grid flow based on the forecast solar performance, the expected consumption and prices with no forced charging or discharging from the grid.. The total cost for today and tomorrow is written to `sensor.pvopt_base_cost` and the associated SOC vs time is written to the attributes of this entity allowing it to be graphed using `apex-charts`.
+2) An "Optimsised Charging" plan, written to `sensor.pvopt_opt_cost`. In addition to the parameters written to base_cost this will also include a list of charge windows.
 
 The easiest way to control and visualise this is through the `dashboards/pvopt_dashboard.yaml` Lovelace yaml file included in this repo. 
 
