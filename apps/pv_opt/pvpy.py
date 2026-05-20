@@ -1596,7 +1596,7 @@ class PVsystemModel:
                 self.log(
                     f"WARNING: Cheap-rate window has insufficient headroom to reach 100%. "
                     f"Maximum achievable SOC is approximately "
-                    f"{soc_end_of_window + (total_headroom_wh / self.battery.capacity * 100):.1f}% "
+                    f"{self.flows['soc_end'].iloc[-1] + (total_headroom_wh / self.battery.capacity * 100):.1f}% "
                     f"({shortfall_pct:.1f}% short). Consider a longer charge window or higher charger power."
                 )
 
