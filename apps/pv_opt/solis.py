@@ -755,7 +755,7 @@ class SolisInverter(BaseInverterController):
             if time is not None:
                 entity_id = self._host.config.get(f"id_timed_{direction}_{limit}", None)
                 if entity_id is not None:
-                    changed, written = self.write_to_hass(entity_id=entity_id, value=time, verbose=False)
+                    changed, written = self.write_to_hass(entity_id=entity_id, value=time, verbose=False, tolerance=0.5)
                     value_changed = value_changed or written
 
         return value_changed
