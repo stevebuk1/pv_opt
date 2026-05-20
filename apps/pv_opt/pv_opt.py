@@ -1411,6 +1411,7 @@ class PVOpt(hass.Hass):
             max_dod=self.get_config("maximum_dod_percent", 15) / 100,
             current_limit_amps=self.get_config("battery_current_limit_amps", default=100),
             voltage=self.get_config("battery_voltage", default=50),
+            charger_power=self.get_config("charger_power_watts"),
         )
         self.pv_system = pv.PVsystemModel("PV_Opt", self.inverter_model, self.battery_model, host=self)
 

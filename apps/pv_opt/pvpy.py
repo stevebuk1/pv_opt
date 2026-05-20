@@ -599,11 +599,13 @@ class BatteryModel:
         max_dod: float = 0.15,
         current_limit_amps: int = 100,
         voltage: int = 50,
+        charger_power: int = None,
     ) -> None:
         self.capacity = capacity
         self.max_dod = max_dod
         self.current_limit_amps = current_limit_amps
         self.voltage = voltage
+        self.charger_power = charger_power
 
     def __str__(self):
         pass
@@ -624,6 +626,8 @@ class BatteryModel:
     @property
     def max_discharge_power(self) -> int:
         """returns the maximum watts at which the battery can discharge."""
+        if self.charger_power is not None:
+            return min(self.max_charge_power, self.charger_power)
         return self.max_charge_power
 
 
@@ -900,6 +904,8 @@ class PVsystemModel:
         )
         self.flows.loc[self.flows["battery"] < 0, "battery"] = self.flows["battery"] / self.inverter.charger_efficiency
         self.flows["grid"] = (self.flows["batt_grid_req"] - self.flows["battery"]).round(0)
+        # Cap export to inverter output limit (negative grid = export)
+        self.flows["grid"] = self.flows["grid"].clip(lower=-self.inverter.inverter_power)
         self.flows["soc"] = (self.flows["chg"] / self.battery.capacity) * 100
         self.flows["soc_end"] = (self.flows["chg_end"] / self.battery.capacity) * 100
 
