@@ -13,7 +13,7 @@ import pandas as pd
 import pvpy as pv
 from numpy import nan
 
-VERSION = "5.0.4"
+VERSION = "5.0.5"
 
 UNITS = {
     "current": "A",
@@ -1693,10 +1693,10 @@ class PVOpt(hass.Hass):
                 # SVB debugging line to force export tariff
                 # self.contract.tariffs["export"] = pv.Tariff("None", export=True, unit=15, octopus=False, host=self)
             self.rlog("")
-            # self._load_saving_events()
-            self._load_saving_events_new()  # Resolves Issue #418.
-            # self._load_free_electricity_events()
-            self._load_free_electricity_events_new()  # Resolves Issue #418
+            self._load_saving_events()
+            # self._load_saving_events_new()
+            self._load_free_electricity_events()
+            # self._load_free_electricity_events_new()  # Resolves Issue #418
 
         self.log("")
         self.log("Finished loading contract")
@@ -2564,10 +2564,10 @@ class PVOpt(hass.Hass):
         # initialse a DataFrame to cover today and tomorrow at 30 minute frequency
 
         self.log("")
-        # self._load_saving_events()
-        self._load_saving_events_new()  # Resolves Issue #418.
-        # self._load_free_electricity_events()
-        self._load_free_electricity_events_new()  # Resolves Issue #418
+        self._load_saving_events()
+        # self._load_saving_events_new()
+        self._load_free_electricity_events()
+        # self._load_free_electricity_events_new()
 
         if self.get_config("forced_discharge") and (self.get_config("supports_forced_discharge", True)):
             discharge_enable = "enabled"
