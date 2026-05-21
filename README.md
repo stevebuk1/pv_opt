@@ -1,4 +1,20 @@
-# PV Opt: Home Assistant Solar/Battery Optimiser v5.1.0
+# PV Opt: Home Assistant Solar/Battery Optimiser v5.1.1
+
+<h2>*** Announcment *** </h2>
+
+Pv_opt is now available as an HomeAssistant App (formely known as an AddOn)
+
+No changes to config.yaml are required.
+
+The code that is run is identical to that in AppDaemon, so functionality is identical and no changes to Dashboards are needed. 
+
+For upgrade instructions, please see https://github.com/stevebuk1/pv_opt_app
+
+![alt text](image-2.png)
+
+&nbsp;
+
+
 
 - [Introduction](#Introduction)
 - [Pre-requisites](#pre-requisites)
