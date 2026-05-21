@@ -1,4 +1,4 @@
-# PV Opt: Home Assistant Solar/Battery Optimiser v5.0.4
+# PV Opt: Home Assistant Solar/Battery Optimiser v5.1.0
 
 - [Introduction](#Introduction)
 - [Pre-requisites](#pre-requisites)
@@ -7,18 +7,19 @@
   - [2. Install HACS](#2-install-hacs)
   - [3. Install the Solcast PV Solar Integration (v4.1.x)](#3-install-the-solcast-pv-solar-integration-v41x)
   - [4. Install the Octopus Energy Integration (If Required)](#4-install-the-octopus-energy-integration-if-required)
-  - [5. Install the Integration to Control Your Inverter](#5-install-the-integration-to-control-your-inverter)
+  - [5. Install the Axle Energy VPP Integration (If Required)](#5-install-the-axle-energy-VPP-integration-if-required)
+  - [6. Install the Integration to Control Your Inverter](#6-install-the-integration-to-control-your-inverter)
     - [Solax Modbus](#solax-modbus)
     - [HA Core Modbus](#ha-core-modbus)
     - [Using Solis Cloud](#using-solis-cloud)
-  - [6. Install the MQTT Integration in Home Assistant](#6-install-the-mqtt-integraion-in-home-assistant)
-  - [7. Install Mosquitto MQTT Broker](#7-install-mosquitto-mqtt-broker)
-  - [8. Install File Editor](#8-install-file-editor)
-  - [9. Install Samba Share and/or Studio Code Server Add-ons If Required](#9-install-samba-share-andor-studio-code-server-add-ons-if-required)
-  - [10. Install AppDaemon](#10-install-appdaemon)
-  - [11. Configure AppDaemon](#11-configure-appdaemon)
-  - [12. Install PV Opt from HACS](#12-install-pv-opt-from-hacs)
-  - [13. Add an Automation to Restart AppDaemon when HA Restarts (Optional)](#13-add-an-automation-to-restart-appdaemon-when-ha-restarts-optional)
+  - [7. Install the MQTT Integration in Home Assistant](#7-install-the-mqtt-integraion-in-home-assistant)
+  - [8. Install Mosquitto MQTT Broker](#8-install-mosquitto-mqtt-broker)
+  - [9. Install File Editor](#9-install-file-editor)
+  - [10. Install Samba Share and/or Studio Code Server Add-ons If Required](#10-install-samba-share-andor-studio-code-server-add-ons-if-required)
+  - [11. Install AppDaemon](#11-install-appdaemon)
+  - [12. Configure AppDaemon](#12-configure-appdaemon)
+  - [13. Install PV Opt from HACS](#13-install-pv-opt-from-hacs)
+  - [14. Add an Automation to Restart AppDaemon when HA Restarts (Optional)](#14-add-an-automation-to-restart-appdaemon-when-ha-restarts-optional)
 - [Configuration](#configuration)
   - [System Parameters](#system-parameters)
   - [Control Parameters](#control-parameters)
@@ -67,6 +68,9 @@ PV Opt supports EV charging:
 -   If on the Agile tariff, PV Opt can calculate a car charging plan which can be used to control your EV charger/car via external HA automation scripts.
 -   If necessary Pv_opt automatically prevents house battery discharge during EV Charging.
 
+Octopus Free Electricity and Octopus Saving sessions are fully supported (requires Octopus HA integration, see below)
+
+Axle Energy export events are also supported (requires Axle VPP HA integration, see below)
 
 <h2>Pre-requisites</h2>
 
@@ -85,9 +89,10 @@ This app is not stand-alone it requires the following:
 | Studio Code Server           | Alternative | Alternative to using `File Editor` to edit config files. Not convered in this guide.                                                                                                                                                      |
 | <u><b>Integrations</b></u>   |             |                                                                                                                                                                                                                                           |
 | Solcast PV Solar Integration | Required    | Retrieves solar forecast from Solcast into Home Assistant.                                                                                                                                                                                |
-| Octopus Energy               | Optional    | Used to retrieve tariff information and Octopus Saving Session details. For users on Intelligent Octopus Go, this is required for any addtional slots outside of the 6 hour period to be taken into account in the charge/discharge plan. |
+| Octopus Energy               | Optional    | Used to retrieve tariff information and Octopus Saving Session / Free Electricity details. For users on Intelligent Octopus Go, this is required for any addtional slots outside of the 6 hour period to be taken into account in the charge/discharge plan. |
 | Solax Modbus                 | Optional    | Used to control Solis inverter directly. Support for two other integrations is now available (see below). Support inverter brands is possible using the API described below.                                                              |
 | MyEnergi                     | Optional    | For Intelligent Octopus Go users using a Zappi charger, used by Pv_opt to detect EV plugin and supply EV consumption history.                                                                                                             |
+| Axle VPP                     | Optional    | For Axle Energy VPP users, allows PV_opt to take account of Axle discharge events by including the Axle export price in its calulations                                                                                                 |
 
 <h2>Step by Step Installation Guide</h2>
 
@@ -111,7 +116,16 @@ This app is not stand-alone it requires the following:
 
 This excellent integration will pull Octopus Price data in to Home Assistant. Pv Opt pulls data from Octopus independently of this integration but will extract current tariff codes from it if they are avaiable. If not it will either use account details supplied in `secrets.yaml` or explicitly defined Octopus tariff codes set in `config.yaml`. If on Intelligent Octopus Go, this integration is required, as Pv_opt will use this to identify any slots allocated outside of 23:30 to 05:30 for use in its charge plan and managing the house battery during car charging slots.
 
-<h3>5. Install the Integration to Control Your Inverter</h3>
+<h3>5. Install the Axle Energy VPP Integration (If Required)</h3>
+
+This integration will pull Axle events into HomeAssistant. If you are signed up with Axle Energy this will allow Pv_opt to integrate events automatically into the battery planning.
+Note: curently Axle are only generating export events (not import) and Pv_opt will assume all events are export. Import events are future work. 
+
+1. Install the integation via HACS:https://github.com/deanhalllincoln/ha-axle-vpp
+2. Add the Integration via Settings: http://homeassistant.local:8123/config/integrations/dashboard, adding your Axle API token when prompted. 
+
+
+<h3>6. Install the Integration to Control Your Inverter</h3>
 
 At present this app works directly with Solis hybrid inverters using one of the following:
 1) the Solax Modbus integration (https://github.com/wills106/homeassistant-solax-modbus)
@@ -161,13 +175,13 @@ For Solis Inverters, replace existing Solis_Hybrid.yaml with this one:
 
 https://github.com/stevebuk1/pv_opt/blob/main/files/solis_hybrid.yaml
 
-<h3>6. Install the MQTT Integraion in Home Assistant</h3>
+<h3>7. Install the MQTT Integraion in Home Assistant</h3>
 
 1. Click on the button below to add the MQTT integration:
 
     [![](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start?domain=mqtt)
 
-<h3>7. Install Mosquitto MQTT Broker</h3>
+<h3>8. Install Mosquitto MQTT Broker</h3>
 
 1. Navigate to Settings -> Addons and click "Mosquito Broker"
 
@@ -177,21 +191,21 @@ https://github.com/stevebuk1/pv_opt/blob/main/files/solis_hybrid.yaml
 
 4. Either save the MQTT username and password in your `secrets.yaml` file or make a note of them for later.
 
-<h3>8. Install File Editor</h3>
+<h3>9. Install File Editor</h3>
 
 Follow instructions here: https://github.com/home-assistant/addons/blob/master/configurator/README.md
 
-Navigate to Settings -> Addons -> File editor -> Configuration and set "Enforce Basepath" to "off".
+Navigate to Settings -> Apps -> File editor -> Configuration and set "Enforce Basepath" to "off".
 
-<h3>9. Install Samba Share and/or Studio Code Server Add-ons If Required</h3>
+<h3>10. Install Samba Share and/or Studio Code Server Apps If Required</h3>
 
-Both of these add-ons make it easier to edit text files on your HA Install but aren't strictly necessary. `Samba Share` also makes it easier to access the AppDaemon log files.
+Both of these Apps make it easier to edit text files on your HA Install but aren't strictly necessary. `Samba Share` also makes it easier to access the AppDaemon log files.
 
-<h3>10. Install AppDaemon</h3>
+<h3>11. Install AppDaemon</h3>
 
 The <b>PV_Opt</b> python script currently runs under AppDaemon.
 
-AppDaemon is a loosely coupled, multi-threaded, sandboxed python execution environment for writing automation apps for home automation projects, and any environment that requires a robust event driven architecture. The simplest way to install it on Home Assistantt is using the dedicated add-on:
+AppDaemon is a loosely coupled, multi-threaded, sandboxed python execution environment for writing automation apps for home automation projects, and any environment that requires a robust event driven architecture. The simplest way to install it on Home Assistant is using the dedicated App:
 
 1. Click the Home Assistant My button below to open the add-on on your Home Assistant instance:
 
@@ -201,7 +215,7 @@ AppDaemon is a loosely coupled, multi-threaded, sandboxed python execution envir
 
 3. Turn on <b>Auto update</b>
 
-<h3>11. Configure AppDaemon</h3>
+<h3>12. Configure AppDaemon</h3>
 
 1.  Use `File Editor` (or one of the alternatives) to open `/addon_configs/a0d7b954_appdaemon/appdaemon.yaml`.
 
@@ -258,7 +272,7 @@ And add the `client_user` and `client_password` keys to `secrets.yaml` like this
             date_format: '%H:%M:%S'
             format: '{asctime} {levelname:>8s}: {message}'
 
-4.  Open the AppDaemon Add-On via Settings: http://homeassistant.local:8123/hassio/addon/a0d7b954_appdaemon/info
+4.  Open the AppDaemon App via Settings: http://homeassistant.local:8123/hassio/addon/a0d7b954_appdaemon/info
 
 5.  Click on <b>Configuration</b> at the top
 
@@ -320,9 +334,9 @@ And add the `client_user` and `client_password` keys to `secrets.yaml` like this
 06/04, 20:33:01 INFO AppDaemon: App initialization complete
 ```
 
-That's it. AppDaemon is up and running. There is futher documentation for the [Add-on](https://github.com/hassio-addons/addon-appdaemon/blob/main/appdaemon/DOCS.md) and for [AppDaemon](https://appdaemon.readthedocs.io/en/latest/)
+That's it. AppDaemon is up and running. There is futher documentation for the [App](https://github.com/hassio-addons/addon-appdaemon/blob/main/appdaemon/DOCS.md) and for [AppDaemon](https://appdaemon.readthedocs.io/en/latest/)
 
-<h3>12. Install PV Opt from HACS</h3>
+<h3>13. Install PV Opt from HACS</h3>
 
 0. Make sure HACS "Enable AppDaemon apps discovery & tracking" is enabled - under integrations in HA https://hacs.xyz/docs/categories/appdaemon_apps/
 1. Go to HACS
@@ -334,7 +348,7 @@ That's it. AppDaemon is up and running. There is futher documentation for the [A
 Once downloaded AppDaemon should see the app and attempt to load it using the default configuration. Go back to the AppDaemon logs and this time open pv_opt.log. You should see:
 
 ```
-16:53:23     INFO: ******************* PV Opt v5.0.0 *******************
+16:53:23     INFO: ******************* PV Opt v5.1.0 *******************
 16:53:23     INFO:
 16:53:23     INFO: Time Zone Offset: 0.0 minutes
 16:53:23     INFO: Reading arguments from YAML:
@@ -347,9 +361,9 @@ Once downloaded AppDaemon should see the app and attempt to load it using the de
 16:53:23  WARNING:     read_only           = True   Source: system default. Not in YAML.
 ```
 
-<h3>13. Add an Automation to Restart AppDAemon when HA Restarts (Optional)</h3>
+<h3>14. Add an Automation to Restart AppDAemon when HA Restarts (Optional)</h3>
 
-Restarts between Home Assistant and Add-Ons are not synchronised so it is helpful to set up an Automation to restart AppDAemon if HA is restarted. An example is shown below and included in this repo as `ha_restart_automation.yaml`. The `wait_template` section ensures that key integrations (in this case Solcast and Solax) have numeric values before AppDaemon is started.
+Restarts between Home Assistant and Apps are not synchronised so it is helpful to set up an Automation to restart AppDaemon if HA is restarted. An example is shown below and included in this repo as `ha_restart_automation.yaml`. The `wait_template` section ensures that key integrations (in this case Solcast and Solax) have numeric values before AppDaemon is started.
 
     alias: Restart AppDaemon on HA Restart
     description: ""
@@ -394,11 +408,12 @@ For the Solarman integration:
     inverter_type: SOLIS_SOLARMAN_V2
     device_name: solis
 
-The `config.yaml` file also includes all the other configuration used by PV Opt. If you are using the default setup you shouldn't need to change this but you can edit anything by un-commenting the relevant line in the file. The configuration is grouped by inverter/integration and should be self-explanatory. Once PV Opt is installed the config is stored within entities in Home Assistant. It you want these over-ritten please ensure that `overwrite_ha_on_restart` is set to `true`:
+The `config.yaml` file also includes all the other configuration used by PV Opt. If you are using the default setup (Solax Modbus) you shouldn't need to change this but you can edit anything by un-commenting the relevant line in the file. The configuration is grouped by inverter/integration and should be self-explanatory. Once PV Opt is installed the config is stored within entities in Home Assistant. It you want these over-written from config.yaml please ensure that `overwrite_ha_on_restart` is set to `true`:
 
     overwrite_ha_on_restart: true
 
-<b><i>PV_Opt</b></i> needs to know the size of your battery and the power of your inverter: both when inverting battery to AC power and when chargingh tha battery. It will attempt to work these out from the data it has loaded (WIP) but you should check the following enitities in Home Assistant:
+<b><i>PV_Opt</b></i> needs to know the size of your battery and the power of your inverter: both when inverting battery to AC power and when charging the battery. These are best set in
+config.yaml. Check the following enitities in Home Assistant match your system:
 
 <h3>System Parameters</h3>
 
@@ -417,9 +432,9 @@ These are the main parameters that will control how PV Opt runs:
 
 | Parameter                |   Units    | Entity                                    | Default | Description                                                                                                                                                                                                                  |
 | :----------------------- | :--------: | :---------------------------------------- | :-----: | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Read Only Mode           | `on`/`off` | `switch.pvopt_read_only`                  |   On    | Controls whether the app will actually control the inverter. Start with this on until you are happy the charge/discharge plan makes sense.                                                                                   |
-| Optimise Charging        | `on`/`off` | `switch.pvopt_forced_charge`              |   On    | Controls whether the app will calculate an Optimised plan. If `off` only the Base forecast will be updated.                                                                                                                  |
-| Optimise Discharging     | `on`/`off` | `switch.pvopt_forced_discharge`           |   On    | Controls whether the app will allow for forced discharge as well as charge                                                                                                                                                   |
+| Read Only Mode           | `on`/`off` | `switch.pvopt_read_only`                  |   On    | Controls whether the app will actually control the inverter. Start with this on until you are happy the charge/discharge plan makes sense.                                                                             |
+| Charge to 100%           | `on`/`off` | `switch.pvopt_charge_to_100`                  |   Off    | Override Optimised Charging by instead charging to 100% in the cheap rate, keeping as low a charge rate as possible such that 100% is reached smoothly by the end of the cheap rate period. During Winter, on a tariff that has a defined cheap rate (Go, IOG, Cosy etc) theres little benefit to be gained by optimizing battery use to achieve a battery SOC of "flat" just before the next cheap rate begins, as errors in consumption and solcast mean that "flat" can happen early with a large consequential cost. Any benefit of leaving room for solar to fill the battery (which Pv_opt will normally do) is largely neglible in winter. Note: this mode is ultimately an overide of the prime aim of Pv_opt, which is to optimise based on cost, but is provided where error margins can lead to a frequent flat battery. It has no effect for Octopus Agile users nor if Optimise Discharging is selected (see below). The cost of this plan is displayed in "Optimsed Charging" so it can be compared with Base (no charging or discharging). |
+| Optimise Discharging     | `on`/`off` | `switch.pvopt_forced_discharge`           |   On   | Controls whether the app will allow for forced discharge as well as charge                                                                                                                                                   |
 | Allow Cyclic             | `on`/`off` | `switch.pvopt_allow_cyclic`               |   On    | Controls whether the app will allow cycles of alternating charge/discharge                                                                                                                                                   |
 | Use Solar                | `on`/`off` | `switch.pvopt_use_solar`                  |   On    | Controls whether the app will use the Solcast solar forecast. If set to Off no solar will be used but battery charging can still be optimised for a time-of use tariff.                                                      |
 | Solcast Confidence Level |  `number`  | `number.pvopt_solcast_confidence_level`   | Solcast | Selects which the Confidence Level for the Solcast forecast. Levels between 10% and 50% are weighted from the Solcast 10% and 50% forecasts. Levels between 50% and 90% are weighted from the Solcast 50% and 10% forecasts. |
@@ -441,7 +456,7 @@ These parameters will define how PV Opt estimates daily consumption:
 
 | Parameter               |  Units     | Entity                                 |  Default | Description                                                                                       |
 | :---------------------- | :--------: | :------------------------------------- | :------: | :------------------------------------------------------------------------------------------------ |
-| EV Charger                | None / Zappi / Other | `select.pvopt_ev_charger` |  None    | Set EV Charger Type. At the current release, only 'Zappi' is supported, 'Other' is unused and is for a future release. Note: Zappi support requires the MyEnergi integration to be installed. |
+| EV Charger                | None / Zappi / Other | `select.pvopt_ev_charger` |  None    | Set EV Charger Type. At the current release, only 'Zappi' is supported, 'Other' is unused and is for a future release. Note: Zappi support requires the MyEnergi HA integration to be installed. |
 | EV Part of House Load     |       On / Off       | `switch.pvopt_ev_part_of_house_load` |   On    | Prevents house battery discharge when EV is charging. If your EV Charger is wired so it is seen as part of the house load, then it will discharge to the EV when the EV is charging. Setting this to On prevents this, as well as ensuring that any EV consumption is removed from Consumption History. If your Zappi is wired on its own Henley block and thus outside of what the inverter CT clamp will measure, then set this to Off. Note: PV Opt does not support allowing the house battery to be used to charge the car. |
 | Car Charge Plan           |         kWh          | `switch.control_car_charging` |   Off    | Toggle Car Plan generation On/Off. For users on Agile, setitng to On will generate a candidate car charging plan on each optimiser run based on the settings below. The candidate plan is made active upon car plugin, or via Dashbaord command (see "Transfer Car Charge Plan" below). The active car charging plan is output live on binary_sensor.pvopt_car_charging_slot for use in HA automations to switch the EV charger on and off. An example HA automation to control a Zappi charger is included [here](https://github.com/stevebuk1/pv_opt/blob/main/files/zappi_automation.yaml). Intelligent Octopus Go users should set this to Off. If Off, the rest of the EV parameters below have no effect. |
 | Transfer Car Charge Plan  |        On/Off        | `switch.transfer_car_charge_plan` |    30     | Make Candidate Car Charging Plan the active plan. Useful if adjusting any of the below paramaters after the car has been plugged in. This will automatically be set back to Off after the plan is transferred. This ensures any external HA automations used to auto-calculate "Car Charge to Add" based on car SOC don't corrupt the car charging plan once the car starts charging. |
@@ -472,7 +487,7 @@ These parameters set the price that PV Opt uses:
 Import and/or export tarifs can be set manually as follows. These can be combined with Octopus Account Codes (ie you could set Octopus Agile for input using `octopus_import_tariff_code` and a manual export). Manual tariffs <b>will not work</b> with either `Octopus Auto` or `Octopus Account`.
 
     manual_import_tariff: True
-    manual_import_tariff_name: Test Importe
+    manual_import_tariff_name: Test Import
     manual_import_tariff_tz: GB
     manual_import_tariff_standing: 43
     manual_import_tariff_unit:
@@ -497,6 +512,14 @@ Import and/or export tarifs can be set manually as follows. These can be combine
         price: 50.0
       - period_start: "14:00"
         price: 0.0
+
+<h4>Axle Energy Information</h4>
+
+| Parameter                  |   Units    | Entity                       | Default | Description                                                                                              |
+| :------------------------- | :--------: | :--------------------------- | :-----: | :------------------------------------------------------------------------------------------------------- |
+| Pv_opt control during Axle events   |  `True/False`  | `switch.pv_opt_axle_allow_pvopt_writes`      | True | Allow Pv_opt to write to inverter during Axle Energy events. Axle should control your inverter during an event but has been known to start late or not at all. Until Axle fix this it is recommended that Pv_opt should also control your inverter, which given the current export price will almost certainly schedule an export event and as such there will be no conflicts.                                                      |
+| Axle Energy export price   |  pence  | `number.pvopt_axle_export_rate_p`   |  100p   | Price for Axle Energy Export events. Defaults to 100p which is the current price Axle offer for all events. Change it here if it changes.                                                           |
+
 
 <h3>Tuning Parameters</h3>
 These parameters will tweak how PV Opt runs:
@@ -529,9 +552,9 @@ In this example three alternatives are tested. For each tariff pair the Base and
 
 <h2>Output</h2>
 
-The app always produces a Base forecast of future battery SOC and the associated grid flow based on the forecast solar performance, the expected consumption and prices with no forced charging or discharging from the grid.. The total cost for today and tomorrow is written to `sensor.pvopt_base_cost` and the associated SOC vs time is written to the attributes of this entity allowing it to be graphes using `apex-charts`.
-
-If `Optimise Charging` is enabled, an optimsised charging plan is calculated and writtemt to `sensor.pvopt_opt_cost`. This will also include a list of forced charge and discharge windows.
+The app always produces: 
+1) a Base forecast of future battery SOC and the associated grid flow based on the forecast solar performance, the expected consumption and prices with no forced charging or discharging from the grid.. The total cost for today and tomorrow is written to `sensor.pvopt_base_cost` and the associated SOC vs time is written to the attributes of this entity allowing it to be graphed using `apex-charts`.
+2) An "Optimsised Charging" plan, written to `sensor.pvopt_opt_cost`. In addition to the parameters written to base_cost this will also include a list of charge windows.
 
 The easiest way to control and visualise this is through the `dashboards/pvopt_dashboard.yaml` Lovelace yaml file included in this repo. 
 

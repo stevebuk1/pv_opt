@@ -5,15 +5,23 @@ import time
 from datetime import datetime, timedelta
 from json import dumps
 
-import appdaemon.adbase as ad
-import appdaemon.plugins.hass.hassapi as hass
-import appdaemon.plugins.mqtt.mqttapi as mqtt
+try:
+    import appdaemon.adbase as ad
+    import appdaemon.plugins.hass.hassapi as hass
+    import appdaemon.plugins.mqtt.mqttapi as mqtt
+
+    APPDAEMON = True
+except ImportError:
+    import ha_interface.ha_interface as ad
+    import ha_interface.ha_interface as hass
+
+    APPDAEMON = False
 import numpy as np
 import pandas as pd
 import pvpy as pv
 from numpy import nan
 
-VERSION = "5.0.5"
+VERSION = "5.1.0-Beta-5"
 
 UNITS = {
     "current": "A",
@@ -144,9 +152,9 @@ DOMAIN_ATTRIBUTES = {
 
 DEFAULT_CONFIG = {
     "read_only": {"default": True, "domain": "switch"},
-    "include_export": {"default": True, "domain": "switch"},
     "forced_discharge": {"default": True, "domain": "switch"},
     "allow_cyclic": {"default": False, "domain": "switch"},
+    "charge_to_100": {"default": False, "domain": "switch"},
     "use_solar": {"default": True, "domain": "switch"},
     "ev_part_of_house_load": {"default": True, "domain": "switch"},
     "prevent_discharge": {"default": False, "domain": "switch"},
@@ -255,7 +263,7 @@ DEFAULT_CONFIG = {
         "default": 5.0,
         "attributes": {
             "min": 0.0,
-            "max": 1000.0,
+            "max": 100.0,
             "step": 5,
             "mode": "box",
         },
@@ -424,6 +432,20 @@ DEFAULT_CONFIG = {
     # },
     "id_solcast_today": {"default": "sensor.solcast_pv_forecast_forecast_today"},
     "id_solcast_tomorrow": {"default": "sensor.solcast_pv_forecast_forecast_tomorrow"},
+    "axle_allow_pvopt_writes": {"default": False, "domain": "switch"},
+    "id_axle_start_time": {"default": "sensor.axle_vpp_axle_start_time"},
+    "id_axle_end_time": {"default": "sensor.axle_vpp_axle_end_time"},
+    "axle_export_rate_p": {
+        "default": 100,
+        "domain": "number",
+        "attributes": {
+            "min": 0,
+            "max": 500,
+            "step": 1,
+            "unit_of_measurement": "p/kWh",
+            "mode": "slider",
+        },
+    },
     "use_consumption_history": {"default": True, "domain": "switch"},
     "consumption_history_days": {
         "default": 7,
@@ -621,6 +643,8 @@ class PVOpt(hass.Hass):
 
         self.saving_events = {}
         self.free_electricity_events = {}
+        self.axle_event = None
+
         self.contract = None
         self.car_plugin_detected = 0
         self.car_plugin_detected_delayed = 0
@@ -1112,9 +1136,13 @@ class PVOpt(hass.Hass):
 
         i = 0
         for entity_id in self.zappi_consumption_entities:
-            i += 1
             df = self._get_hass_power_from_daily_kwh(entity_id, start=start, end=end, log=log)
 
+            if df is None or df.empty:
+                self.log(f"No Zappi power data for {entity_id} — skipping", level="WARNING")
+                continue
+
+            i += 1
             if i == 1:
                 df_all = df.copy()
             if i > 1:  # If more than one charger, add data as extra column
@@ -1126,6 +1154,11 @@ class PVOpt(hass.Hass):
                 self.log(f">>> Value of i = {i}")
                 self.rlog(">>> df_all")
                 self.log(f">>>\n{df_all.to_string()}")
+
+        if i == 0:
+            # No valid Zappi data found for any entity
+            self.log("No valid Zappi power data found for any entity", level="WARNING")
+            return pd.DataFrame()
 
         df_all = df_all.fillna(0)  # fill any missing values with 0
         if i == 1:
@@ -1347,8 +1380,8 @@ class PVOpt(hass.Hass):
         if self.inverter_type in INVERTER_TYPES:
             inverter_brand = self.inverter_type.split("_")[0].lower()
             self.log(f"Inverter type: {self.inverter_type}: inverter module: {inverter_brand}.py")
-            if inverter_brand == "solis":
-                # for now only Solis uses the new setup
+            if inverter_brand in ("solis", "sunsynk"):
+                # for now Solis and Sunsynk use the new setup
                 create_inverter_controller = importName(f"{inverter_brand}", "create_inverter_controller")
                 self.inverter = create_inverter_controller(inverter_type=self.inverter_type, host=self)
             else:
@@ -1378,6 +1411,7 @@ class PVOpt(hass.Hass):
             max_dod=self.get_config("maximum_dod_percent", 15) / 100,
             current_limit_amps=self.get_config("battery_current_limit_amps", default=100),
             voltage=self.get_config("battery_voltage", default=50),
+            charger_power=self.get_config("charger_power_watts"),
         )
         self.pv_system = pv.PVsystemModel("PV_Opt", self.inverter_model, self.battery_model, host=self)
 
@@ -1651,7 +1685,7 @@ class PVOpt(hass.Hass):
                         self.rlog(f"Trying to load tariff codes: Export: {self.config['octopus_export_tariff_code']}")
                         tariffs["export"] = pv.Tariff(
                             self.config[f"octopus_export_tariff_code"],
-                            export=False,
+                            export=True,
                             host=self,
                         )
                     elif self.get_config("manual_export_tariff", False):
@@ -1697,6 +1731,7 @@ class PVOpt(hass.Hass):
             # self._load_saving_events_new()
             self._load_free_electricity_events()
             # self._load_free_electricity_events_new()  # Resolves Issue #418
+            self._load_axle_event()
 
         self.log("")
         self.log("Finished loading contract")
@@ -2016,6 +2051,79 @@ class PVOpt(hass.Hass):
                 )
         else:
             self.log("  No upcoming Octopus Free Electricity Events detected")
+
+
+    def _axle_writes_suspended(self):
+
+        """Return True if inverter writes should be suppressed during the Axle
+        event window. Controlled by the axle_suspend_writes config option — set
+        to False if pv_opt's planned discharge is trusted to align with Axle/Enode
+        and write suppression is not needed."""
+        if self.axle_event is None:
+            return False
+        if not self.get_config("axle_allow_pvopt_writes"):
+            return False
+        now = pd.Timestamp.now(tz="UTC")
+        freq = pd.Timedelta(minutes=self.get_config("optimise_frequency_minutes"))
+        window_start = self.axle_event["start"] - freq
+        window_end = self.axle_event["end"] + freq
+        return window_start <= now <= window_end
+
+    def _load_axle_event(self):
+        """
+        Load the next Axle Energy VPP grid event from the Dean Hall HACS integration
+        (ha-axle-vpp). Entity names default to the standard integration names but can
+        be overridden in apps.yaml via id_axle_start_time, id_axle_end_time, and
+        id_axle_1hr_before.
+
+        Populates self.axle_event with a dict {start, end, rate_p} or None if no
+        upcoming export event is found.
+        """
+        self.axle_event = None
+
+        start_entity = self.config["id_axle_start_time"]
+        end_entity = self.config["id_axle_end_time"]
+
+        # Silently skip if the integration is not installed
+        if not self.entity_exists(start_entity):
+            return
+
+        self.log("")
+        self.log("  Checking for Axle Energy VPP events:")
+
+ 
+        start_state = self.get_state_retry(start_entity)
+        end_state = self.get_state_retry(end_entity) if self.entity_exists(end_entity) else None
+
+        if start_state in (None, "unknown", "unavailable") or end_state in (None, "unknown", "unavailable"):
+            self.log("    Axle entities present but no event data available.")
+            return
+
+        try:
+            event_start = pd.Timestamp(start_state).tz_localize("UTC") if pd.Timestamp(start_state).tzinfo is None else pd.Timestamp(start_state).tz_convert("UTC")
+            event_end = pd.Timestamp(end_state).tz_localize("UTC") if pd.Timestamp(end_state).tzinfo is None else pd.Timestamp(end_state).tz_convert("UTC")
+        except Exception as e:
+            self.log(f"    Could not parse Axle event timestamps: {e}")
+            return
+
+        now = pd.Timestamp.now(tz="UTC")
+
+        if event_end <= now:
+            self.log("    Axle event found but it is in the past — ignoring.")
+            return
+
+        rate_p = self.get_config("axle_export_rate_p")
+        self.axle_event = {
+            "start": event_start,
+            "end": event_end,
+            "rate_p": rate_p,
+        }
+        self.log(
+            f"    Axle export event loaded: {event_start.strftime(DATE_TIME_FORMAT_SHORT)} - "
+            f"{event_end.strftime(DATE_TIME_FORMAT_SHORT)} at {rate_p}p/kWh"
+        )
+
+
 
     def get_ha_value(self, entity_id):
         value = None
@@ -2556,7 +2664,9 @@ class PVOpt(hass.Hass):
     @ad.app_lock
     def optimise_time(self, cb_args):
         self.log(f"Optimiser triggered by Scheduler ")
-        self.log(f"Version: v{VERSION}")
+        if not APPDAEMON:
+            self.log(f"App/AddOn Version: {getattr(self, 'addon_version', 'unknown')}")
+        self.log(f"Pv_opt Version: v{VERSION}")
         self.optimise()
 
     @ad.app_lock
@@ -2676,6 +2786,7 @@ class PVOpt(hass.Hass):
         self.pv_system.static_flows.index = [self.time_now] + list(self.pv_system.static_flows.index[1:])
 
         soc_now = self.get_config("id_battery_soc")
+
         self.pv_system.initial_soc = soc_now
         # soc_last_day = self.hass2df(self.config["id_battery_soc"], days=1, log=self.debug)
         # if self.debug and "S" in self.debug_cat:
@@ -2745,10 +2856,6 @@ class PVOpt(hass.Hass):
 
         self.pv_system.prices = self.prices
 
-        # SVB debugging
-        # self.log("Self.prices is")
-        # self.log(self.prices.to_string())
-
         self.pv_system.calculate_flows()
         self.flows = {"Base": self.pv_system.flows}
         self.log("")
@@ -2791,24 +2898,15 @@ class PVOpt(hass.Hass):
 
         cases = {
             "Optimised Charging": {
-                "export": False,
-                "discharge": False,
-            },
-            "Optimised PV Export": {
-                "export": True,
                 "discharge": False,
             },
             "Forced Discharge": {
-                "export": True,
                 "discharge": True,
             },
         }
 
-        if not self.get_config("include_export"):
+        if not self.get_config("forced_discharge"):
             self.selected_case = "Optimised Charging"
-
-        elif not self.get_config("forced_discharge"):
-            self.selected_case = "Optimised PV Export"
 
         else:
             self.selected_case = "Forced Discharge"
@@ -2825,7 +2923,6 @@ class PVOpt(hass.Hass):
 
                 self.flows[case] = self.pv_system.optimised_force(
                     log=True,
-                    use_export=cases[case]["export"],
                     discharge=cases[case]["discharge"],
                 )
 
@@ -2839,7 +2936,6 @@ class PVOpt(hass.Hass):
             for case in cases:
                 self.flows[case] = self.pv_system.optimised_force(
                     log=(case == self.selected_case),
-                    use_export=cases[case]["export"],
                     discharge=cases[case]["discharge"],
                 )
 
@@ -2855,7 +2951,7 @@ class PVOpt(hass.Hass):
         # )
 
         self.ulog("Optimisation Summary")
-        self.log(f"  {'Base cost:':40s} {self.optimised_cost['Base'].sum():6.1f}p")
+        self.log(f"  {'Base cost:':60s} {self.optimised_cost['Base'].sum():6.1f}p")
         cost_today = self._cost_actual().sum()
         self.summary_costs = {
             "Base": {
@@ -2864,7 +2960,7 @@ class PVOpt(hass.Hass):
             }
         }
         for case in cases:
-            str_log = f"  {f'Optimised cost ({case}):':40s} {self.optimised_cost[case].sum():6.1f}p"
+            str_log = f"  {f'Optimised cost ({case}):':60s} {self.optimised_cost[case].sum():6.1f}p"
             self.summary_costs[case] = {"cost": ((self.optimised_cost[case].sum() + cost_today) / 100).round(2)}
             if case == self.selected_case:
                 self.summary_costs[case]["Selected"] = " <=== Current Setup"
@@ -2971,8 +3067,13 @@ class PVOpt(hass.Hass):
                         car_on.iat[i] = 1
 
         # Read "prevent_discharge" switch to set a car slot in the current slot and next slot
+        # Also check if Zappi is actively charging (covers non-smart charging sessions)
+        zappi_charging = (
+            self.zappi_plug_entity is not None
+            and self.get_state(self.zappi_plug_entity) == "Charging"
+        )
 
-        if self.get_config("prevent_discharge"):
+        if self.get_config("prevent_discharge") or zappi_charging:
             car_on.iat[0] = 1
             car_on.iat[1] = 1
 
@@ -3144,6 +3245,11 @@ class PVOpt(hass.Hass):
                 status = self.inverter.status
                 self._log_inverterstatus(status)
 
+                if self._axle_writes_suspended():
+                    self.log("Axle VPP event active prior to next slot start: inverter writes suspended.")
+                    self.status("Idle (Axle VPP)")
+                    break
+
                 retries = 0
                 while not self.inverter.timed_mode and retries < WRITE_POLL_RETRIES:
                     retries += 1
@@ -3241,13 +3347,11 @@ class PVOpt(hass.Hass):
                         ):  #  not sure what this line will report
                             self.log("....but status is not hold")
                             self.log(f"  Enabling SOC hold at SOC of {self.hold[0]['soc']:0.0f}%")
-                            # self.inverter.hold_soc_old(enable=True, soc=self.hold[0]["soc"])
-                            self.inverter.hold_soc(enable=True, target_soc=self.hold[0]["soc"])
+                            self.inverter.hold_soc(enable=True, target_soc=self.hold[0]["soc"], start=self.charge_start_datetime, end=self.charge_end_datetime)
                         else:
                             self.log(f"  Inverter already holding SOC of {self.hold[0]['soc']:0.0f}%")
-                            start = None
-                            end = self.charge_end_datetime
-                            self.inverter.hold_soc(enable=True, target_soc=self.hold[0]["soc"])
+                            # Next line commented out - if its already holding there is nothing to update (there used to be when using backup mode)
+                            # self.inverter.hold_soc(enable=True, target_soc=self.hold[0]["soc"], start=None, end=self.charge_end_datetime)
 
                     else:  # if already in Car slot, this bit should run
                         self.log(f"Current charge/discharge window ends in {time_to_slot_end:0.1f} minutes.")
@@ -3426,23 +3530,33 @@ class PVOpt(hass.Hass):
 
         tolerance = self.get_config("forced_power_group_tolerance")
 
-        # Increment "period" if 
-        #    charge power varies by more than half the power tolerance 
+        # Increment "period" if
+        #    charge power varies by more than half the power tolerance
         #    OR non-contiguous car slot detected (when charge power = 0).
-        #    OR cross from 0 to positive/negative value (otherwise windows of very low values will get joined together). 
-        
+        #    OR cross from 0 to positive/negative value (otherwise windows of very low values will get joined together).
+
         forced_diff = self.opt["forced"].diff()
 
         self.opt["period"] = (
-            (forced_diff.abs() > (tolerance / 2))                          # significant power change
-            | ((forced_diff != 0) & ((self.opt["forced"] == 0) | (self.opt["forced"].shift() == 0)))  # any transition to/from zero
+            (forced_diff.abs() > (tolerance / 2))  # significant power change
+            | (
+                (forced_diff != 0) & ((self.opt["forced"] == 0) | (self.opt["forced"].shift() == 0))
+            )  # any transition to/from zero
             | ((self.opt["carslot"].diff() > 0) & (self.opt["forced"] == 0))  # new car slot with no charge
         ).cumsum()
 
         if self.debug and "O" in self.debug_cat:
             self.log("")
             self.ulog("1/2 Hour Optimsation summary")
-            self.log(f"\n{self.opt.to_string()}")
+
+            # self.log(f"\n{self.opt.round(2).to_string()}")
+
+            opt_display = self.opt.copy()
+            opt_display[["solar", "consumption", "batt_grid_req", "chg", "chg_end", "battery", "grid"]] = opt_display[["solar", "consumption", "batt_grid_req", "chg", "chg_end", "battery", "grid"]].round(0)
+            opt_display[["soc", "soc_end"]] = opt_display[["soc", "soc_end"]].round(1)
+            opt_display[["dt_hours", "import", "export"]] = opt_display[["dt_hours", "import", "export"]].round(2)
+            self.log(f"\n{opt_display.to_string()}")
+
 
         if self.debug and "W" in self.debug_cat:
             self.log("")
@@ -3762,6 +3876,7 @@ class PVOpt(hass.Hass):
         cost,
         df,
         attributes={},
+        full=True,
     ):
         cost_today = self._cost_actual()
         midnight = pd.Timestamp.now(tz="UTC").normalize() + pd.Timedelta(24, "hours")
@@ -3781,10 +3896,10 @@ class PVOpt(hass.Hass):
         # self.log("")
         # self.log(f"\n{cost.to_string()}")
         # self.log(f"Dtype of cost_today is {cost_today.dtypes}")
-        # self.log(f"Dtype of cost is {cost.dtypes}")
+        # self.log(f"Dtype of cost is {cost.dtypes}")   
 
         # cast cost_today as float64 in case it is empty, to prevent Futurewarning "The behavior of array concatenation with empty entries is deprecated"
-        cost = pd.DataFrame(pd.concat([cost_today.astype("float64"), cost])).set_axis(["cost"], axis=1).fillna(0)
+        cost = pd.DataFrame(pd.concat([s for s in [cost_today.astype("float64"), cost] if not s.empty])).set_axis(["cost"], axis=1).fillna(0)
         cost["cumulative_cost"] = cost["cost"].cumsum()
 
         for d in [df, cost]:
@@ -3804,10 +3919,14 @@ class PVOpt(hass.Hass):
                 ),
                 "cost_tomorrow": round((cost["cost"].loc[midnight:].sum()) / 100, 2),
             }
-            | {col: df[["period_start", col]].to_dict("records") for col in cols if col in df.columns}
-            | {"cost": cost[["period_start", "cumulative_cost"]].to_dict("records")}
-            | attributes
-        )
+        ) | attributes
+
+        if full:
+            attributes = (
+                {col: df[["period_start", col]].to_dict("records") for col in cols if col in df.columns}
+                | {"cost": cost[["period_start", "cumulative_cost"]].to_dict("records")}
+                | attributes
+            )
 
         self.write_to_hass(
             entity=entity,
@@ -3857,6 +3976,26 @@ class PVOpt(hass.Hass):
             df=self.flows[self.selected_case],
             attributes={"Summary": self.summary_costs},
         )
+
+        self.write_to_hass(
+            f"sensor.{self.prefix}_cost_today",
+            np.round(self._cost_actual().sum() / 100, 2),
+            attributes={
+                "friendly_name": f"PV_Opt Cost Today",
+                "device_class": "monetary",
+                "state_class": "measurement",
+                "unit_of_measurement": "GBP",
+            },
+        )
+
+        for case in self.summary_costs:
+            self.write_cost(
+                f"PV_Opt Cost ({case})",
+                entity=f"sensor.{self.prefix}_cost_{case.lower().replace(" ","_")}",
+                cost=self.optimised_cost[case],
+                df=self.flows[case],
+                full=False,
+            )
 
         if len(self.windows) > 0:
             hass_start = self.charge_start_datetime
@@ -4101,6 +4240,10 @@ class PVOpt(hass.Hass):
 
         if df is not None:
 
+            if df.empty:
+                self.log(f"No data returned for {entity_id} — skipping", level="WARNING")
+                return df
+
             if self.debug and "Q" in self.debug_cat:
                 self.log(f"power: kWh data from {entity_id} is")
                 self.log(f"\n{df.to_string()}")
@@ -4257,6 +4400,23 @@ class PVOpt(hass.Hass):
                     df = self._subtract_zappi_from_grid(ev_power, df)
 
                 # Add consumption margin
+
+                df_no_margin = df.copy()
+
+                # Log historical daily consumption - skip partial first day
+                daily_totals = df_no_margin.groupby(df_no_margin.index.date).sum() / 2000
+                daily_counts = df_no_margin.groupby(df_no_margin.index.date).count()
+                self.log(f"  - Historical house consumption per day ({actual_days} days):")
+                for date, total in daily_totals.items():
+                    if daily_counts.loc[date] >= 48:  # only log complete days (48 x 30min slots)
+                        self.log(
+                            f"      {pd.Timestamp(date).strftime('%d-%b-%Y')} ({pd.Timestamp(date).strftime('%a')}): {total:0.1f} kWh"
+                        )
+                    else:
+                        self.log(
+                            f"      {pd.Timestamp(date).strftime('%d-%b-%Y')} ({pd.Timestamp(date).strftime('%a')}): {total:0.1f} kWh  (partial day - {daily_counts.loc[date]} slots)"
+                        )
+
                 df = df * (1 + self.get_config("consumption_margin") / 100)
                 if self.debug and "Q" in self.debug_cat:
                     self.log("Df after adding consumption margin is.......")
@@ -4303,9 +4463,9 @@ class PVOpt(hass.Hass):
                     now_floor = pd.Timestamp.now(tz="UTC").floor("30min")
                     for week in range(1, days // 7 + 1):
                         start_dow_n = now_floor - pd.Timedelta(days=7 * week)
-                        slice_n = dfx.loc[start_dow_n : start_dow_n + pd.Timedelta(hours=47, minutes=30)].iloc[:48]
-                        
-                        if len(slice_n) > 40:
+                        slice_n = dfx.loc[start_dow_n : start_dow_n + pd.Timedelta(hours=95, minutes=30)].iloc[:96]
+
+                        if len(slice_n) > 80:
                             dow_slices.append(slice_n.values)
                             if index_dow is None:
                                 index_dow = slice_n.index  # capture the 7-days-ago index
@@ -4327,7 +4487,7 @@ class PVOpt(hass.Hass):
                     #  self.log(f">>> consumption_mean index: {consumption_mean.index[0]} to {consumption_mean.index[-1]}")
 
                     # Add extra entries to consumption_dow so it starts at midnight, then remove time column and change Nans to 0 (they are in the past)
-                    consumption_dow2 = pd.concat([temp, consumption_dow], axis=1).drop(["time"], axis=1).fillna(0)
+                    consumption_dow2 = pd.concat([temp, consumption_dow], axis=1).drop(["time"], axis=1).astype("float64").fillna(0)
 
                     # merge consumption_mean and consumption dow, then trim back to 48 hours long
                     consumption_new = consumption_dow2.merge(
@@ -4345,6 +4505,42 @@ class PVOpt(hass.Hass):
                     if self.debug and "P" in self.debug_cat:
                         self.log(">>> Consumption New:")
                         self.log(f">>> {consumption_new.to_string()}")
+
+                    # Log forecast (pre-margin) daily totals - actuals so far + forecast for remainder
+                    consumption_margin_factor = 1 + self.get_config("consumption_margin") / 100
+                    forecast_pre_margin = consumption_new["total"] / consumption_margin_factor
+
+                    now_floor = pd.Timestamp.now(tz="UTC").floor("30min")
+                    today = now_floor.date()
+
+                    # Actual consumption so far today from raw history
+                    actual_today = df_no_margin[df_no_margin.index.date == today].sum() / 2000
+
+                    # Forecast for remaining slots today (from now onwards)
+                    forecast_today_remaining = forecast_pre_margin[forecast_pre_margin.index >= now_floor]
+                    forecast_today_remaining = (
+                        forecast_today_remaining[forecast_today_remaining.index.date == today].sum() / 2000
+                    )
+
+                    # Tomorrow is pure forecast
+                    tomorrow_start = pd.Timestamp(today, tz="UTC") + pd.Timedelta(days=1)
+                    tomorrow_end = tomorrow_start + pd.Timedelta(hours=23, minutes=30)
+                    forecast_tomorrow = (
+                        forecast_pre_margin[
+                            (forecast_pre_margin.index >= tomorrow_start) & (forecast_pre_margin.index <= tomorrow_end)
+                        ].sum()
+                        / 2000
+                    )
+
+                    tomorrow = (now_floor + pd.Timedelta(days=1)).date()
+
+                    self.log(f"  - Forecast consumption per day (weighted, pre-margin):")
+                    self.log(
+                        f"      {pd.Timestamp(today).strftime('%d-%b-%Y')} ({pd.Timestamp(today).strftime('%a')}): {actual_today + forecast_today_remaining:0.1f} kWh  ({actual_today:0.1f} kWh actual + {forecast_today_remaining:0.1f} kWh forecast)"
+                    )
+                    self.log(
+                        f"      {pd.Timestamp(tomorrow).strftime('%d-%b-%Y')} ({pd.Timestamp(tomorrow).strftime('%a')}): {forecast_tomorrow:0.1f} kWh  (forecast)"
+                    )
 
                     consumption["consumption"] += pd.Series(
                         consumption_new["total"].to_numpy(), index=consumption_mean.index
@@ -4385,17 +4581,6 @@ class PVOpt(hass.Hass):
             self.log("  - Consumption estimated OK")
 
         self.log("")
-
-        ### This next section prints a consumption based on two days worth, as predicted from the last 7 days
-        # What we want is a predicted consumption for the next day, so we can compare it to fixed consumption
-        # problems:
-        # Not sure where two days is created from  (as df is definitley one day)
-        # Each of the two days has different, so its not a straight double generated from the one day df
-
-        self.log(
-            f"    Total consumption from {consumption.index[0].strftime(DATE_TIME_FORMAT_SHORT)} to {consumption.index[-1].strftime(DATE_TIME_FORMAT_SHORT)}:"
-        )
-        self.log(f"    Total consumption: {(consumption['consumption'].sum() / 2000):0.1f} kWh")
 
         if self.debug and "P" in self.debug_cat:
             self.log("Printing final result of routine load_consumption.....")
@@ -4888,7 +5073,7 @@ class PVOpt(hass.Hass):
 
         return (changed, written)
 
-    def write_and_poll_value(self, entity_id, value: int | float, tolerance=0.0, verbose=True):
+    def write_and_poll_value(self, entity_id, value: int | float, tolerance=0.0, verbose=False):
         changed = False
         written = False
         if tolerance == -1:
@@ -4934,7 +5119,7 @@ class PVOpt(hass.Hass):
                 self.call_service("select/select_option", entity_id=entity_id, option=state)
                 self.rlog(f"Setting {entity_id} to {state}")
 
-    def get_state_retry(self, *args, **kwargs):
+    def get_state_retry(self, *args, allow_none=False, **kwargs):
         retries = 0
         state = None
 
@@ -4942,11 +5127,14 @@ class PVOpt(hass.Hass):
 
         while not valid_state and retries < GET_STATE_RETRIES:
             state = self.get_state(*args, **kwargs)
-            valid_state = (
-                (("attribute" in kwargs) and (isinstance(state, dict)))
-                or (state not in ["unknown", "unavailable", "", None, nan])
-                or (len(args) == 1)
-            )
+            if allow_none:
+                valid_state = True
+            else:
+                valid_state = (
+                    (("attribute" in kwargs) and (isinstance(state, dict)))
+                    or (state not in ["unknown", "unavailable", "", None, nan])
+                    or (len(args) == 1)
+                )
 
             if not valid_state:
                 retries += 1
@@ -4984,5 +5172,102 @@ class PVOpt(hass.Hass):
         if item is not None:
             return DEFAULT_CONFIG[item]["default"]
 
+
+if __name__ == "__main__":
+    import asyncio
+    import json
+    import logging
+    import logging.handlers
+    import os
+    import sys
+
+    # Ensure /app is on sys.path so importName() can find sunsynk.py,
+    # solis.py etc. when called from _load_inverter()
+    sys.path.insert(0, "/app")
+
+    import yaml
+
+    # Add-On version is injected by the HA Supervisor at runtime.
+    # No need to hardcode — stays in sync with config.yaml automatically.
+    ADDON_VERSION = os.environ.get("ADDON_VERSION", "unknown")
+
+    LOG_FORMAT = "%(asctime)s  %(levelname)-8s %(message)s"
+    LOG_DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
+
+    # ── Console handler (captured by HA Supervisor → Add-On Log tab) ─────────
+    logging.basicConfig(
+        level=logging.INFO,
+        format=LOG_FORMAT,
+        datefmt=LOG_DATE_FORMAT,
+    )
+
+    # ── Persistent file handlers (/config/pv_opt mirrors AppDaemon log location) ─
+    PV_OPT_DIR = "/config/pv_opt"
+    os.makedirs(PV_OPT_DIR, exist_ok=True)
+
+    # Main log — all levels
+    LOG_FILE = f"{PV_OPT_DIR}/pv_opt.log"
+    file_handler = logging.handlers.RotatingFileHandler(
+        LOG_FILE,
+        maxBytes=5 * 1024 * 1024,
+        backupCount=3,
+        encoding="utf-8",
+    )
+    file_handler.setFormatter(logging.Formatter(fmt=LOG_FORMAT, datefmt=LOG_DATE_FORMAT))
+    logging.getLogger().addHandler(file_handler)
+
+    # Error log — WARNING and above only (mirrors AppDaemon's error.log)
+    ERROR_LOG_FILE = f"{PV_OPT_DIR}/error.log"
+    error_handler = logging.handlers.RotatingFileHandler(
+        ERROR_LOG_FILE,
+        maxBytes=1 * 1024 * 1024,
+        backupCount=3,
+        encoding="utf-8",
+    )
+    error_handler.setLevel(logging.WARNING)
+    error_handler.setFormatter(logging.Formatter(fmt=LOG_FORMAT, datefmt=LOG_DATE_FORMAT))
+    logging.getLogger().addHandler(error_handler)
+
+    logging.info(f"*************** PV Opt Add-On Version: {ADDON_VERSION} ***************")
+    logging.info(f"Logging to {LOG_FILE} and {ERROR_LOG_FILE}")
+
+    # ── Load Add-On UI options (MQTT credentials, log level, etc.) ─────────
+    OPTIONS_FILE = "/data/options.json"
+    if not os.path.exists(OPTIONS_FILE):
+        logging.warning(f"{OPTIONS_FILE} not found — using empty Add-On options")
+        addon_options = {}
+    else:
+        with open(OPTIONS_FILE) as f:
+            addon_options = json.load(f)
+
+    # ── Load pv_opt config.yaml (the main app configuration) ─────────────
+    # Defaults to /config/pv_opt/config.yaml — written by run.sh on first start.
+    # Users can find and edit this via the HA File Editor, consistent with
+    # where AppDaemon stores its files.
+    # Override by setting config_path in the Add-On UI if needed.
+
+    CONFIG_FILE = addon_options.get("config_path", f"{PV_OPT_DIR}/config.yaml")
+    if not os.path.exists(CONFIG_FILE):
+        logging.warning(f"pv_opt config.yaml not found at {CONFIG_FILE} — " f"running with Add-On UI options only.")
+        pv_opt_config = {}
+    else:
+        with open(CONFIG_FILE) as f:
+            raw = yaml.safe_load(f)
+        if isinstance(raw, dict) and "pv_opt" in raw:
+            pv_opt_config = raw["pv_opt"]
+            # Remove AppDaemon-only keys that have no meaning here
+            for ad_key in ("module", "class", "log"):
+                pv_opt_config.pop(ad_key, None)
+        else:
+            pv_opt_config = raw or {}
+        logging.info(f"Loaded pv_opt config from {CONFIG_FILE}")
+
+    # ── Merge: pv_opt config.yaml takes precedence over Add-On UI options ────
+    options = {**addon_options, **pv_opt_config}
+
+    app = PVOpt(options=options)
+    app.addon_version = ADDON_VERSION
+
+    asyncio.run(app._run())
 
 # %%
