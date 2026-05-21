@@ -72,14 +72,14 @@ INVERTER_DEFS = {
         "online": "sensor.state_of_charge",
         "default_config": {
             "maximum_dod_percent": 20,
-            "id_battery_soc": "sensor.state_of_charge",
-            "id_consumption_today": "sensor.total_load",
-            "id_consumption": "sensor.instantaneous_load",
-            "id_grid_import_today": "sensor.grid_to_load",
-            "id_grid_export_today": "sensor.solar_to_grid",
+            "id_battery_soc": "sensor.{device_name}_{inverter_sn}_state_of_charge",
+            "id_consumption_today": "sensor.{device_name}_{inverter_sn}_total_load",
+            "id_consumption": "sensor.{device_name}_{inverter_sn}_instantaneous_load",
+            "id_grid_import_today": "sensor.{device_name}_{inverter_sn}_grid_to_load",
+            "id_grid_export_today": "sensor.{device_name}_{inverter_sn}_solar_to_grid",
             "id_solar_power": [
-                "sensor.instantaneous_ppv1",
-                "sensor.instantaneous_ppv2",
+                "sensor.{device_name}_{inverter_sn}_instantaneous_ppv1",
+                "sensor.{device_name}_{inverter_sn}_instantaneous_ppv2",
             ],
             "supports_hold_soc": False,
             "update_cycle_seconds": 60,
@@ -87,8 +87,8 @@ INVERTER_DEFS = {
         # Brand Configuration: Exposed as inverter.brand_config and can be over-written using arguments
         # from the config.yaml file but not required outside of this module
         "brand_config": {
-            "battery_voltage": "sensor.instantaneous_battery_i_o",
-            "battery_current": "sensor.instantaneous_battery_i_o",
+            "battery_voltage": "sensor.{device_name}_{inverter_sn}_instantaneous_battery_i_o",
+            "battery_current": "sensor.{device_name}_{inverter_sn}_instantaneous_battery_i_o", # not believed used
             "json_work_mode": "sysWorkMode",
             "json_priority_load": "energyMode",
             "json_grid_charge": "sdChargeOn",
