@@ -2,9 +2,9 @@
 
 <h2>*** Announcment *** </h2>
 
-Pv_opt is now avaiable as an HomeAssistant App (formely known as an AddOn)
+Pv_opt is now available as an HomeAssistant App (formely known as an AddOn)
 
-No changes to config.yaml are required
+No changes to config.yaml are required.
 
 The code that is run is identical to that in AppDaemon, so functionality is identical and no changes to Dashboards are needed. 
 
