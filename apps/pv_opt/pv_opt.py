@@ -21,7 +21,7 @@ import pandas as pd
 import pvpy as pv
 from numpy import nan
 
-VERSION = "5.1.0-Beta-4"
+VERSION = "5.1.0-Beta-5"
 
 UNITS = {
     "current": "A",
@@ -1731,6 +1731,7 @@ class PVOpt(hass.Hass):
             # self._load_saving_events_new()
             self._load_free_electricity_events()
             # self._load_free_electricity_events_new()  # Resolves Issue #418
+            self._load_axle_event()
 
         self.log("")
         self.log("Finished loading contract")
