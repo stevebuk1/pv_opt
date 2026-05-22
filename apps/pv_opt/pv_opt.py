@@ -21,7 +21,7 @@ import pandas as pd
 import pvpy as pv
 from numpy import nan
 
-VERSION = "5.1.1"
+VERSION = "5.1.2"
 
 UNITS = {
     "current": "A",
@@ -2678,6 +2678,7 @@ class PVOpt(hass.Hass):
         # self._load_saving_events_new()
         self._load_free_electricity_events()
         # self._load_free_electricity_events_new()
+        self._load_axle_event()
 
         if self.get_config("forced_discharge") and (self.get_config("supports_forced_discharge", True)):
             discharge_enable = "enabled"
