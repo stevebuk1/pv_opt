@@ -616,12 +616,13 @@ class SolisInverter(BaseInverterController):
             times["end"] = kwargs.get("end", None)
             current = kwargs.get("current", abs(round(kwargs.get("power", 0) / self.voltage, 1)))
 
-            # SVB debugging
-            # self.log(f"Voltage in solis.py = {self.voltage}")
-            # self.log(f"Current in solis.py = {current}")
-
-            # SVB debugging
-            # self.log(f"Entered control_charge_discharge, Enable = True")
+            # If start is None (charge already active), check if end and current already match
+            if (
+                times["start"] is None
+                and times["end"] == self.status[direction]["end"]
+                and abs(current - self.status[direction]["current"]) <= 2.0
+            ):
+                return
 
             target_soc = kwargs.get("target_soc", None)
 
