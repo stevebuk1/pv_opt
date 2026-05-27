@@ -410,6 +410,9 @@ pv_opt:
   # inverter_type: SUNSYNK_SOLARSUNSYNK
   # device_name: sunsynk_statistics_sunsynk_332054
   # inverter_sn: 2207112425a  # enter {sunsynk_serial} from Solar Sunskynk integration
+  # sunsynk_username: their@email.com
+  # sunsynk_password: theirpassword
+
 
   # These are the default entities used with the Sunsynk Solar Sunsynk integration. 
   # You can change them here and over-ride the defaults
@@ -418,7 +421,7 @@ pv_opt:
   # id_priority_load: sensor.{device_name}_{inverter_sn}_work_mode               # not used, done by solar_sunsynk.set_solar_settings
   # id_control_helper: input_text.{device_name}_{inverter_sn}_settings           # not ussed, done by solar_sunsynk.set_solar_settings
 
-  # id_timed_charge_start: sensor.{device_name}_{inverter_sn}_sell_time_1         #not used, done by direct API callv
+  # id_timed_charge_start: sensor.{device_name}_{inverter_sn}_sell_time_1         #not used, done by direct API call
   # id_timed_charge_end: sensor.{device_name}_{inverter_sn}_sell_time_2           #not used, done by direct API call
   # id_timed_charge_enable: sensor.{device_name}_{inverter_sn}_gen_charge_time_1  #not used, done by direct API call
   # id_timed_charge_target_soc: sensor.{device_name}_{inverter_sn}_cap_1_soc      #not used, done by direct API call
@@ -428,11 +431,11 @@ pv_opt:
   # id_timed_discharge_enable: sensor.{device_name}_{inverter_sn}_gen_charge_time_3 #not used, done by direct API call
   # id_timed_discharge_target_soc: sensor.{device_name}_{inverter_sn}_cap_3_soc   #not used, done by direct API call
   
-  # id_battery_soc:  sensor.{device_name}_{inverter_sn}_state_of_charge           # done
-  # battery_voltage: sensor.{device_name}_{inverter_sn}_instantaneous_battery_i_o # done
-  # id_consumption_today: sensor.{device_name}_{inverter_sn}_total_load           # done
-  # id_grid_import_today: sensor.{device_name}_{inverter_sn}_grid_to_load         # done
-  # id_grid_export_today: sensor.{device_name}_{inverter_sn}_solar_to_grid        # done
+  # id_battery_soc:  sensor.{device_name}_{inverter_sn}_state_of_charge           
+  # battery_voltage: sensor.{device_name}_{inverter_sn}_instantaneous_battery_i_o 
+  # id_consumption_today: sensor.{device_name}_{inverter_sn}_total_load           
+  # id_grid_import_today: sensor.{device_name}_{inverter_sn}_grid_to_load         
+  # id_grid_export_today: sensor.{device_name}_{inverter_sn}_solar_to_grid        
 
   
   # maximum_dod_percent:  20
