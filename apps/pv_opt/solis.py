@@ -616,6 +616,8 @@ class SolisInverter(BaseInverterController):
             times["end"] = kwargs.get("end", None)
             current = kwargs.get("current", abs(round(kwargs.get("power", 0) / self.voltage, 1)))
 
+            self.log(f"DEBUG guard: start={times['start']} status_start={self.status[direction]['start']} end={times['end']} status_end={self.status[direction]['end']} current={current} status_current={self.status[direction]['current']}")
+
             # If start is None (charge already active), check if end and current already match
             if (
                 times["start"] is None
