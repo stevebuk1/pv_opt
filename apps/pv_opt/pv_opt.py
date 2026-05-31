@@ -3279,9 +3279,9 @@ class PVOpt(hass.Hass):
 
                     if self.charge_power > 1:
                         self.log("Charge Power >1")
-                        self.inverter.control_discharge(enable=False)
+                        did_something = self.inverter.control_discharge(enable=False)
 
-                        self.inverter.control_charge(
+                        did_something = self.inverter.control_charge(
                             enable=True,
                             start=self.charge_start_datetime,
                             end=self.charge_end_datetime,
@@ -3291,9 +3291,9 @@ class PVOpt(hass.Hass):
 
                     elif self.charge_power < 0:
                         self.log("Charge Power <0")
-                        self.inverter.control_charge(enable=False)
+                        did_something = self.inverter.control_charge(enable=False)
 
-                        self.inverter.control_discharge(
+                        did_something = self.inverter.control_discharge(
                             enable=True,
                             start=self.charge_start_datetime,
                             end=self.charge_end_datetime,
@@ -3305,9 +3305,9 @@ class PVOpt(hass.Hass):
 
                     elif (self.charge_power == 1) & (self.windows["hold_soc"].iloc[0] == "<=Car"):
                         self.log("Car slot")
-                        self.inverter.control_discharge(enable=False)
+                        did_something = self.inverter.control_discharge(enable=False)
 
-                        self.inverter.control_charge(
+                        did_something = self.inverter.control_charge(
                             enable=True,
                             start=self.charge_start_datetime,
                             end=self.charge_end_datetime,
@@ -3373,7 +3373,7 @@ class PVOpt(hass.Hass):
 
                             if status["discharge"]["active"]:
                                 self.log("Disabling discharge")
-                                self.inverter.control_discharge(
+                                did_something = self.inverter.control_discharge(
                                     enable=False,
                                 )
 
@@ -3383,7 +3383,7 @@ class PVOpt(hass.Hass):
                             self.log(f"Setting SOC to {self.charge_target_soc}")
                             # self.log(f"Current is {float(self.charge_current):4.1f}")
 
-                            self.inverter.control_charge(
+                            did_something = self.inverter.control_charge(
                                 enable=True,
                                 start=start,
                                 end=end,
@@ -3398,11 +3398,11 @@ class PVOpt(hass.Hass):
                                 start = None
 
                             if status["charge"]["active"]:
-                                self.inverter.control_charge(
+                                did_something = self.inverter.control_charge(
                                     enable=False,
                                 )
 
-                            self.inverter.control_discharge(
+                            did_something = self.inverter.control_discharge(
                                 enable=True,
                                 start=start,
                                 end=self.charge_end_datetime,
