@@ -1828,18 +1828,23 @@ class PVOpt(hass.Hass):
             ]
 
             if len(available_events) > 0:
-                self.log("Joining the following new Octoplus Events:")
+                axle_enrolled = self.entity_exists(self.config["id_axle_start_time"])
+                if axle_enrolled:
+                    self.log("  Axle Energy VPP integration detected — not auto-joining Octopus Saving Sessions to avoid DFS T&C conflict.")
+                else:
+                    self.log("Joining the following new Octoplus Events:")
                 for event in available_events:
                     if event["id"] not in self.saving_events:
                         self.saving_events[event["id"]] = event
                         self.log(
                             f"{event['id']:8d}: {pd.Timestamp(event['start']).strftime(DATE_TIME_FORMAT_SHORT)} - {pd.Timestamp(event['end']).strftime(DATE_TIME_FORMAT_SHORT)} at {int(event['octopoints_per_kwh'])/8:5.1f}p/kWh"
                         )
-                        self.call_service(
-                            "octopus_energy/join_octoplus_saving_session_event",
-                            entity_id=saving_events_entity,
-                            event_code=event["code"],
-                        )
+                        if not axle_enrolled:
+                            self.call_service(
+                                "octopus_energy/join_octoplus_saving_session_event",
+                                entity_id=saving_events_entity,
+                                event_code=event["code"],
+                            )
 
             joined_events = self.get_state_retry(saving_events_entity, attribute="all")["attributes"]["joined_events"]
 
