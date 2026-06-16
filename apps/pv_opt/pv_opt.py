@@ -1481,6 +1481,13 @@ class PVOpt(hass.Hass):
         if item in self.config:
             if isinstance(self.config[item], str) and self.entity_exists(self.config[item]):
                 x = self.get_ha_value(entity_id=self.config[item])
+                if x is None:
+                    self.log(
+                        f"Config item '{item}' references entity '{self.config[item]}' which returned None. Using default: {default}",
+                        level="WARNING",
+                    )
+                    return default
+
                 return x
             elif isinstance(self.config[item], list):
                 if min([isinstance(x, str)] for x in self.config[item])[0]:
