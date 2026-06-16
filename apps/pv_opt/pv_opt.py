@@ -21,7 +21,7 @@ import pandas as pd
 import pvpy as pv
 from numpy import nan
 
-VERSION = "5.1.3-Beta-2"
+VERSION = "5.1.3-Beta-3"
 
 UNITS = {
     "current": "A",
@@ -1815,7 +1815,7 @@ class PVOpt(hass.Hass):
                 name for name in self.get_state_retry("event").keys() if ("octoplus_saving_session_events" in name)
             ][0]
             self.log("")
-            self.rlog(f"Found Octopus Savings Events entity: {saving_events_entity}")
+            self.log(f"Found Octopus Savings Events entity: {saving_events_entity}")
             octopus_account = self.get_state_retry(entity_id=saving_events_entity, attribute="account_id")
 
             self.config["octopus_account"] = octopus_account
@@ -1990,7 +1990,7 @@ class PVOpt(hass.Hass):
                     f"{id:8s}: {pd.Timestamp(self.free_electricity_events[id]['start']).strftime(DATE_TIME_FORMAT_SHORT)} - {pd.Timestamp(self.free_electricity_events[id]['end']).strftime(DATE_TIME_FORMAT_SHORT)}"
                 )
         else:
-            self.log("  No upcoming Octopus Free Electricity Events detected")
+            self.log("No upcoming Octopus Free Electricity Events detected")
 
     def _load_free_electricity_events_new(self):
         """
@@ -2101,7 +2101,7 @@ class PVOpt(hass.Hass):
             return
 
         self.log("")
-        self.log("  Checking for Axle Energy VPP events:")
+        self.log("Checking for Axle Energy VPP events:")
 
  
         start_state = self.get_state_retry(start_entity)
