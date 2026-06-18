@@ -1835,7 +1835,7 @@ class PVOpt(hass.Hass):
                     self.log("Joining the following new Octoplus Events:")
                 for event in available_events:
                     if event["id"] not in self.saving_events:
-                        self.saving_events[event["id"]] = event
+                        # self.saving_events[event["id"]] = event
                         self.log(
                             f"{event['id']:8d}: {pd.Timestamp(event['start']).strftime(DATE_TIME_FORMAT_SHORT)} - {pd.Timestamp(event['end']).strftime(DATE_TIME_FORMAT_SHORT)} at {int(event['octopoints_per_kwh'])/8:5.1f}p/kWh"
                         )
@@ -1862,7 +1862,7 @@ class PVOpt(hass.Hass):
                     f"{id:8d}: {pd.Timestamp(self.saving_events[id]['start']).strftime(DATE_TIME_FORMAT_SHORT)} - {pd.Timestamp(self.saving_events[id]['end']).strftime(DATE_TIME_FORMAT_SHORT)} at {int(self.saving_events[id]['octopoints_per_kwh'])/8:5.1f}p/kWh"
                 )
         else:
-            self.log("  No upcoming Octopus Saving Events detected or joined:")
+            self.log("  No upcoming Octopus Saving Events joined:")
 
     def _load_saving_events_new(self):
         """
