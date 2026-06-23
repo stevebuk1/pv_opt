@@ -44,7 +44,6 @@ DEBUG = False
 # D = Discharge algorithm Logging
 # W = Charge/Discharge Windows Logging
 # X = Charge/Discharge Windows Logging (verbose)
-# O = Optimsation Summary (1/2 hour slots) of chosen plan
 # A = All plans Optimisation Summary (1/2 hour slots)
 # F = Power Flows Logging
 # V = Power Flows debugging (verbose)
@@ -3559,17 +3558,13 @@ class PVOpt(hass.Hass):
             | ((self.opt["carslot"].diff() > 0) & (self.opt["forced"] == 0))  # new car slot with no charge
         ).cumsum()
 
-        if self.debug and "O" in self.debug_cat:
-            self.log("")
-            self.ulog("1/2 Hour Optimsation summary")
-
-            # self.log(f"\n{self.opt.round(2).to_string()}")
-
-            opt_display = self.opt.copy()
-            opt_display[["solar", "consumption", "batt_grid_req", "chg", "chg_end", "battery", "grid"]] = opt_display[["solar", "consumption", "batt_grid_req", "chg", "chg_end", "battery", "grid"]].round(0)
-            opt_display[["soc", "soc_end"]] = opt_display[["soc", "soc_end"]].round(1)
-            opt_display[["dt_hours", "import", "export"]] = opt_display[["dt_hours", "import", "export"]].round(2)
-            self.log(f"\n{opt_display.to_string()}")
+        self.log("")
+        self.ulog("1/2 Hour Optimsation summary")
+        opt_display = self.opt.copy()
+        opt_display[["solar", "consumption", "batt_grid_req", "chg", "chg_end", "battery", "grid"]] = opt_display[["solar", "consumption", "batt_grid_req", "chg", "chg_end", "battery", "grid"]].round(0)
+        opt_display[["soc", "soc_end"]] = opt_display[["soc", "soc_end"]].round(1)
+        opt_display[["dt_hours", "import", "export"]] = opt_display[["dt_hours", "import", "export"]].round(2)
+        self.log(f"\n{opt_display.to_string()}")
 
 
         if self.debug and "W" in self.debug_cat:

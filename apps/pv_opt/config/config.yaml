@@ -4,7 +4,7 @@ pv_opt:
   class: PVOpt
   log: pv_opt_log
   prefix: pvopt
-  debug: true
+  debug: false
 
   # User configuration ---  EDIT AWAY! ---
   # ========================================
@@ -34,7 +34,6 @@ pv_opt:
   # D = Discharge algorithm Logging
   # A = Print out all plans summary (1/2 hour slots)
   # W = Charge/Discharge Windows Logging
-  # O = Optimsation Summary (1/2 hour slots)
   # F = Power Flows Logging
   # V = Power Flows debugging (extra verbose)
   # I = inverter control/commands Logging
