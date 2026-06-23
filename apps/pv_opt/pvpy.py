@@ -1710,10 +1710,7 @@ class PVsystemModel:
                 slot = (
                     start_window,
                     -min(
-                        min(
-                            self.battery.max_discharge_power,
-                            self.inverter.inverter_power - x["solar"].loc[start_window],
-                        ),
+                        self.battery.max_discharge_power,
                         ((x["soc_end"].loc[start_window] - self.battery.max_dod) / 100 * self.battery.capacity)
                         / x["dt_hours"].loc[start_window],
                     ),
