@@ -2530,7 +2530,7 @@ class PVOpt(hass.Hass):
                     self.mqtt.mqtt_publish(state_topic, state, retain=True)
                     self.mqtt.mqtt_publish(command_topic, state, retain=True)
 
-                self.mqtt.mqtt_subscribe(state_topic)
+                self.mqtt.mqtt_subscribe(command_topic)
 
             elif (
                 isinstance(self.get_ha_value(entity_id=entity_id), str)
@@ -2575,6 +2575,7 @@ class PVOpt(hass.Hass):
 
             self.config[item] = entity_id
             self.change_items[entity_id] = item
+            self.change_items[command_topic] = item
             self.config_state[item] = state
 
         self.log("")
@@ -2609,8 +2610,17 @@ class PVOpt(hass.Hass):
 
     @ad.app_lock
     def optimise_state_change(self, entity_id, attribute, old, new, kwargs):
-        item = self.change_items[entity_id]
+
+        item = self.change_items.get(entity_id)
+        if item is None:
+            return
+
         self.log(f"State change detected for {entity_id} [config item: {item}] from {old} to {new}:")
+
+        if entity_id.startswith("homeassistant/") and entity_id.endswith("/set"):
+            state_topic = entity_id[:-4] + "/state"
+            self.mqtt.mqtt_publish(state_topic, new, retain=True)
+
 
         self.config_state[item] = new
 
