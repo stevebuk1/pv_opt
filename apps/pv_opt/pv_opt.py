@@ -2570,6 +2570,10 @@ class PVOpt(hass.Hass):
                     else:
                         self.log(f"{str_log} <<< FAILED!", level="WARN")
 
+                domain = entity_id.split(".")[0]
+                state_topic = f"homeassistant/{domain}/{entity_id.split('.')[1]}/state"
+                self.mqtt.mqtt_publish(state_topic, new_state.upper() if domain == "switch" else new_state, retain=True)
+
             else:
                 state = self.get_state_retry(entity_id)
 
