@@ -2617,9 +2617,20 @@ class PVOpt(hass.Hass):
 
         self.log(f"State change detected for {entity_id} [config item: {item}] from {old} to {new}:")
 
+        if old == "unavailable":
+            self.log(f"  Transition from unavailable — re-reading {entity_id} from HA to avoid reconnect noise.")
+            refreshed = self.get_state_retry(entity_id)
+            if refreshed is not None:
+                self.config_state[item] = refreshed
+            return
+
         if entity_id.startswith("homeassistant/") and entity_id.endswith("/set"):
             state_topic = entity_id[:-4] + "/state"
             self.mqtt.mqtt_publish(state_topic, new, retain=True)
+        elif "." in entity_id:
+            domain, object_id = entity_id.split(".", 1)
+            state_topic = f"homeassistant/{domain}/{object_id}/state"
+            self.mqtt.mqtt_publish(state_topic, new.upper() if domain == "switch" else new, retain=True)
 
 
         self.config_state[item] = new
