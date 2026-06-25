@@ -2621,11 +2621,12 @@ class PVOpt(hass.Hass):
 
         self.log(f"State change detected for {entity_id} [config item: {item}] from {old} to {new}:")
 
-        if old == "unavailable":
-            self.log(f"  Transition from unavailable — re-reading {entity_id} from HA to avoid reconnect noise.")
-            refreshed = self.get_state_retry(entity_id)
-            if refreshed is not None:
-                self.config_state[item] = refreshed
+        if old == "unavailable" or new == "unavailable":
+            self.log(f"  Transition from/to unavailable — re-reading {entity_id} from HA to avoid reconnect noise.")
+            if new != "unavailable":
+                refreshed = self.get_state_retry(entity_id)
+                if refreshed is not None:
+                    self.config_state[item] = refreshed
             return
 
         if entity_id.startswith("homeassistant/") and entity_id.endswith("/set"):
