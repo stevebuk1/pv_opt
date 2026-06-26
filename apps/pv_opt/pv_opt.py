@@ -3992,7 +3992,7 @@ class PVOpt(hass.Hass):
         for case in self.summary_costs:
             self.write_cost(
                 f"PV_Opt Cost ({case})",
-                entity=f"sensor.{self.prefix}_cost_{case.lower().replace(" ","_")}",
+                entity=f"sensor.{self.prefix}_cost_{case.lower().replace(' ','_')}",
                 cost=self.optimised_cost[case],
                 df=self.flows[case],
                 full=False,
