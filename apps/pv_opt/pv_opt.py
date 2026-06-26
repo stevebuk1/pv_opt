@@ -21,7 +21,7 @@ import pandas as pd
 import pvpy as pv
 from numpy import nan
 
-VERSION = "5.1.2-Beta-1"
+VERSION = "5.1.3-Beta-4"
 
 UNITS = {
     "current": "A",
@@ -44,7 +44,6 @@ DEBUG = False
 # D = Discharge algorithm Logging
 # W = Charge/Discharge Windows Logging
 # X = Charge/Discharge Windows Logging (verbose)
-# O = Optimsation Summary (1/2 hour slots) of chosen plan
 # A = All plans Optimisation Summary (1/2 hour slots)
 # F = Power Flows Logging
 # V = Power Flows debugging (verbose)
@@ -1481,6 +1480,13 @@ class PVOpt(hass.Hass):
         if item in self.config:
             if isinstance(self.config[item], str) and self.entity_exists(self.config[item]):
                 x = self.get_ha_value(entity_id=self.config[item])
+                if x is None:
+                    self.log(
+                        f"Config item '{item}' references entity '{self.config[item]}' which returned None. Using default: {default}",
+                        level="WARNING",
+                    )
+                    return default
+
                 return x
             elif isinstance(self.config[item], list):
                 if min([isinstance(x, str)] for x in self.config[item])[0]:
@@ -1808,7 +1814,7 @@ class PVOpt(hass.Hass):
                 name for name in self.get_state_retry("event").keys() if ("octoplus_saving_session_events" in name)
             ][0]
             self.log("")
-            self.rlog(f"Found Octopus Savings Events entity: {saving_events_entity}")
+            self.log(f"Found Octopus Savings Events entity: {saving_events_entity}")
             octopus_account = self.get_state_retry(entity_id=saving_events_entity, attribute="account_id")
 
             self.config["octopus_account"] = octopus_account
@@ -1821,18 +1827,23 @@ class PVOpt(hass.Hass):
             ]
 
             if len(available_events) > 0:
-                self.log("Joining the following new Octoplus Events:")
+                axle_enrolled = self.entity_exists(self.config["id_axle_start_time"])
+                if axle_enrolled:
+                    self.log("  Axle Energy VPP integration detected — not auto-joining Octopus Saving Sessions to avoid DFS T&C conflict.")
+                else:
+                    self.log("Joining the following new Octoplus Events:")
                 for event in available_events:
                     if event["id"] not in self.saving_events:
-                        self.saving_events[event["id"]] = event
+                        # self.saving_events[event["id"]] = event
                         self.log(
                             f"{event['id']:8d}: {pd.Timestamp(event['start']).strftime(DATE_TIME_FORMAT_SHORT)} - {pd.Timestamp(event['end']).strftime(DATE_TIME_FORMAT_SHORT)} at {int(event['octopoints_per_kwh'])/8:5.1f}p/kWh"
                         )
-                        self.call_service(
-                            "octopus_energy/join_octoplus_saving_session_event",
-                            entity_id=saving_events_entity,
-                            event_code=event["code"],
-                        )
+                        if not axle_enrolled:
+                            self.call_service(
+                                "octopus_energy/join_octoplus_saving_session_event",
+                                entity_id=saving_events_entity,
+                                event_code=event["code"],
+                            )
 
             joined_events = self.get_state_retry(saving_events_entity, attribute="all")["attributes"]["joined_events"]
 
@@ -1850,7 +1861,7 @@ class PVOpt(hass.Hass):
                     f"{id:8d}: {pd.Timestamp(self.saving_events[id]['start']).strftime(DATE_TIME_FORMAT_SHORT)} - {pd.Timestamp(self.saving_events[id]['end']).strftime(DATE_TIME_FORMAT_SHORT)} at {int(self.saving_events[id]['octopoints_per_kwh'])/8:5.1f}p/kWh"
                 )
         else:
-            self.log("  No upcoming Octopus Saving Events detected or joined:")
+            self.log("  No upcoming Octopus Saving Events joined:")
 
     def _load_saving_events_new(self):
         """
@@ -1978,7 +1989,7 @@ class PVOpt(hass.Hass):
                     f"{id:8s}: {pd.Timestamp(self.free_electricity_events[id]['start']).strftime(DATE_TIME_FORMAT_SHORT)} - {pd.Timestamp(self.free_electricity_events[id]['end']).strftime(DATE_TIME_FORMAT_SHORT)}"
                 )
         else:
-            self.log("  No upcoming Octopus Free Electricity Events detected")
+            self.log("No upcoming Octopus Free Electricity Events detected")
 
     def _load_free_electricity_events_new(self):
         """
@@ -2089,7 +2100,7 @@ class PVOpt(hass.Hass):
             return
 
         self.log("")
-        self.log("  Checking for Axle Energy VPP events:")
+        self.log("Checking for Axle Energy VPP events:")
 
  
         start_state = self.get_state_retry(start_entity)
@@ -2519,7 +2530,7 @@ class PVOpt(hass.Hass):
                     self.mqtt.mqtt_publish(state_topic, state, retain=True)
                     self.mqtt.mqtt_publish(command_topic, state, retain=True)
 
-                self.mqtt.mqtt_subscribe(state_topic)
+                self.mqtt.mqtt_subscribe(command_topic)
 
             elif (
                 isinstance(self.get_ha_value(entity_id=entity_id), str)
@@ -2559,11 +2570,16 @@ class PVOpt(hass.Hass):
                     else:
                         self.log(f"{str_log} <<< FAILED!", level="WARN")
 
+                domain = entity_id.split(".")[0]
+                state_topic = f"homeassistant/{domain}/{entity_id.split('.')[1]}/state"
+                self.mqtt.mqtt_publish(state_topic, new_state.upper() if domain == "switch" else new_state, retain=True)
+
             else:
                 state = self.get_state_retry(entity_id)
 
             self.config[item] = entity_id
             self.change_items[entity_id] = item
+            self.change_items[command_topic] = item
             self.config_state[item] = state
 
         self.log("")
@@ -2598,8 +2614,29 @@ class PVOpt(hass.Hass):
 
     @ad.app_lock
     def optimise_state_change(self, entity_id, attribute, old, new, kwargs):
-        item = self.change_items[entity_id]
+
+        item = self.change_items.get(entity_id)
+        if item is None:
+            return
+
         self.log(f"State change detected for {entity_id} [config item: {item}] from {old} to {new}:")
+
+        if old == "unavailable" or new == "unavailable":
+            self.log(f"  Transition from/to unavailable — re-reading {entity_id} from HA to avoid reconnect noise.")
+            if new != "unavailable":
+                refreshed = self.get_state_retry(entity_id)
+                if refreshed is not None:
+                    self.config_state[item] = refreshed
+            return
+
+        if entity_id.startswith("homeassistant/") and entity_id.endswith("/set"):
+            state_topic = entity_id[:-4] + "/state"
+            self.mqtt.mqtt_publish(state_topic, new, retain=True)
+        elif "." in entity_id:
+            domain, object_id = entity_id.split(".", 1)
+            state_topic = f"homeassistant/{domain}/{object_id}/state"
+            self.mqtt.mqtt_publish(state_topic, new.upper() if domain == "switch" else new, retain=True)
+
 
         self.config_state[item] = new
 
@@ -2678,6 +2715,7 @@ class PVOpt(hass.Hass):
         # self._load_saving_events_new()
         self._load_free_electricity_events()
         # self._load_free_electricity_events_new()
+        self._load_axle_event()
 
         if self.get_config("forced_discharge") and (self.get_config("supports_forced_discharge", True)):
             discharge_enable = "enabled"
@@ -3278,9 +3316,9 @@ class PVOpt(hass.Hass):
 
                     if self.charge_power > 1:
                         self.log("Charge Power >1")
-                        self.inverter.control_discharge(enable=False)
+                        did_something = self.inverter.control_discharge(enable=False)
 
-                        self.inverter.control_charge(
+                        did_something = self.inverter.control_charge(
                             enable=True,
                             start=self.charge_start_datetime,
                             end=self.charge_end_datetime,
@@ -3290,9 +3328,9 @@ class PVOpt(hass.Hass):
 
                     elif self.charge_power < 0:
                         self.log("Charge Power <0")
-                        self.inverter.control_charge(enable=False)
+                        did_something = self.inverter.control_charge(enable=False)
 
-                        self.inverter.control_discharge(
+                        did_something = self.inverter.control_discharge(
                             enable=True,
                             start=self.charge_start_datetime,
                             end=self.charge_end_datetime,
@@ -3304,9 +3342,9 @@ class PVOpt(hass.Hass):
 
                     elif (self.charge_power == 1) & (self.windows["hold_soc"].iloc[0] == "<=Car"):
                         self.log("Car slot")
-                        self.inverter.control_discharge(enable=False)
+                        did_something = self.inverter.control_discharge(enable=False)
 
-                        self.inverter.control_charge(
+                        did_something = self.inverter.control_charge(
                             enable=True,
                             start=self.charge_start_datetime,
                             end=self.charge_end_datetime,
@@ -3350,6 +3388,7 @@ class PVOpt(hass.Hass):
                             self.inverter.hold_soc(enable=True, target_soc=self.hold[0]["soc"], start=self.charge_start_datetime, end=self.charge_end_datetime)
                         else:
                             self.log(f"  Inverter already holding SOC of {self.hold[0]['soc']:0.0f}%")
+                            did_something = False
                             # Next line commented out - if its already holding there is nothing to update (there used to be when using backup mode)
                             # self.inverter.hold_soc(enable=True, target_soc=self.hold[0]["soc"], start=None, end=self.charge_end_datetime)
 
@@ -3371,7 +3410,7 @@ class PVOpt(hass.Hass):
 
                             if status["discharge"]["active"]:
                                 self.log("Disabling discharge")
-                                self.inverter.control_discharge(
+                                did_something = self.inverter.control_discharge(
                                     enable=False,
                                 )
 
@@ -3381,7 +3420,7 @@ class PVOpt(hass.Hass):
                             self.log(f"Setting SOC to {self.charge_target_soc}")
                             # self.log(f"Current is {float(self.charge_current):4.1f}")
 
-                            self.inverter.control_charge(
+                            did_something = self.inverter.control_charge(
                                 enable=True,
                                 start=start,
                                 end=end,
@@ -3396,11 +3435,11 @@ class PVOpt(hass.Hass):
                                 start = None
 
                             if status["charge"]["active"]:
-                                self.inverter.control_charge(
+                                did_something = self.inverter.control_charge(
                                     enable=False,
                                 )
 
-                            self.inverter.control_discharge(
+                            did_something = self.inverter.control_discharge(
                                 enable=True,
                                 start=start,
                                 end=self.charge_end_datetime,
@@ -3545,17 +3584,13 @@ class PVOpt(hass.Hass):
             | ((self.opt["carslot"].diff() > 0) & (self.opt["forced"] == 0))  # new car slot with no charge
         ).cumsum()
 
-        if self.debug and "O" in self.debug_cat:
-            self.log("")
-            self.ulog("1/2 Hour Optimsation summary")
-
-            # self.log(f"\n{self.opt.round(2).to_string()}")
-
-            opt_display = self.opt.copy()
-            opt_display[["solar", "consumption", "batt_grid_req", "chg", "chg_end", "battery", "grid"]] = opt_display[["solar", "consumption", "batt_grid_req", "chg", "chg_end", "battery", "grid"]].round(0)
-            opt_display[["soc", "soc_end"]] = opt_display[["soc", "soc_end"]].round(1)
-            opt_display[["dt_hours", "import", "export"]] = opt_display[["dt_hours", "import", "export"]].round(2)
-            self.log(f"\n{opt_display.to_string()}")
+        self.log("")
+        self.ulog("1/2 Hour Optimsation summary")
+        opt_display = self.opt.copy()
+        opt_display[["solar", "consumption", "batt_grid_req", "chg", "chg_end", "battery", "grid"]] = opt_display[["solar", "consumption", "batt_grid_req", "chg", "chg_end", "battery", "grid"]].round(0)
+        opt_display[["soc", "soc_end"]] = opt_display[["soc", "soc_end"]].round(1)
+        opt_display[["dt_hours", "import", "export"]] = opt_display[["dt_hours", "import", "export"]].round(2)
+        self.log(f"\n{opt_display.to_string()}")
 
 
         if self.debug and "W" in self.debug_cat:
@@ -3991,7 +4026,7 @@ class PVOpt(hass.Hass):
         for case in self.summary_costs:
             self.write_cost(
                 f"PV_Opt Cost ({case})",
-                entity=f"sensor.{self.prefix}_cost_{case.lower().replace(" ","_")}",
+                entity=f"sensor.{self.prefix}_cost_{case.lower().replace(' ','_')}",
                 cost=self.optimised_cost[case],
                 df=self.flows[case],
                 full=False,
