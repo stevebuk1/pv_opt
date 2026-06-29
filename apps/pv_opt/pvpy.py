@@ -1201,15 +1201,10 @@ class PVsystemModel:
 
                             # If the charge rate is really low, just use the last 2 slots to charge instead of all of the cheap slots
                             # Note, will only invoke for cheap rates that last for 3.5 hours or more. (Go, IOG, Eco7)
-                            # Fix: compare the concentrated power (into 2 slots) against tolerance, not the spread-out
-                            # per-swap marginal power. The old check (slot_power_required < tolerance/2) fired on every
-                            # individual swap because each swap's marginal energy is always small when spread across a
-                            # full 4-6 hour window, causing all charge to pile into the last hour.
 
                             tolerance = self.host.get_config("forced_power_group_tolerance")
                             window_hours = search_window["dt_hours"].loc[window].sum()
-                            concentrated_power = round_trip_energy_required * 1000 / search_window["dt_hours"].loc[window[-2:]].sum()
-                            if concentrated_power < tolerance and window_hours > 3.5:
+                            if slot_power_required < (tolerance / 2) and window_hours > 3.5:
                                 window = window[-2:]
                                 slot_power_required = (
                                     round_trip_energy_required * 1000 / search_window["dt_hours"].loc[window].sum()
