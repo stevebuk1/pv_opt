@@ -21,7 +21,7 @@ import pandas as pd
 import pvpy as pv
 from numpy import nan
 
-VERSION = "5.1.3-Beta-4"
+VERSION = "5.1.3-Beta-5"
 
 UNITS = {
     "current": "A",
@@ -108,6 +108,7 @@ INVERTER_TYPES = [
     "SOLIS_SOLARMAN",
     "SOLIS_SOLARMAN_V2",
     "SUNSYNK_SOLARSYNKV3",
+    "SUNSYNK_SOLARSUNSYNK",
     "SOLAX_X1",
     "SOLIS_CLOUD",
     "SOLIS_CLOUD_SENSOR_CONTROL",
