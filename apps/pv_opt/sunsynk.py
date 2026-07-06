@@ -587,15 +587,37 @@ class SolarSunsynkInverter(SunsynkBaseInverter):
             self.log(f"Sunsynk settings fetch error: {e}", level="ERROR")
             return {}
 
+    # Keys accepted by the solar_sunsynk.set_battery_settings service but NOT
+    # by set_solar_settings. set_solar_settings uses a strict schema with no
+    # extra keys allowed, so any of these must be sent as a separate call or
+    # HA rejects the whole request with a 400 Bad Request.
+    
+    _BATTERY_SETTINGS_KEYS = {
+        "sdBatteryCurrent",
+    }
+
     def _set_inverter(self, **kwargs):
         converted = self._convert_kwargs(kwargs)
         sn = self._inverter_sn
-        self.log(f"Calling solar_sunsynk.set_solar_settings for inverter {sn} with {converted}")
-        self._host.call_service(
-            "solar_sunsynk/set_solar_settings",
-            sn=sn,
-            **converted,
-        )
+
+        solar_settings = {k: v for k, v in converted.items() if k not in self._BATTERY_SETTINGS_KEYS}
+        battery_settings = {k: v for k, v in converted.items() if k in self._BATTERY_SETTINGS_KEYS}
+
+        if solar_settings:
+            self.log(f"Calling solar_sunsynk.set_solar_settings for inverter {sn} with {solar_settings}")
+            self._host.call_service(
+                "solar_sunsynk/set_solar_settings",
+                sn=sn,
+                **solar_settings,
+            )
+
+        if battery_settings:
+            self.log(f"Calling solar_sunsynk.set_battery_settings for inverter {sn} with {battery_settings}")
+            self._host.call_service(
+                "solar_sunsynk/set_battery_settings",
+                sn=sn,
+                **battery_settings,
+            )
 
     @property
     def status(self):
