@@ -778,20 +778,21 @@ class PVOpt(hass.Hass):
 
                 self.rlog(f"    Found Dispatching Sensor:  {self.io_dispatching_sensor}")
                 self.log("")
-                self.log(f"    Trying to find Car % Charge to add from Octopus Energy Integration")
-                io_charge_to_add_sensor = [
-                    name
-                    for name in self.get_state_retry(BOTTLECAP_DAVE["domain2"]).keys()
-                    if ("octopus_energy_" in name and "intelligent_charge_" in name)
-                ]
-                self.io_charge_to_add_sensor = io_charge_to_add_sensor[0]
-                self.rlog(f"    Found Charge to Add entity:  {self.io_charge_to_add_sensor}")
 
-                self.io_charge_to_add = self.get_state(
-                    self.io_charge_to_add_sensor
-                )  # Load the current charge to add value
-                self.old_io_charge_to_add = self.io_charge_to_add  # And set historic value to be the same
-                self.rlog(f"    Charge to Add Value = :  {self.io_charge_to_add}")
+#                self.log(f"    Trying to find Car % Charge to add from Octopus Energy Integration")
+#                io_charge_to_add_sensor = [
+#                    name
+#                    for name in self.get_state_retry(BOTTLECAP_DAVE["domain2"]).keys()
+#                    if ("octopus_energy_" in name and "intelligent_charge_" in name)
+#                ]
+#                self.io_charge_to_add_sensor = io_charge_to_add_sensor[0]
+#                self.rlog(f"    Found Charge to Add entity:  {self.io_charge_to_add_sensor}")
+#
+#                self.io_charge_to_add = self.get_state(
+#                    self.io_charge_to_add_sensor
+#                )  # Load the current charge to add value
+#                self.old_io_charge_to_add = self.io_charge_to_add  # And set historic value to be the same
+#                self.rlog(f"    Charge to Add Value = :  {self.io_charge_to_add}")
 
             except Exception as e:
                 self.log(f"{e.__traceback__.tb_lineno}: {e}", level="ERROR")
@@ -799,9 +800,7 @@ class PVOpt(hass.Hass):
                     "Failed to find Octopus Intelligent Dispatching Sensor and/or % Charge to Add from Octopus Energy Integration. Car charging cannot be determined",
                     level="WARNING",
                 )
-        else:  # No access to Octopus for loading charge to add
-            self.io_charge_to_add = 0  # Set default value of 0
-            self.old_io_charge_to_add = 0
+
 
     def get_io_tariffs(self, entity_id1):
 
@@ -923,54 +922,6 @@ class PVOpt(hass.Hass):
 
         return df
 
-    # def not used - remove after testing of new def just below
-    def _check_car_plugin_iog_old(self):
-
-        # If a Zappi entity previously found/configured and EV charger is Zappi, schedule an IOG tariff reload on the next optimizer run when its
-        # detected the car has been plugged in.
-
-        if (len(self.zappi_plug_entity) > 0) and self.ev:
-            plug_status = self.get_state(self.zappi_plug_entity)
-            # self.log(plug_status)
-            if ((plug_status == "EV Connected") or (plug_status == "EV Ready to Charge")) and (
-                self.tariff_reloaded == 0
-            ):
-                self.car_plugin_detected = 1
-                self.log(
-                    "EV plug-in event detected (or end of car plan reached), Contract reload scheduled for next optimiser run"
-                )
-
-            elif ((plug_status == "EV Connected") or (plug_status == "EV Ready to Charge")) and (
-                self.tariff_reloaded == 1
-            ):
-                self.log("EV is connected but Contract reload previously caried out.")
-                self.car_plugin_detected = 0
-
-            elif (plug_status == "Charging") and (self.tariff_reloaded == 0):
-                self.log(
-                    "EV plug-in event detected and car has commenced charging. Contract to be reloaded on next optimiser run"
-                )
-                self.car_plugin_detected = 1
-
-            elif (plug_status == "Charging") and (self.tariff_reloaded == 1):
-                self.log("EV is charging but Contract reload previously carried out.")
-                self.car_plugin_detected = 0
-
-            else:
-                self.log("EV not plugged in. Contract reload not necessary")
-                self.car_plugin_detected = 0
-
-            # If EV plugged in, check charge to add hasnt changed
-            if self.get_config("octopus_auto"):
-                self.io_charge_to_add = self.get_state(self.io_charge_to_add_sensor)
-                if (self.old_io_charge_to_add != self.io_charge_to_add) and (plug_status == "EV Connected"):
-                    self.car_plugin_detected = 1
-                    self.log("Charge to add changed, Contract reload scheduled for next optimiser run")
-            else:
-                self.log(
-                    "Octopus Energy Integration not detected (or disabled): Charge to add is not available, no reload carried out"
-                )
-
     def _check_car_plugin_iog(self):
 
         # If a Zappi entity previously found/configured and EV charger is Zappi, schedule an IOG tariff reload on the next optimizer run when its
@@ -1009,15 +960,15 @@ class PVOpt(hass.Hass):
                 self.car_plugin_detected = 0
 
             # If EV plugged in, check charge to add hasnt changed
-            if self.get_config("octopus_auto"):
-                self.io_charge_to_add = self.get_state(self.io_charge_to_add_sensor)
-                if (self.old_io_charge_to_add != self.io_charge_to_add) and (plug_status == "EV Connected"):
-                    self.car_plugin_detected = 1
-                    self.log("Charge to add changed, Contract reload scheduled for next optimiser run")
-            else:
-                self.log(
-                    "Octopus Energy Integration not detected (or disabled): Charge to add is not available, no reload carried out"
-                )
+    #        if self.get_config("octopus_auto"):
+    #            self.io_charge_to_add = self.get_state(self.io_charge_to_add_sensor)
+    #            if (self.old_io_charge_to_add != self.io_charge_to_add) and (plug_status == "EV Connected"):
+    #                self.car_plugin_detected = 1
+    #                self.log("Charge to add changed, Contract reload scheduled for next optimiser run")
+    #        else:
+    #            self.log(
+    #                "Octopus Energy Integration not detected (or disabled): Charge to add is not available, no reload carried out"
+    #            )
 
     def _check_car_plugin_agile(self):
 
