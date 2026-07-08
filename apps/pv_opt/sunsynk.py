@@ -21,7 +21,7 @@ INVERTER_DEFS = {
             "maximum_dod_percent": 20,
             "id_battery_soc": "sensor.{device_name}_{inverter_sn}_battery_soc",
             "id_consumption_today": "sensor.{device_name}_{inverter_sn}_load_daily_used",
-            "id_consumption": "sensor.{device_name}_{inverter_sn}_load_power",   # not believed used
+            "id_consumption": "sensor.{device_name}_{inverter_sn}_load_power_x",   # _x to endure id_consumption_today is used in preference
             "id_grid_import_today": "sensor.{device_name}_{inverter_sn}_grid_etoday_from",
             "id_grid_export_today": "sensor.{device_name}_{inverter_sn}_grid_etoday_to",
             "id_solar_power": [
@@ -74,7 +74,7 @@ INVERTER_DEFS = {
             "maximum_dod_percent": 20,
             "id_battery_soc": "sensor.{device_name}_{inverter_sn}_state_of_charge",
             "id_consumption_today": "sensor.{device_name}_{inverter_sn}_total_load",
-            "id_consumption": "sensor.{device_name}_{inverter_sn}_instantaneous_load",
+            "id_consumption": "sensor.{device_name}_{inverter_sn}_instantaneous_load_x", #_x to endure id_consumption_today is used in preference
             "id_grid_import_today": "sensor.{device_name}_{inverter_sn}_grid_to_load",
             "id_grid_export_today": "sensor.{device_name}_{inverter_sn}_solar_to_grid",
             "id_solar_power": [
