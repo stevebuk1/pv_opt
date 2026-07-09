@@ -2568,15 +2568,16 @@ class PVOpt(hass.Hass):
     def optimise_state_change(self, entity_id, attribute, old, new, kwargs):
 
         item = self.change_items.get(entity_id)
+
         if item is None:
             return
 
         self.log(f"State change detected for {entity_id} [config item: {item}] from {old} to {new}:")
 
-        if old == "unavailable" or new == "unavailable":
-            self.log(f"  Transition from/to unavailable — re-reading {entity_id} from HA to avoid reconnect noise.")
-            if new != "unavailable":
-                refreshed = self.get_state_retry(entity_id)
+        if old in ("unavailable", "unknown") or new in ("unavailable", "unknown"):
+            self.log(f"  Transition from/to unavailable/unknown — re-reading {entity_id} from HA to avoid reconnect noise.")
+            if new not in ("unavailable", "unknown"):
+                refreshed = self.get_state_retry(entity_id=entity_id)
                 if refreshed is not None:
                     self.config_state[item] = refreshed
             return
@@ -2614,6 +2615,8 @@ class PVOpt(hass.Hass):
             self._run_test()
 
     def _value_from_state(self, state):
+        if state in ["unknown", "unavailable", None]:
+            return None
         value = None
         try:
             value = int(state)
