@@ -2588,6 +2588,7 @@ class PVOpt(hass.Hass):
         elif "." in entity_id:
             domain, object_id = entity_id.split(".", 1)
             state_topic = f"homeassistant/{domain}/{object_id}/state"
+            self.log(f"  Publishing {new.upper() if domain == 'switch' else new} to {state_topic}")
             self.mqtt.mqtt_publish(state_topic, new.upper() if domain == "switch" else new, retain=True)
 
 
