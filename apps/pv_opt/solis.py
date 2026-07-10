@@ -1102,13 +1102,22 @@ class SolisSolarmanModbusInverter(SolisInverter):
         )
 
     def _write_modbus_register(self, register, value, cfg=None, tolerance=0, multiplier=1):
+        changed = True
+        written = False
+
         if cfg is not None and self._host.entity_exists(cfg):
-            old_value = int(float(self._host.get_state_retry(entity_id=cfg)))
-            if isinstance(old_value, int) and abs(old_value - value) <= tolerance:
-                self.log(f"Inverter value already set to {value}.")
-                changed = False
+            raw_old = self._host.get_state_retry(entity_id=cfg)
+            if raw_old is None:
+                self.log(f"  - Could not read current value of {cfg} - proceeding with write", level="WARNING")
+            else:
+                old_value = int(float(raw_old))
+                if abs(old_value - value) <= tolerance:
+                    self.log(f"Inverter value already set to {value}.")
+                    changed = False
 
         if changed:
             data = {"register": register, "value": value}
             self._host.call_service("solarman/write_holding_register", **data)
             written = True
+
+        return changed, written
