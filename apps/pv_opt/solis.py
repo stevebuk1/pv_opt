@@ -1033,10 +1033,14 @@ class SolisCoreModbusInverter(SolisInverter):
         written = False
         self.log(f"Setting register {register} to {value} for entity {cfg}")
         if cfg is not None:
-            current_value = int(float(self.get_config(cfg)))
-            if isinstance(current_value, int) and abs(current_value / multiplier - value) <= tolerance:
-                self.log(f"Inverter value already set to {value}.")
-                changed = False
+            raw_current = self.get_config(cfg)
+            if raw_current is None:
+                self.log(f"  - Could not read current value of {cfg} - proceeding with write", level="WARNING")
+            else:
+                current_value = int(float(raw_current))
+                if abs(current_value / multiplier - value) <= tolerance:
+                    self.log(f"Inverter value already set to {value}.")
+                    changed = False
 
             if changed:
                 data = {
@@ -1047,9 +1051,13 @@ class SolisCoreModbusInverter(SolisInverter):
                 }
                 self._host.call_service("modbus/write_register", **data)
                 sleep(0.1)
-                new_value = int(float(self.get_config(cfg))) / multiplier
-
-                written = new_value == value
+                raw_new = self.get_config(cfg)
+                if raw_new is None:
+                    self.log(f"  - Could not verify write to {cfg} - readback unavailable", level="WARNING")
+                    written = False
+                else:
+                    new_value = int(float(raw_new)) / multiplier
+                    written = new_value == value
         return changed, written
 
     def _get_times_current(self, direction):
