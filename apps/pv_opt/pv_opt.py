@@ -21,7 +21,7 @@ import pandas as pd
 import pvpy as pv
 from numpy import nan
 
-VERSION = "5.1.3-Beta-10"
+VERSION = "5.1.3-Beta-11"
 
 UNITS = {
     "current": "A",
@@ -2625,17 +2625,28 @@ class PVOpt(hass.Hass):
             self._run_test()
 
     def _debounced_optimise(self, delay_seconds=5):
-        """Coalesce rapid-fire optimise triggers (e.g. bursts of retained MQTT
-        echoes during startup) into a single call, fired once no further
-        trigger has arrived for `delay_seconds`."""
+        """Coalesce rapid-fire optimise triggers into a single call. Uses a
+        generation token rather than relying on cancel_timer succeeding —
+        if cancel_timer silently fails to cancel a stale pending call, that
+        stale call will still fire, but will no-op once it sees its token
+        is outdated."""
+        self._optimise_debounce_token = getattr(self, "_optimise_debounce_token", 0) + 1
+        token = self._optimise_debounce_token
+
         if getattr(self, "_optimise_debounce_handle", None) is not None:
             try:
                 self.cancel_timer(self._optimise_debounce_handle)
             except Exception:
                 pass
-        self._optimise_debounce_handle = self.run_in(self._run_debounced_optimise, delay_seconds)
- 
+
+        self._optimise_debounce_handle = self.run_in(
+            self._run_debounced_optimise, delay_seconds, token=token
+        )
+
     def _run_debounced_optimise(self, kwargs):
+        if kwargs.get("token") != getattr(self, "_optimise_debounce_token", None):
+            # A newer trigger arrived after this one was scheduled — skip.
+            return
         self._optimise_debounce_handle = None
         self.optimise()
 
