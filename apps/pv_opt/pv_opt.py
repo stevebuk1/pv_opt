@@ -21,7 +21,7 @@ import pandas as pd
 import pvpy as pv
 from numpy import nan
 
-VERSION = "5.1.3-Beta-8"
+VERSION = "5.1.3-Beta-9"
 
 UNITS = {
     "current": "A",
@@ -570,6 +570,7 @@ class PVOpt(hass.Hass):
         self.config = {}
         self.change_items = {}
         self.config_state = {}
+        self._suppress_optimise_on_config_sync = True  # suppress echo-triggered optimise() during startup config sync
         self.log("")
         self.log(f"*************** PV Opt Version: v{VERSION} ***************")
         self.log("")
@@ -708,6 +709,7 @@ class PVOpt(hass.Hass):
         self.log("")
         self.log("Running initial Optimisation:")
         self.optimise()
+        self._suppress_optimise_on_config_sync = False  # startup MQTT retained-echo replay window is over; resume normal triggering
         self._setup_schedule()
 
         ### SVB new function
@@ -2618,7 +2620,7 @@ class PVOpt(hass.Hass):
         ]:
             self._load_pv_system_model()
 
-        if "test" not in item:
+        if "test" not in item and not getattr(self, "_suppress_optimise_on_config_sync", False):
             self.optimise()
         elif "button" in item:
             self._run_test()
