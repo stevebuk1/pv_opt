@@ -21,7 +21,7 @@ import pandas as pd
 import pvpy as pv
 from numpy import nan
 
-VERSION = "5.1.3-Beta-7"
+VERSION = "5.1.3-Beta-8"
 
 UNITS = {
     "current": "A",
@@ -2570,6 +2570,14 @@ class PVOpt(hass.Hass):
         item = self.change_items.get(entity_id)
 
         if item is None:
+            return
+
+        if "_active" in item:
+            # These reflect pv_opt's own internal state and are written by
+            # pv_opt itself during optimise(). Re-triggering optimise() off
+            # their own echoed MQTT state change causes an infinite loop
+            # (see issue #269). Record the new value but don't re-optimise.
+            self.config_state[item] = new
             return
 
         self.log(f"State change detected for {entity_id} [config item: {item}] from {old} to {new}:")
