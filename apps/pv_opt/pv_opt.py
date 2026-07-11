@@ -2639,8 +2639,8 @@ class PVOpt(hass.Hass):
                 pass
 
         if value is None:
-            if state in ["on", "off"]:
-                value = state == "on"
+            if isinstance(state, str) and state.strip().lower() in ["on", "off"]:
+               value = state.strip().lower() == "on"
 
         if value is None:
             time_value = pd.to_datetime(state, errors="coerce", format="%H:%M")
