@@ -21,7 +21,7 @@ import pandas as pd
 import pvpy as pv
 from numpy import nan
 
-VERSION = "5.1.3-Beta-9"
+VERSION = "5.1.3-Beta-10"
 
 UNITS = {
     "current": "A",
@@ -570,7 +570,6 @@ class PVOpt(hass.Hass):
         self.config = {}
         self.change_items = {}
         self.config_state = {}
-        self._suppress_optimise_on_config_sync = True  # suppress echo-triggered optimise() during startup config sync
         self.log("")
         self.log(f"*************** PV Opt Version: v{VERSION} ***************")
         self.log("")
@@ -709,7 +708,6 @@ class PVOpt(hass.Hass):
         self.log("")
         self.log("Running initial Optimisation:")
         self.optimise()
-        self._suppress_optimise_on_config_sync = False  # startup MQTT retained-echo replay window is over; resume normal triggering
         self._setup_schedule()
 
         ### SVB new function
@@ -2620,10 +2618,27 @@ class PVOpt(hass.Hass):
         ]:
             self._load_pv_system_model()
 
-        if "test" not in item and not getattr(self, "_suppress_optimise_on_config_sync", False):
-            self.optimise()
+        if "test" not in item:
+            self._debounced_optimise()
+
         elif "button" in item:
             self._run_test()
+
+    def _debounced_optimise(self, delay_seconds=5):
+        """Coalesce rapid-fire optimise triggers (e.g. bursts of retained MQTT
+        echoes during startup) into a single call, fired once no further
+        trigger has arrived for `delay_seconds`."""
+        if getattr(self, "_optimise_debounce_handle", None) is not None:
+            try:
+                self.cancel_timer(self._optimise_debounce_handle)
+            except Exception:
+                pass
+        self._optimise_debounce_handle = self.run_in(self._run_debounced_optimise, delay_seconds)
+ 
+    def _run_debounced_optimise(self, kwargs):
+        self._optimise_debounce_handle = None
+        self.optimise()
+
 
     def _value_from_state(self, state):
         if state in ["unknown", "unavailable", None]:
