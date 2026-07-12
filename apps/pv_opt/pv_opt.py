@@ -21,7 +21,7 @@ import pandas as pd
 import pvpy as pv
 from numpy import nan
 
-VERSION = "5.1.3-Beta-11"
+VERSION = "5.1.3-Beta-13"
 
 UNITS = {
     "current": "A",
@@ -1686,9 +1686,7 @@ class PVOpt(hass.Hass):
                 # self.contract.tariffs["export"] = pv.Tariff("None", export=True, unit=15, octopus=False, host=self)
             self.rlog("")
             self._load_saving_events()
-            # self._load_saving_events_new()
             self._load_free_electricity_events()
-            # self._load_free_electricity_events_new()  # Resolves Issue #418
             self._load_axle_event()
 
         self.log("")
@@ -1758,12 +1756,14 @@ class PVOpt(hass.Hass):
             )
 
     def _load_saving_events(self):
+
+        event_states = self.get_state_retry("event") or {}   #Protects against None being returned
         if (
-            len([name for name in self.get_state_retry("event").keys() if ("octoplus_saving_session_events" in name)])
+            len([name for name in event_states.keys() if ("octoplus_saving_session_events" in name)])
             > 0
         ):
             saving_events_entity = [
-                name for name in self.get_state_retry("event").keys() if ("octoplus_saving_session_events" in name)
+                name for name in event_states.keys() if ("octoplus_saving_session_events" in name)
             ][0]
             self.log("")
             self.log(f"Found Octopus Savings Events entity: {saving_events_entity}")
@@ -1815,76 +1815,6 @@ class PVOpt(hass.Hass):
         else:
             self.log("  No upcoming Octopus Saving Events joined:")
 
-    def _load_saving_events_new(self):
-        """
-        MIGRATION NOTES - event entity → calendar entity
-        ─────────────────────────────────────────────────
-        Uses the calendar entity introduced to replace the deprecated event entity
-        (removed May 2026):
-            calendar.octopus_energy_<ACCOUNT_ID>_octoplus_saving_sessions
-        The calendar entity surfaces the current or next joined session via standard
-        HA calendar attributes (start_time, end_time). Note that octopoints_per_kwh
-        is not available from the calendar entity.
-        """
-
-        # ── 1. Discover the calendar entity ──────────────────────────────────
-        calendar_entity = next(
-            (name for name in self.get_state_retry("calendar").keys() if "octoplus_saving_sessions" in name),
-            None,
-        )
-
-        if calendar_entity is None:
-            self.log("")
-            self.log("  No Octopus Saving Sessions calendar entity found.")
-            return
-
-        self.log("")
-        self.rlog(f"Found Octopus Saving Sessions calendar entity: {calendar_entity}")
-
-        # ── 2. Obtain account_id from the entity name ─────────────────────────
-        # e.g. "calendar.octopus_energy_A-1B2C3D4E_octoplus_saving_sessions"
-        #                                ^^^^^^^^^^ extract this part
-        try:
-            octopus_account = calendar_entity.split("octopus_energy_")[1].split("_octoplus_saving_sessions")[0]
-            self.config["octopus_account"] = octopus_account
-            if octopus_account not in self.redact_regex:
-                self.redact_regex.append(octopus_account)
-                self.redact_regex.append(octopus_account.lower().replace("-", "_"))
-        except IndexError:
-            self.log("  Could not extract account_id from calendar entity name.")
-
-        # ── 3. Read current/next session from calendar attributes ─────────────
-        # The calendar exposes `start_time` and `end_time` when a session is
-        # current or upcoming. octopoints_per_kwh is not available here.
-        cal_attrs = self.get_state_retry(calendar_entity, attribute="all").get("attributes", {})
-        start_time = cal_attrs.get("start_time")
-        end_time = cal_attrs.get("end_time")
-
-        if start_time and end_time:
-            synthetic_id = f"calendar_{start_time}"
-            if synthetic_id not in self.saving_events and pd.Timestamp(end_time, tz="UTC") > pd.Timestamp.now(
-                tz="UTC"
-            ):
-                self.saving_events[synthetic_id] = {
-                    "id": synthetic_id,
-                    "start": start_time,
-                    "end": end_time,
-                    "octopoints_per_kwh": 0,  # unknown — not available from calendar
-                }
-
-        # ── 4. Summary log ────────────────────────────────────────────────────
-        self.log("")
-        if len(self.saving_events) > 0:
-            self.log("  The following Octopus Saving Events have been joined:")
-            for id in self.saving_events:
-                self.log(
-                    f"{id!s:>8}: "
-                    f"{pd.Timestamp(self.saving_events[id]['start']).strftime(DATE_TIME_FORMAT_SHORT)} - "
-                    f"{pd.Timestamp(self.saving_events[id]['end']).strftime(DATE_TIME_FORMAT_SHORT)} "
-                    f"at {int(self.saving_events[id]['octopoints_per_kwh']) / 8:5.1f}p/kWh"
-                )
-        else:
-            self.log("  No upcoming Octopus Saving Events detected or joined.")
 
     def _load_free_electricity_events(self):
         if (
@@ -1942,78 +1872,6 @@ class PVOpt(hass.Hass):
                 )
         else:
             self.log("No upcoming Octopus Free Electricity Events detected")
-
-    def _load_free_electricity_events_new(self):
-        """
-        MIGRATION NOTES - event entity → calendar entity
-        ─────────────────────────────────────────────────
-        Uses the calendar entity introduced to replace the deprecated event entity
-        (removed May 2026):
-            calendar.octopus_energy_<ACCOUNT_ID>_octoplus_free_electricity_session
-        The calendar entity surfaces the current or next session via standard
-        HA calendar attributes (start_time, end_time).
-        Note: unlike saving sessions, free electricity sessions are automatic —
-        there is no join service and no octopoints_per_kwh to display.
-        """
-
-        # ── 1. Discover the calendar entity ──────────────────────────────────
-        calendar_entity = next(
-            (name for name in self.get_state_retry("calendar").keys() if "octoplus_free_electricity_session" in name),
-            None,
-        )
-
-        if calendar_entity is None:
-            self.log("")
-            self.log("  No Octopus Free Electricity Session calendar entity found.")
-            return
-
-        self.log("")
-        self.rlog(f"Found Octopus Free Electricity Session calendar entity: {calendar_entity}")
-
-        # ── 2. Obtain account_id from the entity name ─────────────────────────
-        # e.g. "calendar.octopus_energy_A-1B2C3D4E_octoplus_free_electricity_session"
-        #                                ^^^^^^^^^^ extract this part
-        try:
-            octopus_account = calendar_entity.split("octopus_energy_")[1].split("_octoplus_free_electricity_session")[
-                0
-            ]
-            self.config["octopus_account"] = octopus_account
-            if octopus_account not in self.redact_regex:
-                self.redact_regex.append(octopus_account)
-                self.redact_regex.append(octopus_account.lower().replace("-", "_"))
-        except IndexError:
-            self.log("  Could not extract account_id from calendar entity name.")
-
-        # ── 3. Read current/next session from calendar attributes ─────────────
-        # The calendar exposes `start_time` and `end_time` when a session is
-        # current or upcoming.
-        cal_attrs = self.get_state_retry(calendar_entity, attribute="all").get("attributes", {})
-        start_time = cal_attrs.get("start_time")
-        end_time = cal_attrs.get("end_time")
-
-        if start_time and end_time:
-            synthetic_code = f"calendar_{start_time}"
-            if synthetic_code not in self.free_electricity_events and pd.Timestamp(
-                end_time, tz="UTC"
-            ) > pd.Timestamp.now(tz="UTC"):
-                self.free_electricity_events[synthetic_code] = {
-                    "code": synthetic_code,
-                    "start": start_time,
-                    "end": end_time,
-                }
-
-        # ── 4. Summary log ────────────────────────────────────────────────────
-        self.log("")
-        if len(self.free_electricity_events) > 0:
-            self.log("  The following upcoming Octopus Free Electricity Events are being applied:")
-            for id in self.free_electricity_events:
-                self.log(
-                    f"{id:8s}: "
-                    f"{pd.Timestamp(self.free_electricity_events[id]['start']).strftime(DATE_TIME_FORMAT_SHORT)} - "
-                    f"{pd.Timestamp(self.free_electricity_events[id]['end']).strftime(DATE_TIME_FORMAT_SHORT)}"
-                )
-        else:
-            self.log("  No upcoming Octopus Free Electricity Events detected")
 
 
     def _axle_writes_suspended(self):
@@ -2580,6 +2438,18 @@ class PVOpt(hass.Hass):
             self.config_state[item] = new
             return
 
+        def _same(a, b):
+            if isinstance(a, str) and isinstance(b, str):
+                return a.strip().lower() == b.strip().lower()
+            return a == b
+ 
+        if _same(new, old):
+            # No genuine change — avoid re-publishing/re-triggering on echoes
+            # of our own retained messages
+            self.config_state[item] = new
+            return
+
+
         self.log(f"State change detected for {entity_id} [config item: {item}] from {old} to {new}:")
 
         if old in ("unavailable", "unknown") or new in ("unavailable", "unknown"):
@@ -2652,7 +2522,7 @@ class PVOpt(hass.Hass):
 
 
     def _value_from_state(self, state):
-        if state in ["unknown", "unavailable", None]:
+        if state is None or (isinstance(state, str) and state.strip().lower() in ["unknown", "unavailable", "none"]):
             return None
         value = None
         try:
