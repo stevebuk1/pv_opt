@@ -604,10 +604,10 @@ class SolisInverter(BaseInverterController):
         return code
 
     def control_charge(self, enable, **kwargs):
-        self._control_charge_discharge("charge", enable, **kwargs)
+        return self._control_charge_discharge("charge", enable, **kwargs)
 
     def control_discharge(self, enable, **kwargs):
-        self._control_charge_discharge("discharge", enable, **kwargs)
+        return self._control_charge_discharge("discharge", enable, **kwargs)
 
     def _control_charge_discharge(self, direction, enable, **kwargs):
         times = {}
@@ -616,12 +616,15 @@ class SolisInverter(BaseInverterController):
             times["end"] = kwargs.get("end", None)
             current = kwargs.get("current", abs(round(kwargs.get("power", 0) / self.voltage, 1)))
 
-            # SVB debugging
-            # self.log(f"Voltage in solis.py = {self.voltage}")
-            # self.log(f"Current in solis.py = {current}")
+            self.log(f"DEBUG guard: start={times['start']} status_start={self.status[direction]['start']} end={times['end']} status_end={self.status[direction]['end']} current={current} status_current={self.status[direction]['current']}")
 
-            # SVB debugging
-            # self.log(f"Entered control_charge_discharge, Enable = True")
+            # If start is None (charge already active), check if end and current already match
+            if (
+                times["start"] is None
+                and times["end"] == self.status[direction]["end"]
+                and abs(current - self.status[direction]["current"]) <= 2.0
+            ):
+                return
 
             target_soc = kwargs.get("target_soc", None)
 
@@ -690,6 +693,8 @@ class SolisInverter(BaseInverterController):
             self.log("6 slot firmware configured, about to write target_soc")
             if changed or (self.status[direction].get("soc", 0) != target_soc):
                 self._set_target_soc(direction, target_soc, forced=True)
+
+        return changed
 
     def hold_soc(self, enable, target_soc=0, **kwargs):
 
@@ -1028,10 +1033,14 @@ class SolisCoreModbusInverter(SolisInverter):
         written = False
         self.log(f"Setting register {register} to {value} for entity {cfg}")
         if cfg is not None:
-            current_value = int(float(self.get_config(cfg)))
-            if isinstance(current_value, int) and abs(current_value / multiplier - value) <= tolerance:
-                self.log(f"Inverter value already set to {value}.")
-                changed = False
+            raw_current = self.get_config(cfg)
+            if raw_current is None:
+                self.log(f"  - Could not read current value of {cfg} - proceeding with write", level="WARNING")
+            else:
+                current_value = int(float(raw_current))
+                if abs(current_value / multiplier - value) <= tolerance:
+                    self.log(f"Inverter value already set to {value}.")
+                    changed = False
 
             if changed:
                 data = {
@@ -1042,9 +1051,13 @@ class SolisCoreModbusInverter(SolisInverter):
                 }
                 self._host.call_service("modbus/write_register", **data)
                 sleep(0.1)
-                new_value = int(float(self.get_config(cfg))) / multiplier
-
-                written = new_value == value
+                raw_new = self.get_config(cfg)
+                if raw_new is None:
+                    self.log(f"  - Could not verify write to {cfg} - readback unavailable", level="WARNING")
+                    written = False
+                else:
+                    new_value = int(float(raw_new)) / multiplier
+                    written = new_value == value
         return changed, written
 
     def _get_times_current(self, direction):
@@ -1089,13 +1102,22 @@ class SolisSolarmanModbusInverter(SolisInverter):
         )
 
     def _write_modbus_register(self, register, value, cfg=None, tolerance=0, multiplier=1):
+        changed = True
+        written = False
+
         if cfg is not None and self._host.entity_exists(cfg):
-            old_value = int(float(self._host.get_state_retry(entity_id=cfg)))
-            if isinstance(old_value, int) and abs(old_value - value) <= tolerance:
-                self.log(f"Inverter value already set to {value}.")
-                changed = False
+            raw_old = self._host.get_state_retry(entity_id=cfg)
+            if raw_old is None:
+                self.log(f"  - Could not read current value of {cfg} - proceeding with write", level="WARNING")
+            else:
+                old_value = int(float(raw_old))
+                if abs(old_value - value) <= tolerance:
+                    self.log(f"Inverter value already set to {value}.")
+                    changed = False
 
         if changed:
             data = {"register": register, "value": value}
             self._host.call_service("solarman/write_holding_register", **data)
             written = True
+
+        return changed, written

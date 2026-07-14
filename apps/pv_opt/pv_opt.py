@@ -44,7 +44,6 @@ DEBUG = False
 # D = Discharge algorithm Logging
 # W = Charge/Discharge Windows Logging
 # X = Charge/Discharge Windows Logging (verbose)
-# O = Optimsation Summary (1/2 hour slots) of chosen plan
 # A = All plans Optimisation Summary (1/2 hour slots)
 # F = Power Flows Logging
 # V = Power Flows debugging (verbose)
@@ -109,6 +108,7 @@ INVERTER_TYPES = [
     "SOLIS_SOLARMAN",
     "SOLIS_SOLARMAN_V2",
     "SUNSYNK_SOLARSYNKV3",
+    "SUNSYNK_SOLARSUNSYNK",
     "SOLAX_X1",
     "SOLIS_CLOUD",
     "SOLIS_CLOUD_SENSOR_CONTROL",
@@ -778,20 +778,21 @@ class PVOpt(hass.Hass):
 
                 self.rlog(f"    Found Dispatching Sensor:  {self.io_dispatching_sensor}")
                 self.log("")
-                self.log(f"    Trying to find Car % Charge to add from Octopus Energy Integration")
-                io_charge_to_add_sensor = [
-                    name
-                    for name in self.get_state_retry(BOTTLECAP_DAVE["domain2"]).keys()
-                    if ("octopus_energy_" in name and "intelligent_charge_" in name)
-                ]
-                self.io_charge_to_add_sensor = io_charge_to_add_sensor[0]
-                self.rlog(f"    Found Charge to Add entity:  {self.io_charge_to_add_sensor}")
 
-                self.io_charge_to_add = self.get_state(
-                    self.io_charge_to_add_sensor
-                )  # Load the current charge to add value
-                self.old_io_charge_to_add = self.io_charge_to_add  # And set historic value to be the same
-                self.rlog(f"    Charge to Add Value = :  {self.io_charge_to_add}")
+#                self.log(f"    Trying to find Car % Charge to add from Octopus Energy Integration")
+#                io_charge_to_add_sensor = [
+#                    name
+#                    for name in self.get_state_retry(BOTTLECAP_DAVE["domain2"]).keys()
+#                    if ("octopus_energy_" in name and "intelligent_charge_" in name)
+#                ]
+#                self.io_charge_to_add_sensor = io_charge_to_add_sensor[0]
+#                self.rlog(f"    Found Charge to Add entity:  {self.io_charge_to_add_sensor}")
+#
+#                self.io_charge_to_add = self.get_state(
+#                    self.io_charge_to_add_sensor
+#                )  # Load the current charge to add value
+#                self.old_io_charge_to_add = self.io_charge_to_add  # And set historic value to be the same
+#                self.rlog(f"    Charge to Add Value = :  {self.io_charge_to_add}")
 
             except Exception as e:
                 self.log(f"{e.__traceback__.tb_lineno}: {e}", level="ERROR")
@@ -799,9 +800,7 @@ class PVOpt(hass.Hass):
                     "Failed to find Octopus Intelligent Dispatching Sensor and/or % Charge to Add from Octopus Energy Integration. Car charging cannot be determined",
                     level="WARNING",
                 )
-        else:  # No access to Octopus for loading charge to add
-            self.io_charge_to_add = 0  # Set default value of 0
-            self.old_io_charge_to_add = 0
+
 
     def get_io_tariffs(self, entity_id1):
 
@@ -923,54 +922,6 @@ class PVOpt(hass.Hass):
 
         return df
 
-    # def not used - remove after testing of new def just below
-    def _check_car_plugin_iog_old(self):
-
-        # If a Zappi entity previously found/configured and EV charger is Zappi, schedule an IOG tariff reload on the next optimizer run when its
-        # detected the car has been plugged in.
-
-        if (len(self.zappi_plug_entity) > 0) and self.ev:
-            plug_status = self.get_state(self.zappi_plug_entity)
-            # self.log(plug_status)
-            if ((plug_status == "EV Connected") or (plug_status == "EV Ready to Charge")) and (
-                self.tariff_reloaded == 0
-            ):
-                self.car_plugin_detected = 1
-                self.log(
-                    "EV plug-in event detected (or end of car plan reached), Contract reload scheduled for next optimiser run"
-                )
-
-            elif ((plug_status == "EV Connected") or (plug_status == "EV Ready to Charge")) and (
-                self.tariff_reloaded == 1
-            ):
-                self.log("EV is connected but Contract reload previously caried out.")
-                self.car_plugin_detected = 0
-
-            elif (plug_status == "Charging") and (self.tariff_reloaded == 0):
-                self.log(
-                    "EV plug-in event detected and car has commenced charging. Contract to be reloaded on next optimiser run"
-                )
-                self.car_plugin_detected = 1
-
-            elif (plug_status == "Charging") and (self.tariff_reloaded == 1):
-                self.log("EV is charging but Contract reload previously carried out.")
-                self.car_plugin_detected = 0
-
-            else:
-                self.log("EV not plugged in. Contract reload not necessary")
-                self.car_plugin_detected = 0
-
-            # If EV plugged in, check charge to add hasnt changed
-            if self.get_config("octopus_auto"):
-                self.io_charge_to_add = self.get_state(self.io_charge_to_add_sensor)
-                if (self.old_io_charge_to_add != self.io_charge_to_add) and (plug_status == "EV Connected"):
-                    self.car_plugin_detected = 1
-                    self.log("Charge to add changed, Contract reload scheduled for next optimiser run")
-            else:
-                self.log(
-                    "Octopus Energy Integration not detected (or disabled): Charge to add is not available, no reload carried out"
-                )
-
     def _check_car_plugin_iog(self):
 
         # If a Zappi entity previously found/configured and EV charger is Zappi, schedule an IOG tariff reload on the next optimizer run when its
@@ -1009,15 +960,15 @@ class PVOpt(hass.Hass):
                 self.car_plugin_detected = 0
 
             # If EV plugged in, check charge to add hasnt changed
-            if self.get_config("octopus_auto"):
-                self.io_charge_to_add = self.get_state(self.io_charge_to_add_sensor)
-                if (self.old_io_charge_to_add != self.io_charge_to_add) and (plug_status == "EV Connected"):
-                    self.car_plugin_detected = 1
-                    self.log("Charge to add changed, Contract reload scheduled for next optimiser run")
-            else:
-                self.log(
-                    "Octopus Energy Integration not detected (or disabled): Charge to add is not available, no reload carried out"
-                )
+    #        if self.get_config("octopus_auto"):
+    #            self.io_charge_to_add = self.get_state(self.io_charge_to_add_sensor)
+    #            if (self.old_io_charge_to_add != self.io_charge_to_add) and (plug_status == "EV Connected"):
+    #                self.car_plugin_detected = 1
+    #                self.log("Charge to add changed, Contract reload scheduled for next optimiser run")
+    #        else:
+    #            self.log(
+    #                "Octopus Energy Integration not detected (or disabled): Charge to add is not available, no reload carried out"
+    #            )
 
     def _check_car_plugin_agile(self):
 
@@ -1481,6 +1432,13 @@ class PVOpt(hass.Hass):
         if item in self.config:
             if isinstance(self.config[item], str) and self.entity_exists(self.config[item]):
                 x = self.get_ha_value(entity_id=self.config[item])
+                if x is None:
+                    self.log(
+                        f"Config item '{item}' references entity '{self.config[item]}' which returned None. Using default: {default}",
+                        level="WARNING",
+                    )
+                    return default
+
                 return x
             elif isinstance(self.config[item], list):
                 if min([isinstance(x, str)] for x in self.config[item])[0]:
@@ -1728,9 +1686,7 @@ class PVOpt(hass.Hass):
                 # self.contract.tariffs["export"] = pv.Tariff("None", export=True, unit=15, octopus=False, host=self)
             self.rlog("")
             self._load_saving_events()
-            # self._load_saving_events_new()
             self._load_free_electricity_events()
-            # self._load_free_electricity_events_new()  # Resolves Issue #418
             self._load_axle_event()
 
         self.log("")
@@ -1800,15 +1756,17 @@ class PVOpt(hass.Hass):
             )
 
     def _load_saving_events(self):
+
+        event_states = self.get_state_retry("event") or {}   #Protects against None being returned
         if (
-            len([name for name in self.get_state_retry("event").keys() if ("octoplus_saving_session_events" in name)])
+            len([name for name in event_states.keys() if ("octoplus_saving_session_events" in name)])
             > 0
         ):
             saving_events_entity = [
-                name for name in self.get_state_retry("event").keys() if ("octoplus_saving_session_events" in name)
+                name for name in event_states.keys() if ("octoplus_saving_session_events" in name)
             ][0]
             self.log("")
-            self.rlog(f"Found Octopus Savings Events entity: {saving_events_entity}")
+            self.log(f"Found Octopus Savings Events entity: {saving_events_entity}")
             octopus_account = self.get_state_retry(entity_id=saving_events_entity, attribute="account_id")
 
             self.config["octopus_account"] = octopus_account
@@ -1821,18 +1779,23 @@ class PVOpt(hass.Hass):
             ]
 
             if len(available_events) > 0:
-                self.log("Joining the following new Octoplus Events:")
+                axle_enrolled = self.entity_exists(self.config["id_axle_start_time"])
+                if axle_enrolled:
+                    self.log("  Axle Energy VPP integration detected — not auto-joining Octopus Saving Sessions to avoid DFS T&C conflict.")
+                else:
+                    self.log("Joining the following new Octoplus Events:")
                 for event in available_events:
                     if event["id"] not in self.saving_events:
-                        self.saving_events[event["id"]] = event
+                        # self.saving_events[event["id"]] = event
                         self.log(
                             f"{event['id']:8d}: {pd.Timestamp(event['start']).strftime(DATE_TIME_FORMAT_SHORT)} - {pd.Timestamp(event['end']).strftime(DATE_TIME_FORMAT_SHORT)} at {int(event['octopoints_per_kwh'])/8:5.1f}p/kWh"
                         )
-                        self.call_service(
-                            "octopus_energy/join_octoplus_saving_session_event",
-                            entity_id=saving_events_entity,
-                            event_code=event["code"],
-                        )
+                        if not axle_enrolled:
+                            self.call_service(
+                                "octopus_energy/join_octoplus_saving_session_event",
+                                entity_id=saving_events_entity,
+                                event_code=event["code"],
+                            )
 
             joined_events = self.get_state_retry(saving_events_entity, attribute="all")["attributes"]["joined_events"]
 
@@ -1850,78 +1813,8 @@ class PVOpt(hass.Hass):
                     f"{id:8d}: {pd.Timestamp(self.saving_events[id]['start']).strftime(DATE_TIME_FORMAT_SHORT)} - {pd.Timestamp(self.saving_events[id]['end']).strftime(DATE_TIME_FORMAT_SHORT)} at {int(self.saving_events[id]['octopoints_per_kwh'])/8:5.1f}p/kWh"
                 )
         else:
-            self.log("  No upcoming Octopus Saving Events detected or joined:")
+            self.log("  No upcoming Octopus Saving Events joined:")
 
-    def _load_saving_events_new(self):
-        """
-        MIGRATION NOTES - event entity → calendar entity
-        ─────────────────────────────────────────────────
-        Uses the calendar entity introduced to replace the deprecated event entity
-        (removed May 2026):
-            calendar.octopus_energy_<ACCOUNT_ID>_octoplus_saving_sessions
-        The calendar entity surfaces the current or next joined session via standard
-        HA calendar attributes (start_time, end_time). Note that octopoints_per_kwh
-        is not available from the calendar entity.
-        """
-
-        # ── 1. Discover the calendar entity ──────────────────────────────────
-        calendar_entity = next(
-            (name for name in self.get_state_retry("calendar").keys() if "octoplus_saving_sessions" in name),
-            None,
-        )
-
-        if calendar_entity is None:
-            self.log("")
-            self.log("  No Octopus Saving Sessions calendar entity found.")
-            return
-
-        self.log("")
-        self.rlog(f"Found Octopus Saving Sessions calendar entity: {calendar_entity}")
-
-        # ── 2. Obtain account_id from the entity name ─────────────────────────
-        # e.g. "calendar.octopus_energy_A-1B2C3D4E_octoplus_saving_sessions"
-        #                                ^^^^^^^^^^ extract this part
-        try:
-            octopus_account = calendar_entity.split("octopus_energy_")[1].split("_octoplus_saving_sessions")[0]
-            self.config["octopus_account"] = octopus_account
-            if octopus_account not in self.redact_regex:
-                self.redact_regex.append(octopus_account)
-                self.redact_regex.append(octopus_account.lower().replace("-", "_"))
-        except IndexError:
-            self.log("  Could not extract account_id from calendar entity name.")
-
-        # ── 3. Read current/next session from calendar attributes ─────────────
-        # The calendar exposes `start_time` and `end_time` when a session is
-        # current or upcoming. octopoints_per_kwh is not available here.
-        cal_attrs = self.get_state_retry(calendar_entity, attribute="all").get("attributes", {})
-        start_time = cal_attrs.get("start_time")
-        end_time = cal_attrs.get("end_time")
-
-        if start_time and end_time:
-            synthetic_id = f"calendar_{start_time}"
-            if synthetic_id not in self.saving_events and pd.Timestamp(end_time, tz="UTC") > pd.Timestamp.now(
-                tz="UTC"
-            ):
-                self.saving_events[synthetic_id] = {
-                    "id": synthetic_id,
-                    "start": start_time,
-                    "end": end_time,
-                    "octopoints_per_kwh": 0,  # unknown — not available from calendar
-                }
-
-        # ── 4. Summary log ────────────────────────────────────────────────────
-        self.log("")
-        if len(self.saving_events) > 0:
-            self.log("  The following Octopus Saving Events have been joined:")
-            for id in self.saving_events:
-                self.log(
-                    f"{id!s:>8}: "
-                    f"{pd.Timestamp(self.saving_events[id]['start']).strftime(DATE_TIME_FORMAT_SHORT)} - "
-                    f"{pd.Timestamp(self.saving_events[id]['end']).strftime(DATE_TIME_FORMAT_SHORT)} "
-                    f"at {int(self.saving_events[id]['octopoints_per_kwh']) / 8:5.1f}p/kWh"
-                )
-        else:
-            self.log("  No upcoming Octopus Saving Events detected or joined.")
 
     def _load_free_electricity_events(self):
         if (
@@ -1978,79 +1871,7 @@ class PVOpt(hass.Hass):
                     f"{id:8s}: {pd.Timestamp(self.free_electricity_events[id]['start']).strftime(DATE_TIME_FORMAT_SHORT)} - {pd.Timestamp(self.free_electricity_events[id]['end']).strftime(DATE_TIME_FORMAT_SHORT)}"
                 )
         else:
-            self.log("  No upcoming Octopus Free Electricity Events detected")
-
-    def _load_free_electricity_events_new(self):
-        """
-        MIGRATION NOTES - event entity → calendar entity
-        ─────────────────────────────────────────────────
-        Uses the calendar entity introduced to replace the deprecated event entity
-        (removed May 2026):
-            calendar.octopus_energy_<ACCOUNT_ID>_octoplus_free_electricity_session
-        The calendar entity surfaces the current or next session via standard
-        HA calendar attributes (start_time, end_time).
-        Note: unlike saving sessions, free electricity sessions are automatic —
-        there is no join service and no octopoints_per_kwh to display.
-        """
-
-        # ── 1. Discover the calendar entity ──────────────────────────────────
-        calendar_entity = next(
-            (name for name in self.get_state_retry("calendar").keys() if "octoplus_free_electricity_session" in name),
-            None,
-        )
-
-        if calendar_entity is None:
-            self.log("")
-            self.log("  No Octopus Free Electricity Session calendar entity found.")
-            return
-
-        self.log("")
-        self.rlog(f"Found Octopus Free Electricity Session calendar entity: {calendar_entity}")
-
-        # ── 2. Obtain account_id from the entity name ─────────────────────────
-        # e.g. "calendar.octopus_energy_A-1B2C3D4E_octoplus_free_electricity_session"
-        #                                ^^^^^^^^^^ extract this part
-        try:
-            octopus_account = calendar_entity.split("octopus_energy_")[1].split("_octoplus_free_electricity_session")[
-                0
-            ]
-            self.config["octopus_account"] = octopus_account
-            if octopus_account not in self.redact_regex:
-                self.redact_regex.append(octopus_account)
-                self.redact_regex.append(octopus_account.lower().replace("-", "_"))
-        except IndexError:
-            self.log("  Could not extract account_id from calendar entity name.")
-
-        # ── 3. Read current/next session from calendar attributes ─────────────
-        # The calendar exposes `start_time` and `end_time` when a session is
-        # current or upcoming.
-        cal_attrs = self.get_state_retry(calendar_entity, attribute="all").get("attributes", {})
-        start_time = cal_attrs.get("start_time")
-        end_time = cal_attrs.get("end_time")
-
-        if start_time and end_time:
-            synthetic_code = f"calendar_{start_time}"
-            if synthetic_code not in self.free_electricity_events and pd.Timestamp(
-                end_time, tz="UTC"
-            ) > pd.Timestamp.now(tz="UTC"):
-                self.free_electricity_events[synthetic_code] = {
-                    "code": synthetic_code,
-                    "start": start_time,
-                    "end": end_time,
-                }
-
-        # ── 4. Summary log ────────────────────────────────────────────────────
-        self.log("")
-        if len(self.free_electricity_events) > 0:
-            self.log("  The following upcoming Octopus Free Electricity Events are being applied:")
-            for id in self.free_electricity_events:
-                self.log(
-                    f"{id:8s}: "
-                    f"{pd.Timestamp(self.free_electricity_events[id]['start']).strftime(DATE_TIME_FORMAT_SHORT)} - "
-                    f"{pd.Timestamp(self.free_electricity_events[id]['end']).strftime(DATE_TIME_FORMAT_SHORT)}"
-                )
-        else:
-            self.log("  No upcoming Octopus Free Electricity Events detected")
+            self.log("No upcoming Octopus Free Electricity Events detected")
 
 
     def _axle_writes_suspended(self):
@@ -2089,7 +1910,7 @@ class PVOpt(hass.Hass):
             return
 
         self.log("")
-        self.log("  Checking for Axle Energy VPP events:")
+        self.log("Checking for Axle Energy VPP events:")
 
  
         start_state = self.get_state_retry(start_entity)
@@ -2519,7 +2340,7 @@ class PVOpt(hass.Hass):
                     self.mqtt.mqtt_publish(state_topic, state, retain=True)
                     self.mqtt.mqtt_publish(command_topic, state, retain=True)
 
-                self.mqtt.mqtt_subscribe(state_topic)
+                self.mqtt.mqtt_subscribe(command_topic)
 
             elif (
                 isinstance(self.get_ha_value(entity_id=entity_id), str)
@@ -2559,11 +2380,17 @@ class PVOpt(hass.Hass):
                     else:
                         self.log(f"{str_log} <<< FAILED!", level="WARN")
 
+                    domain = entity_id.split(".")[0]
+                    state_topic = f"homeassistant/{domain}/{entity_id.split('.')[1]}/state"
+                    self.mqtt.mqtt_publish(state_topic, new_state.upper() if domain == "switch" else new_state, retain=True)
+                    self.mqtt.mqtt_publish(command_topic, new_state.upper() if domain == "switch" else new_state, retain=True)
+
             else:
                 state = self.get_state_retry(entity_id)
 
             self.config[item] = entity_id
             self.change_items[entity_id] = item
+            self.change_items[command_topic] = item
             self.config_state[item] = state
 
         self.log("")
@@ -2598,8 +2425,51 @@ class PVOpt(hass.Hass):
 
     @ad.app_lock
     def optimise_state_change(self, entity_id, attribute, old, new, kwargs):
-        item = self.change_items[entity_id]
+
+        item = self.change_items.get(entity_id)
+
+        if item is None:
+            return
+
+        if "_active" in item:
+            # These reflect pv_opt's own internal state and are written by
+            # pv_opt itself during optimise(). Re-triggering optimise() off
+            # their own echoed MQTT state change causes an infinite loop
+            # (see issue #269). Record the new value but don't re-optimise.
+            self.config_state[item] = new
+            return
+
+        def _same(a, b):
+            if isinstance(a, str) and isinstance(b, str):
+                return a.strip().lower() == b.strip().lower()
+            return a == b
+ 
+        if _same(new, old):
+            # No genuine change — avoid re-publishing/re-triggering on echoes
+            # of our own retained messages
+            self.config_state[item] = new
+            return
+
+
         self.log(f"State change detected for {entity_id} [config item: {item}] from {old} to {new}:")
+
+        if old in ("unavailable", "unknown") or new in ("unavailable", "unknown"):
+            self.log(f"  Transition from/to unavailable/unknown — re-reading {entity_id} from HA to avoid reconnect noise.")
+            if new not in ("unavailable", "unknown"):
+                refreshed = self.get_state_retry(entity_id=entity_id)
+                if refreshed is not None:
+                    self.config_state[item] = refreshed
+            return
+
+        if entity_id.startswith("homeassistant/") and entity_id.endswith("/set"):
+            state_topic = entity_id[:-4] + "/state"
+            self.mqtt.mqtt_publish(state_topic, new, retain=True)
+        elif "." in entity_id:
+            domain, object_id = entity_id.split(".", 1)
+            state_topic = f"homeassistant/{domain}/{object_id}/state"
+            self.log(f"  Publishing {new.upper() if domain == 'switch' else new} to {state_topic}")
+            self.mqtt.mqtt_publish(state_topic, new.upper() if domain == "switch" else new, retain=True)
+
 
         self.config_state[item] = new
 
@@ -2620,11 +2490,41 @@ class PVOpt(hass.Hass):
             self._load_pv_system_model()
 
         if "test" not in item:
-            self.optimise()
+            self._debounced_optimise()
+
         elif "button" in item:
             self._run_test()
 
+    def _debounced_optimise(self, delay_seconds=5):
+        """Coalesce rapid-fire optimise triggers into a single call. Uses a
+        generation token rather than relying on cancel_timer succeeding —
+        if cancel_timer silently fails to cancel a stale pending call, that
+        stale call will still fire, but will no-op once it sees its token
+        is outdated."""
+        self._optimise_debounce_token = getattr(self, "_optimise_debounce_token", 0) + 1
+        token = self._optimise_debounce_token
+
+        if getattr(self, "_optimise_debounce_handle", None) is not None:
+            try:
+                self.cancel_timer(self._optimise_debounce_handle)
+            except Exception:
+                pass
+
+        self._optimise_debounce_handle = self.run_in(
+            self._run_debounced_optimise, delay_seconds, token=token
+        )
+
+    def _run_debounced_optimise(self, kwargs):
+        if kwargs.get("token") != getattr(self, "_optimise_debounce_token", None):
+            # A newer trigger arrived after this one was scheduled — skip.
+            return
+        self._optimise_debounce_handle = None
+        self.optimise()
+
+
     def _value_from_state(self, state):
+        if state is None or (isinstance(state, str) and state.strip().lower() in ["unknown", "unavailable", "none"]):
+            return None
         value = None
         try:
             value = int(state)
@@ -2638,8 +2538,8 @@ class PVOpt(hass.Hass):
                 pass
 
         if value is None:
-            if state in ["on", "off"]:
-                value = state == "on"
+            if isinstance(state, str) and state.strip().lower() in ["on", "off"]:
+               value = state.strip().lower() == "on"
 
         if value is None:
             time_value = pd.to_datetime(state, errors="coerce", format="%H:%M")
@@ -3279,9 +3179,9 @@ class PVOpt(hass.Hass):
 
                     if self.charge_power > 1:
                         self.log("Charge Power >1")
-                        self.inverter.control_discharge(enable=False)
+                        did_something = self.inverter.control_discharge(enable=False)
 
-                        self.inverter.control_charge(
+                        did_something = self.inverter.control_charge(
                             enable=True,
                             start=self.charge_start_datetime,
                             end=self.charge_end_datetime,
@@ -3291,9 +3191,9 @@ class PVOpt(hass.Hass):
 
                     elif self.charge_power < 0:
                         self.log("Charge Power <0")
-                        self.inverter.control_charge(enable=False)
+                        did_something = self.inverter.control_charge(enable=False)
 
-                        self.inverter.control_discharge(
+                        did_something = self.inverter.control_discharge(
                             enable=True,
                             start=self.charge_start_datetime,
                             end=self.charge_end_datetime,
@@ -3305,9 +3205,9 @@ class PVOpt(hass.Hass):
 
                     elif (self.charge_power == 1) & (self.windows["hold_soc"].iloc[0] == "<=Car"):
                         self.log("Car slot")
-                        self.inverter.control_discharge(enable=False)
+                        did_something = self.inverter.control_discharge(enable=False)
 
-                        self.inverter.control_charge(
+                        did_something = self.inverter.control_charge(
                             enable=True,
                             start=self.charge_start_datetime,
                             end=self.charge_end_datetime,
@@ -3351,6 +3251,7 @@ class PVOpt(hass.Hass):
                             self.inverter.hold_soc(enable=True, target_soc=self.hold[0]["soc"], start=self.charge_start_datetime, end=self.charge_end_datetime)
                         else:
                             self.log(f"  Inverter already holding SOC of {self.hold[0]['soc']:0.0f}%")
+                            did_something = False
                             # Next line commented out - if its already holding there is nothing to update (there used to be when using backup mode)
                             # self.inverter.hold_soc(enable=True, target_soc=self.hold[0]["soc"], start=None, end=self.charge_end_datetime)
 
@@ -3372,7 +3273,7 @@ class PVOpt(hass.Hass):
 
                             if status["discharge"]["active"]:
                                 self.log("Disabling discharge")
-                                self.inverter.control_discharge(
+                                did_something = self.inverter.control_discharge(
                                     enable=False,
                                 )
 
@@ -3382,7 +3283,7 @@ class PVOpt(hass.Hass):
                             self.log(f"Setting SOC to {self.charge_target_soc}")
                             # self.log(f"Current is {float(self.charge_current):4.1f}")
 
-                            self.inverter.control_charge(
+                            did_something = self.inverter.control_charge(
                                 enable=True,
                                 start=start,
                                 end=end,
@@ -3397,11 +3298,11 @@ class PVOpt(hass.Hass):
                                 start = None
 
                             if status["charge"]["active"]:
-                                self.inverter.control_charge(
+                                did_something = self.inverter.control_charge(
                                     enable=False,
                                 )
 
-                            self.inverter.control_discharge(
+                            did_something = self.inverter.control_discharge(
                                 enable=True,
                                 start=start,
                                 end=self.charge_end_datetime,
@@ -3546,17 +3447,13 @@ class PVOpt(hass.Hass):
             | ((self.opt["carslot"].diff() > 0) & (self.opt["forced"] == 0))  # new car slot with no charge
         ).cumsum()
 
-        if self.debug and "O" in self.debug_cat:
-            self.log("")
-            self.ulog("1/2 Hour Optimsation summary")
-
-            # self.log(f"\n{self.opt.round(2).to_string()}")
-
-            opt_display = self.opt.copy()
-            opt_display[["solar", "consumption", "batt_grid_req", "chg", "chg_end", "battery", "grid"]] = opt_display[["solar", "consumption", "batt_grid_req", "chg", "chg_end", "battery", "grid"]].round(0)
-            opt_display[["soc", "soc_end"]] = opt_display[["soc", "soc_end"]].round(1)
-            opt_display[["dt_hours", "import", "export"]] = opt_display[["dt_hours", "import", "export"]].round(2)
-            self.log(f"\n{opt_display.to_string()}")
+        self.log("")
+        self.ulog("1/2 Hour Optimsation summary")
+        opt_display = self.opt.copy()
+        opt_display[["solar", "consumption", "batt_grid_req", "chg", "chg_end", "battery", "grid"]] = opt_display[["solar", "consumption", "batt_grid_req", "chg", "chg_end", "battery", "grid"]].round(0)
+        opt_display[["soc", "soc_end"]] = opt_display[["soc", "soc_end"]].round(1)
+        opt_display[["dt_hours", "import", "export"]] = opt_display[["dt_hours", "import", "export"]].round(2)
+        self.log(f"\n{opt_display.to_string()}")
 
 
         if self.debug and "W" in self.debug_cat:

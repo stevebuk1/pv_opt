@@ -616,10 +616,11 @@ class BatteryModel:
         try:
             max_charge_power = self.current_limit_amps * self.voltage
         except:
-            self.log(
-                f"Unable to calculate max_charge_power from current limit {self.current_limit_amps} x voltage {self.voltage}",
-                level="WARINING",
-            )
+            # No self.log in this class
+            #self.log(
+            #    f"Unable to calculate max_charge_power from current limit {self.current_limit_amps} x voltage {self.voltage}",
+            #    level="WARINING",
+            #)
             max_charge_power = 100000
         return max_charge_power
 
@@ -1197,6 +1198,7 @@ class PVsystemModel:
                                 round_trip_energy_required * 1000 / search_window["dt_hours"].loc[window].sum()
                             )
 
+
                             # If the charge rate is really low, just use the last 2 slots to charge instead of all of the cheap slots
                             # Note, will only invoke for cheap rates that last for 3.5 hours or more. (Go, IOG, Eco7)
 
@@ -1709,10 +1711,7 @@ class PVsystemModel:
                 slot = (
                     start_window,
                     -min(
-                        min(
-                            self.battery.max_discharge_power,
-                            self.inverter.inverter_power - x["solar"].loc[start_window],
-                        ),
+                        self.battery.max_discharge_power,
                         ((x["soc_end"].loc[start_window] - self.battery.max_dod) / 100 * self.battery.capacity)
                         / x["dt_hours"].loc[start_window],
                     ),

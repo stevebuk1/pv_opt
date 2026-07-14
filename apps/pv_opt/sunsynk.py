@@ -21,7 +21,7 @@ INVERTER_DEFS = {
             "maximum_dod_percent": 20,
             "id_battery_soc": "sensor.{device_name}_{inverter_sn}_battery_soc",
             "id_consumption_today": "sensor.{device_name}_{inverter_sn}_load_daily_used",
-            "id_consumption": "sensor.{device_name}_{inverter_sn}_load_power",   # not believed used
+            "id_consumption": "sensor.{device_name}_{inverter_sn}_load_power_x",   # _x to endure id_consumption_today is used in preference
             "id_grid_import_today": "sensor.{device_name}_{inverter_sn}_grid_etoday_from",
             "id_grid_export_today": "sensor.{device_name}_{inverter_sn}_grid_etoday_to",
             "id_solar_power": [
@@ -72,14 +72,14 @@ INVERTER_DEFS = {
         "online": "sensor.state_of_charge",
         "default_config": {
             "maximum_dod_percent": 20,
-            "id_battery_soc": "sensor.state_of_charge",
-            "id_consumption_today": "sensor.total_load",
-            "id_consumption": "sensor.instantaneous_load",
-            "id_grid_import_today": "sensor.grid_to_load",
-            "id_grid_export_today": "sensor.solar_to_grid",
+            "id_battery_soc": "sensor.{device_name}_{inverter_sn}_state_of_charge",
+            "id_consumption_today": "sensor.{device_name}_{inverter_sn}_total_load",
+            "id_consumption": "sensor.{device_name}_{inverter_sn}_instantaneous_load_x", #_x to endure id_consumption_today is used in preference
+            "id_grid_import_today": "sensor.{device_name}_{inverter_sn}_grid_to_load",
+            "id_grid_export_today": "sensor.{device_name}_{inverter_sn}_solar_to_grid",
             "id_solar_power": [
-                "sensor.instantaneous_ppv1",
-                "sensor.instantaneous_ppv2",
+                "sensor.{device_name}_{inverter_sn}_instantaneous_ppv1",
+                "sensor.{device_name}_{inverter_sn}_instantaneous_ppv2",
             ],
             "supports_hold_soc": False,
             "update_cycle_seconds": 60,
@@ -87,8 +87,8 @@ INVERTER_DEFS = {
         # Brand Configuration: Exposed as inverter.brand_config and can be over-written using arguments
         # from the config.yaml file but not required outside of this module
         "brand_config": {
-            "battery_voltage": "sensor.instantaneous_battery_i_o",
-            "battery_current": "sensor.instantaneous_battery_i_o",
+            "battery_voltage": "sensor.{device_name}_{inverter_sn}_instantaneous_battery_i_o",
+            "battery_current": "sensor.{device_name}_{inverter_sn}_instantaneous_battery_i_o", # not believed used
             "json_work_mode": "sysWorkMode",
             "json_priority_load": "energyMode",
             "json_grid_charge": "sdChargeOn",
@@ -587,15 +587,37 @@ class SolarSunsynkInverter(SunsynkBaseInverter):
             self.log(f"Sunsynk settings fetch error: {e}", level="ERROR")
             return {}
 
+    # Keys accepted by the solar_sunsynk.set_battery_settings service but NOT
+    # by set_solar_settings. set_solar_settings uses a strict schema with no
+    # extra keys allowed, so any of these must be sent as a separate call or
+    # HA rejects the whole request with a 400 Bad Request.
+    
+    _BATTERY_SETTINGS_KEYS = {
+        "sdBatteryCurrent",
+    }
+
     def _set_inverter(self, **kwargs):
         converted = self._convert_kwargs(kwargs)
         sn = self._inverter_sn
-        self.log(f"Calling solar_sunsynk.set_solar_settings for inverter {sn} with {converted}")
-        self._host.call_service(
-            "solar_sunsynk/set_solar_settings",
-            sn=sn,
-            **converted,
-        )
+
+        solar_settings = {k: v for k, v in converted.items() if k not in self._BATTERY_SETTINGS_KEYS}
+        battery_settings = {k: v for k, v in converted.items() if k in self._BATTERY_SETTINGS_KEYS}
+
+        if solar_settings:
+            self.log(f"Calling solar_sunsynk.set_solar_settings for inverter {sn} with {solar_settings}")
+            self._host.call_service(
+                "solar_sunsynk/set_solar_settings",
+                sn=sn,
+                **solar_settings,
+            )
+
+        if battery_settings:
+            self.log(f"Calling solar_sunsynk.set_battery_settings for inverter {sn} with {battery_settings}")
+            self._host.call_service(
+                "solar_sunsynk/set_battery_settings",
+                sn=sn,
+                **battery_settings,
+            )
 
     @property
     def status(self):
