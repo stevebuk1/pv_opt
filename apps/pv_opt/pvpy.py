@@ -130,7 +130,7 @@ class Tariff:
                     self.day = [{"value_inc_vat": day, "valid_from": valid_from}]
                     self.night = [{"value_inc_vat": night, "valid_from": valid_from}]
 
-        if "INTELLI" in name and not self.export:
+        if ("INTELLI" in name or "IOG" in name) and not self.export:
             if self.host.get_config("octopus_auto"):
                 try:
                     self.log(f"    Trying to find Octopus Intelligent Entities from Octopus Energy Integration:")
@@ -185,6 +185,10 @@ class Tariff:
                 for x in requests.get(url, params=params).json()["results"]
                 if x["payment_method"] != "NON_DIRECT_DEBIT"
             ]
+            if not self.fixed:
+                raise ValueError(
+                    f"Octopus API returned no standing-charges for tariff '{code}' (product '{product}'). URL: {url}"
+                )
 
         if self.eco7:
             url = f"{OCTOPUS_PRODUCT_URL}{product}/electricity-tariffs/{code}/day-unit-rates/"
@@ -201,6 +205,10 @@ class Tariff:
         else:
             url = f"{OCTOPUS_PRODUCT_URL}{product}/electricity-tariffs/{code}/standard-unit-rates/"
             self.unit = requests.get(url, params=params).json()["results"]
+            if not self.unit:
+                raise ValueError(
+                    f"Octopus API returned no standard-unit-rates for tariff '{code}' (product '{product}'). URL: {url}"
+                )
             # SVB logging
             # self.log("")
             # self.log("Printing self.unit")
@@ -358,7 +366,7 @@ class Tariff:
             # to overwrite the Df with IOG data from the BottlecapDave integration, loaded in pv_opt.py and passed in here via self.host.io_prices.
             # (SVB Note: io_prices should be passed in via Class, but I cannot figure out the structure of Tariff and Contract Classes to do this)
 
-            if len(self.host.io_prices) > 0 and "INTELLI" in self.name:
+            if len(self.host.io_prices) > 0 and ("INTELLI" in self.name or "IOG" in self.name):
                 # Add IO slot prices as a column to dataframe.
                 df = pd.concat([df, self.host.io_prices], axis=1).set_axis(["unit", "io_unit"], axis=1)
 

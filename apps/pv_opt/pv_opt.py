@@ -21,7 +21,7 @@ import pandas as pd
 import pvpy as pv
 from numpy import nan
 
-VERSION = "5.1.4"
+VERSION = "5.1.5"
 
 UNITS = {
     "current": "A",
@@ -1744,8 +1744,10 @@ class PVOpt(hass.Hass):
 
                 if "AGILE" in tariff.name:
                     self.agile = True
-                if "INTELLI" in tariff.name:
+                if "INTELLI" in tariff.name or "IOG" in tariff.name:
                     self.intelligent = True
+                    if not hasattr(self, "io_dispatching_sensor"):
+                        self._get_io_sensors()
 
         if self.agile:
             self.log("  AGILE tariff detected. Rates will update at 16:00 daily")
@@ -2634,10 +2636,14 @@ class PVOpt(hass.Hass):
 
             # reload pricing from bottlecap dave sensors on every optimiser run
 
-            self.log("")
-            self.ulog("Reload IOG prices from Octopus Energy Integration")
+            if self.bottlecap_entities["import"] is not None:
+                self.log("")
+                self.ulog("Reload IOG prices from Octopus Energy Integration")
 
-            self.io_prices = self.get_io_tariffs(self.octopus_import_entity[0])
+                self.io_prices = self.get_io_tariffs(self.bottlecap_entities["import"])
+                
+            elif self.debug and "T" in self.debug_cat:
+                self.log("Skipping IOG price reload - no bottlecap entity available (using manual/fallback tariff)")
 
         elif ((pd.Timestamp.now(tz="UTC") - self.contract_last_loaded).total_seconds() / 3600) > 6:
             # Reload every 6 hours
