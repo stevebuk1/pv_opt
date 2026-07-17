@@ -184,9 +184,18 @@ class SunsynkInverterController(ABC):
         raise Exception(e)
 
     def _convert_kwargs(self, kwargs: dict) -> dict:
-        """Convert numpy/pandas types to native Python types."""
+        """Convert numpy/pandas types to native Python types.
+
+        Keys with a value of None are dropped entirely rather than being
+        forwarded as null. Callers use start=None etc. to mean 'leave this
+        field unchanged', but set_solar_settings has a strict schema that
+        rejects null values outright, and the SolarSynkV3 text-helper merge
+        would otherwise serialise the literal string "None".
+        """
         converted = {}
         for key, value in kwargs.items():
+            if value is None:
+                continue
             if isinstance(value, (np.integer, np.int64)):
                 converted[key] = int(value)
             elif isinstance(value, (np.floating, np.float64)):
