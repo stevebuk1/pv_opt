@@ -1951,21 +1951,17 @@ class PVOpt(hass.Hass):
     def get_ha_value(self, entity_id):
         value = None
 
-        # if the entity doesn't exist return None
         if self.entity_exists(entity_id=entity_id):
             state = self.get_state_retry(entity_id=entity_id)
 
-            # if the state is None return None
             if state is not None:
                 if (state in ["unknown", "unavailable"]) and (entity_id[:6] != "button"):
                     e = f"HA returned {state} for state of {entity_id}"
                     self.status(f"ERROR: {e}")
                     self.log(e, level="ERROR")
-                # if the state is 'on' or 'off' then it's a bool
+                    return None
                 elif state.lower() in ["on", "off", "true", "false"]:
                     value = state.lower() in ["on", "true"]
-
-                # see if we can coerce it into an int 1st and then a floar
                 else:
                     for t in [int, float]:
                         try:
@@ -1973,7 +1969,6 @@ class PVOpt(hass.Hass):
                         except:
                             pass
 
-                # if none of the above return a string
                 if value is None:
                     value = state
 
