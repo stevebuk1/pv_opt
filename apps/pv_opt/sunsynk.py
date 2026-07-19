@@ -305,7 +305,6 @@ class SolarSynkV3Inverter(SunsynkBaseInverter):
 
         else:
             params = {
-                self._brand_config["json_work_mode"]: 2,
                 self._brand_config["json_timed_charge_target_soc"]: 100,
                 self._brand_config["json_timed_charge_start"]: "00:00",
                 self._brand_config["json_timed_charge_end"]: "00:00",
