@@ -335,7 +335,7 @@ class SolarSynkV3Inverter(SunsynkBaseInverter):
             self._set_inverter(**params)
 
             params = {
-                self._brand_config["json_timed_discharge_power"]: kwargs.get("power", 0),
+                self._brand_config["json_timed_discharge_power"]: abs(kwargs.get("power", 0)),
                 self._brand_config["json_timed_discharge_enable"]: True,
                 self._brand_config["json_gen_discharge_enable"]: False,
             }
@@ -474,7 +474,7 @@ class SolarSunsynkInverter(SunsynkBaseInverter):
                 self._brand_config["json_timed_discharge_end"]: kwargs.get(
                     "end", time_now.ceil("30min").strftime(TIMEFORMAT)
                 ),
-                self._brand_config["json_timed_discharge_power"]: kwargs.get("power", 0),
+                self._brand_config["json_timed_discharge_power"]: abs(kwargs.get("power", 0)),
                 self._brand_config["json_timed_discharge_enable"]: True,
                 self._brand_config["json_gen_discharge_enable"]: False,
             }
