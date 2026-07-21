@@ -21,7 +21,7 @@ import pandas as pd
 import pvpy as pv
 from numpy import nan
 
-VERSION = "5.1.6-Beta-3"
+VERSION = "5.1.6-Beta-4"
 
 UNITS = {
     "current": "A",
@@ -1996,7 +1996,7 @@ class PVOpt(hass.Hass):
         """Scan self.args for credential-shaped keys (mqtt_pass, api_token etc.) and
         register their values with rlog()'s redaction list before anything is logged."""
         for item, value in self.args.items():
-            if not self.SENSITIVE_ARG_REGEX.search(item):
+            if not SENSITIVE_ARG_REGEX.search(item):
                 continue
             for v in (value if isinstance(value, list) else [value]):
                 if isinstance(v, str) and v and re.escape(v) not in self.redact_regex:
