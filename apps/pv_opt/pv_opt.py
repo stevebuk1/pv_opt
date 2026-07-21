@@ -21,7 +21,7 @@ import pandas as pd
 import pvpy as pv
 from numpy import nan
 
-VERSION = "5.1.6-Beta-2"
+VERSION = "5.1.6-Beta-3"
 
 UNITS = {
     "current": "A",
@@ -71,6 +71,8 @@ REDACT_REGEX = [
     r"A-[0-f]{8}",  # Account Number
     r"sk_live_[a-zA-Z0-9]{24}",  # API
 ]
+
+SENSITIVE_ARG_REGEX = re.compile(r"pass|secret|token|api[_-]?key", re.IGNORECASE)
 
 EVENT_TRIGGER = "PV_OPT"
 DEBUG_TRIGGER = "PV_DEBUG"
@@ -1990,7 +1992,19 @@ class PVOpt(hass.Hass):
         else:
             return True
 
+    def _register_sensitive_args(self):
+        """Scan self.args for credential-shaped keys (mqtt_pass, api_token etc.) and
+        register their values with rlog()'s redaction list before anything is logged."""
+        for item, value in self.args.items():
+            if not self.SENSITIVE_ARG_REGEX.search(item):
+                continue
+            for v in (value if isinstance(value, list) else [value]):
+                if isinstance(v, str) and v and re.escape(v) not in self.redact_regex:
+                    self.redact_regex.append(re.escape(v))
+
     def _load_args(self, items=None):
+        self._register_sensitive_args()
+
         if self.debug and "S" in self.debug_cat:
             self.rlog(self.args)
 
