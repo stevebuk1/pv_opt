@@ -1103,26 +1103,30 @@ class PVsystemModel:
             a = self.flows["forced"][self.flows["forced"] != 0].to_dict()
             new_slots = [(k, a[k]) for k in a]
 
-            revised_slots = []
-            skip_flag = False
-            for i, x in enumerate(zip(new_slots[:-1], new_slots[1:])):
+            if len(new_slots) <= 1:
+                # Nothing to pair against - a single isolated forced slot can't be cyclic
+                revised_slots = list(new_slots)
+            else:
+                revised_slots = []
+                skip_flag = False
+                for i, x in enumerate(zip(new_slots[:-1], new_slots[1:])):
 
-                if (
-                    (int(x[0][1]) == self.inverter.charger_power)
-                    & (int(-x[1][1]) == self.inverter.charger_power)
-                    & (x[1][0] - x[0][0] == pd.Timedelta("30min"))
-                ):
-                    skip_flag = True
-                    if log:
-                        self.log(
-                            f"  Skipping slots at {x[0][0].strftime(TIME_FORMAT)} ({x[0][1]}W) and {x[1][0].strftime(TIME_FORMAT)} ({x[1][1]}W)"
-                        )
-                elif skip_flag:
-                    skip_flag = False
-                else:
-                    revised_slots.append(x[0])
-                    if i == len(new_slots) - 2:
-                        revised_slots.append(x[1])
+                    if (
+                        (int(x[0][1]) == self.inverter.charger_power)
+                        & (int(-x[1][1]) == self.inverter.charger_power)
+                        & (x[1][0] - x[0][0] == pd.Timedelta("30min"))
+                    ):
+                        skip_flag = True
+                        if log:
+                            self.log(
+                                f"  Skipping slots at {x[0][0].strftime(TIME_FORMAT)} ({x[0][1]}W) and {x[1][0].strftime(TIME_FORMAT)} ({x[1][1]}W)"
+                            )
+                    elif skip_flag:
+                        skip_flag = False
+                    else:
+                        revised_slots.append(x[0])
+                        if i == len(new_slots) - 2:
+                            revised_slots.append(x[1])
 
             self.calculate_flows(slots=revised_slots)
 
