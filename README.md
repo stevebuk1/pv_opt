@@ -1,6 +1,6 @@
 # PV Opt: Home Assistant Solar/Battery Optimiser v5.1.5
 
-<h2>*** Announcment *** </h2>
+<h2>*** Announcement *** </h2>
 
 Pv_opt is now available as an HomeAssistant App (formely known as an AddOn)
 
