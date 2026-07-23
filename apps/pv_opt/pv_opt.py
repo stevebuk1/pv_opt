@@ -21,7 +21,7 @@ import pandas as pd
 import pvpy as pv
 from numpy import nan
 
-VERSION = "5.1.6"
+VERSION = "5.1.7"
 
 UNITS = {
     "current": "A",
@@ -1825,7 +1825,7 @@ class PVOpt(hass.Hass):
             len(
                 [
                     name
-                    for name in self.get_state_retry("event").keys()
+                    for name in (self.get_state_retry("event") or {}).keys()
                     if ("octoplus_free_electricity_session_events" in name)
                 ]
             )
@@ -1833,7 +1833,7 @@ class PVOpt(hass.Hass):
         ):
             free_electricity_events_entity = [
                 name
-                for name in self.get_state_retry("event").keys()
+                for name in (self.get_state_retry("event") or {}).keys()
                 if ("octoplus_free_electricity_session_events" in name)
             ][0]
             self.log("")
