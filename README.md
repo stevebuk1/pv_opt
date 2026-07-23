@@ -1,4 +1,4 @@
-# PV Opt: Home Assistant Solar/Battery Optimiser v5.1.6
+# PV Opt: Home Assistant Solar/Battery Optimiser v5.1.7
 
 <h2>*** Announcement *** </h2>
 
