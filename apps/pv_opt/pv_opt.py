@@ -21,7 +21,7 @@ import pandas as pd
 import pvpy as pv
 from numpy import nan
 
-VERSION = "5.1.6"
+VERSION = "5.1.7-Beta-1"
 
 UNITS = {
     "current": "A",
@@ -2351,8 +2351,6 @@ class PVOpt(hass.Hass):
                     self.mqtt.mqtt_publish(state_topic, state, retain=True)
                     self.mqtt.mqtt_publish(command_topic, state, retain=True)
 
-                self.mqtt.mqtt_subscribe(command_topic)
-
             elif (
                 isinstance(self.get_ha_value(entity_id=entity_id), str)
                 and (self.get_ha_value(entity_id=entity_id) not in attributes.get("options", {}))
@@ -2404,6 +2402,12 @@ class PVOpt(hass.Hass):
             self.change_items[command_topic] = item
             self.config_state[item] = state
 
+            # Explicitly scoped per-topic subscription — replaces reliance on
+            # the broker-wide "#" wildcard (see pv_opt_app issue #44). Runs
+            # unconditionally every startup so existing entities are covered,
+            # not just newly-created ones.
+            self.mqtt.listen_state(callback=self.optimise_state_change, entity_id=command_topic)
+
         self.log("")
         self.log("Syncing config with Home Assistant:")
         self.log("-----------------------------------")
@@ -2423,9 +2427,6 @@ class PVOpt(hass.Hass):
                     )
                     self.ha_entities[item] = entity_id
 
-        self.mqtt.listen_state(
-            callback=self.optimise_state_change,
-        )
 
     def status(self, status):
         entity_id = f"sensor.{self.prefix.lower()}_status"
