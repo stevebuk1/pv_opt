@@ -462,9 +462,11 @@ class Tariff:
                     df.loc[event_start:event_end, "unit"] += event_value
 
         # Update for Free Electricity Events if they exist
+        # Import only - export is still paid at the normal rate during a Power Up session
 
-        if (self.host is not None) and ("unit" in df.columns):
+        if (self.host is not None) and ("unit" in df.columns) and (not self.export):
             events = self.host.free_electricity_events
+
             for id in events:
                 event_start = pd.Timestamp(events[id]["start"]).floor("30min")
                 event_end = pd.Timestamp(events[id]["end"]).ceil("30min")
@@ -495,7 +497,7 @@ class Tariff:
                         self.log("")
                         self.log(f"event_start = {event_start}")
                         self.log(f"event_end = {event_end}")
-                        self.log(f"event_value = {event_value}")
+                        # self.log(f"event_value = {event_value}")
 
                     # Set import cost to zero on Free electricity sessions
                     # Note - this is a simplification, as free use is only over and above normal use
