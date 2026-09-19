@@ -87,8 +87,8 @@ INVERTER_DEFS = {
         # Brand Configuration: Exposed as inverter.brand_config and can be over-written using arguments
         # from the config.yaml file but not required outside of this module
         "brand_config": {
-            "battery_voltage": "sensor.{device_name}_{inverter_sn}_instantaneous_battery_i_o",
-            "battery_current": "sensor.{device_name}_{inverter_sn}_instantaneous_battery_i_o", # not believed used
+            # "battery_voltage": "sensor.{device_name}_{inverter_sn}_instantaneous_battery_i_o",  # commented out as not available
+            # "battery_current": "sensor.{device_name}_{inverter_sn}_instantaneous_battery_i_o", # not believed used
             "json_work_mode": "sysWorkMode",
             "json_priority_load": "energyMode",
             "json_grid_charge": "sdChargeOn",
