@@ -1965,16 +1965,36 @@ class PVOpt(hass.Hass):
         start_entity = self.config["id_axle_start_time"]
         end_entity = self.config["id_axle_end_time"]
 
-        # Silently skip if the integration is not installed
+        # Skip if the integration is not installed, but say so once per restart so a
+        # missing/renamed entity (e.g. after an HA rebuild) doesn't fail silently
         if not self.entity_exists(start_entity):
+            if not getattr(self, "_axle_missing_logged", False):
+                sensor_states = self.get_state_retry("sensor") or {}
+                candidates = [name for name in sensor_states.keys() if "axle" in name and "start_time" in name]
+                self.log("")
+                self.log(
+                    f"Axle entity {start_entity} not found - Axle VPP events disabled and "
+                    "Octopus Saving Sessions will be auto-joined.",
+                    level="WARNING",
+                )
+                if candidates:
+                    self.log(f"  Possible Axle start-time entities: {', '.join(candidates)}", level="WARNING")
+                    self.log("  Set id_axle_start_time / id_axle_end_time in config to use them.", level="WARNING")
+                self._axle_missing_logged = True
             return
 
         self.log("")
         self.log("Checking for Axle Energy VPP events:")
 
- 
+        if not self.entity_exists(end_entity):
+            self.log(
+                f"    Axle start entity found but end entity {end_entity} does not exist - check id_axle_end_time.",
+                level="WARNING",
+            )
+            return
+
         start_state = self.get_state_retry(start_entity)
-        end_state = self.get_state_retry(end_entity) if self.entity_exists(end_entity) else None
+        end_state = self.get_state_retry(end_entity) 
 
         if start_state in (None, "unknown", "unavailable") or end_state in (None, "unknown", "unavailable"):
             self.log("    Axle entities present but no event data available.")
