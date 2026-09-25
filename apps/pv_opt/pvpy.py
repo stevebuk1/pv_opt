@@ -392,10 +392,11 @@ class Tariff:
                 df = pd.concat([df, self.host.io_prices], axis=1).set_axis(["unit", "io_unit"], axis=1)
 
                 df = df.dropna(subset=["unit"])  # Drop Nans
-                mask = df["io_unit"] < df["unit"]  # Mask is true if an IOslot
-                df.loc[mask, "unit"] = df[
-                    "io_unit"
-                ]  # Overwrite unit (prices from website) with io_unit (prices from OE integration) if in an IOslot.
+                # The OE integration's rates are authoritative wherever it has a value, in either
+                # direction: a cancelled IO slot must be able to raise the price back to standard.
+                mask = df["io_unit"].notna()
+                df.loc[mask, "unit"] = df.loc[mask, "io_unit"]
+                # Overwrite unit (prices from website) with io_unit (prices from OE integration) if in an IOslot.
                 df = df.drop(["io_unit"], axis=1)  # remove IO prices column
 
                 # SVB logging
