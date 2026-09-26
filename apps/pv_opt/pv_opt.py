@@ -21,7 +21,7 @@ import pandas as pd
 import pvpy as pv
 from numpy import nan
 
-VERSION = "5.1.8"
+VERSION = "5.1.10"
 
 UNITS = {
     "current": "A",
@@ -893,11 +893,28 @@ class PVOpt(hass.Hass):
         df = pd.DataFrame(self.get_state_retry(self.io_dispatching_sensor, attribute=("planned_dispatches")))
 
         # If Charging plan exists, convert dispatch start and end times to datetime format and append to df.
+        # If Charging plan exists, convert dispatch start and end times to datetime format and append to df.
         if not df.empty:
             df["start_dt"] = pd.to_datetime(df["start"], utc=True)
             df["end_dt"] = pd.to_datetime(df["end"], utc=True)
             df["start_local"] = df["start_dt"].dt.tz_convert(self.tz)
             df["end_local"] = df["end_dt"].dt.tz_convert(self.tz)
+
+            # Guard against a stale "planned_dispatches" attribute from the Octopus Energy
+            # integration (observed: the intelligent-dispatch sensor can stop updating while
+            # other Octopus entities keep working, silently returning a schedule that is days
+            # or weeks old). Drop any rows whose end has already passed by more than a day -
+            # a genuinely current/future schedule should never have entries this stale.
+            stale_cutoff = pd.Timestamp.now(tz="UTC") - pd.Timedelta(days=1)
+            stale_mask = df["end_dt"] < stale_cutoff
+
+            if stale_mask.any():
+                self.log(
+                    f"    WARNING: {stale_mask.sum()} IOG dispatch row(s) appear stale "
+                    f"(ended before {stale_cutoff.strftime('%d-%b %H:%M %Z')}) - discarding. "
+                    "Check the Octopus Energy integration's intelligent-dispatch sensor if this persists."
+                )
+                df = df[~stale_mask].reset_index(drop=True)
 
         self.log("")
         self.log("    Octopus Intelligent Go Smart Charging Schedule is.... ")
@@ -1798,13 +1815,22 @@ class PVOpt(hass.Hass):
                     self.log("  Axle Energy VPP integration detected — not auto-joining Octopus Saving Sessions to avoid DFS T&C conflict.")
                 else:
                     self.log("Joining the following new Octoplus Events:")
+
                 for event in available_events:
                     if event["id"] not in self.saving_events:
                         # self.saving_events[event["id"]] = event
+                        octopoints = int(event.get("octopoints_per_kwh") or 0)
                         self.log(
-                            f"{event['id']:8d}: {pd.Timestamp(event['start']).strftime(DATE_TIME_FORMAT_SHORT)} - {pd.Timestamp(event['end']).strftime(DATE_TIME_FORMAT_SHORT)} at {int(event['octopoints_per_kwh'])/8:5.1f}p/kWh"
+                            f"{event['id']:8d}: {pd.Timestamp(event['start']).strftime(DATE_TIME_FORMAT_SHORT)} - {pd.Timestamp(event['end']).strftime(DATE_TIME_FORMAT_SHORT)} at {octopoints/8:5.1f}p/kWh"
                         )
-                        if not axle_enrolled:
+                        if octopoints == 0:
+                            self.log(
+                                "          Zero reward rate: this is a Free Electricity (Power Up) offer, not a Power Down session."
+                            )
+                            self.log(
+                                "          The slot must be chosen in the Octopus app. pv_opt will not attempt to join it."
+                            )
+                        elif not axle_enrolled:
                             self.call_service(
                                 join_service,
                                 entity_id=saving_events_entity,
@@ -1814,9 +1840,20 @@ class PVOpt(hass.Hass):
             joined_events = self.get_state_retry(saving_events_entity, attribute="all")["attributes"]["joined_events"]
 
             for event in joined_events:
-                if event["id"] not in self.saving_events and pd.Timestamp(event["end"], tz="UTC") > pd.Timestamp.now(
-                    tz="UTC"
-                ):
+                if pd.Timestamp(event["end"], tz="UTC") <= pd.Timestamp.now(tz="UTC"):
+                    continue
+
+                if int(event.get("octopoints_per_kwh") or 0) == 0:
+                    # A joined Power Down event with a zero reward rate is a Free Electricity
+                    # (Power Up) hour awarded for previous savings, not a saving session.
+                    # Price it as free import rather than a zero-value uplift.
+                    event_key = f"pd_{event['id']}"
+                    if event_key not in self.free_electricity_events:
+                        self.free_electricity_events[event_key] = event
+                        self.log(
+                            f"{event['id']:8d}: joined at 0.0p/kWh, applying as a pseudo Free Electricity session"
+                        )
+                elif event["id"] not in self.saving_events:
                     self.saving_events[event["id"]] = event
 
         self.log("")
@@ -1928,16 +1965,36 @@ class PVOpt(hass.Hass):
         start_entity = self.config["id_axle_start_time"]
         end_entity = self.config["id_axle_end_time"]
 
-        # Silently skip if the integration is not installed
+        # Skip if the integration is not installed, but say so once per restart so a
+        # missing/renamed entity (e.g. after an HA rebuild) doesn't fail silently
         if not self.entity_exists(start_entity):
+            if not getattr(self, "_axle_missing_logged", False):
+                sensor_states = self.get_state_retry("sensor") or {}
+                candidates = [name for name in sensor_states.keys() if "axle" in name and "start_time" in name]
+                self.log("")
+                self.log(
+                    f"Axle entity {start_entity} not found - Axle VPP events disabled and "
+                    "Octopus Saving Sessions will be auto-joined.",
+                    level="WARNING",
+                )
+                if candidates:
+                    self.log(f"  Possible Axle start-time entities: {', '.join(candidates)}", level="WARNING")
+                    self.log("  Set id_axle_start_time / id_axle_end_time in config to use them.", level="WARNING")
+                self._axle_missing_logged = True
             return
 
         self.log("")
         self.log("Checking for Axle Energy VPP events:")
 
- 
+        if not self.entity_exists(end_entity):
+            self.log(
+                f"    Axle start entity found but end entity {end_entity} does not exist - check id_axle_end_time.",
+                level="WARNING",
+            )
+            return
+
         start_state = self.get_state_retry(start_entity)
-        end_state = self.get_state_retry(end_entity) if self.entity_exists(end_entity) else None
+        end_state = self.get_state_retry(end_entity) 
 
         if start_state in (None, "unknown", "unavailable") or end_state in (None, "unknown", "unavailable"):
             self.log("    Axle entities present but no event data available.")
@@ -4861,6 +4918,15 @@ class PVOpt(hass.Hass):
 
                 for id in self.saving_events:
                     df = df.drop(df[self.saving_events[id]["start"] : self.saving_events[id]["end"]].index[:-1])
+
+                # Drop any Free Electricity / Power Up sessions. The OE integration does not
+                # zero its rate sensors during these, so a delta against pv_opt is expected.
+
+                for id in self.free_electricity_events:
+                    df = df.drop(
+                        df[self.free_electricity_events[id]["start"] : self.free_electricity_events[id]["end"]].index[:-1]
+                    )
+
 
                 pvopt_price = df["pv_opt"].mean()
                 bottlecap_price = df["bottlecap"].mean()

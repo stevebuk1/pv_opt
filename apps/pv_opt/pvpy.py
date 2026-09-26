@@ -392,10 +392,11 @@ class Tariff:
                 df = pd.concat([df, self.host.io_prices], axis=1).set_axis(["unit", "io_unit"], axis=1)
 
                 df = df.dropna(subset=["unit"])  # Drop Nans
-                mask = df["io_unit"] < df["unit"]  # Mask is true if an IOslot
-                df.loc[mask, "unit"] = df[
-                    "io_unit"
-                ]  # Overwrite unit (prices from website) with io_unit (prices from OE integration) if in an IOslot.
+                # The OE integration's rates are authoritative wherever it has a value, in either
+                # direction: a cancelled IO slot must be able to raise the price back to standard.
+                mask = df["io_unit"].notna()
+                df.loc[mask, "unit"] = df.loc[mask, "io_unit"]
+                # Overwrite unit (prices from website) with io_unit (prices from OE integration) if in an IOslot.
                 df = df.drop(["io_unit"], axis=1)  # remove IO prices column
 
                 # SVB logging
@@ -448,7 +449,7 @@ class Tariff:
                     self.log(f"event_start = {event_start}")
                     self.log(f"event_end = {event_end}")
 
-                if event_start <= end or event_end > start and event_value > 0:
+                if event_start <= end and event_end > start and event_value > 0:
                     event_start = max(event_start, start)
                     event_end = min(event_end - pd.Timedelta(30, "minutes"), end)
 
@@ -462,9 +463,11 @@ class Tariff:
                     df.loc[event_start:event_end, "unit"] += event_value
 
         # Update for Free Electricity Events if they exist
+        # Import only - export is still paid at the normal rate during a Power Up session
 
-        if (self.host is not None) and ("unit" in df.columns):
+        if (self.host is not None) and ("unit" in df.columns) and (not self.export):
             events = self.host.free_electricity_events
+
             for id in events:
                 event_start = pd.Timestamp(events[id]["start"]).floor("30min")
                 event_end = pd.Timestamp(events[id]["end"]).ceil("30min")
@@ -486,7 +489,7 @@ class Tariff:
                     self.log(f"event_start = {event_start}")
                     self.log(f"event_end = {event_end}")
 
-                if event_start <= end or event_end > start and event_value > 0:
+                if event_start <= end and event_end > start:
                     event_start = max(event_start, start)
                     event_end = min(event_end - pd.Timedelta(30, "minutes"), end)
 
@@ -495,7 +498,7 @@ class Tariff:
                         self.log("")
                         self.log(f"event_start = {event_start}")
                         self.log(f"event_end = {event_end}")
-                        self.log(f"event_value = {event_value}")
+                        # self.log(f"event_value = {event_value}")
 
                     # Set import cost to zero on Free electricity sessions
                     # Note - this is a simplification, as free use is only over and above normal use
@@ -1237,7 +1240,19 @@ class PVsystemModel:
 
                             tolerance = self.host.get_config("forced_power_group_tolerance")
                             window_hours = search_window["dt_hours"].loc[window].sum()
-                            if slot_power_required < (tolerance / 2) and window_hours > 3.5:
+
+                            # Energy already committed to this window by earlier swaps, plus what this swap
+                            # would add, spread evenly across the whole window - not just this swap's own
+                            # marginal slice.
+
+                            existing_energy_wh = (
+                                search_window["forced"].loc[window] * search_window["dt_hours"].loc[window]
+                            ).sum()
+                            projected_avg_power = (
+                                existing_energy_wh + round_trip_energy_required * 1000
+                            ) / window_hours
+
+                            if projected_avg_power < (tolerance / 2) and window_hours > 3.5:
                                 window = window[-2:]
                                 slot_power_required = (
                                     round_trip_energy_required * 1000 / search_window["dt_hours"].loc[window].sum()
@@ -1252,8 +1267,8 @@ class PVsystemModel:
                                 for slot in window:
                                     slot_charger_power_available = max(
                                         self.inverter.charger_power
-                                        - search_window["forced"].loc[slot]
-                                        - search_window["solar"].loc[slot],
+                                        - search_window["forced"].loc[slot],
+                                    #     - search_window["solar"].loc[slot],  # certain this isnt required. Forced is what the battery charges at, independent of solar
                                         0,
                                     )
                                     slot_available_capacity = max(

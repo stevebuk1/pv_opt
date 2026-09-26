@@ -87,8 +87,8 @@ INVERTER_DEFS = {
         # Brand Configuration: Exposed as inverter.brand_config and can be over-written using arguments
         # from the config.yaml file but not required outside of this module
         "brand_config": {
-            "battery_voltage": "sensor.{device_name}_{inverter_sn}_instantaneous_battery_i_o",
-            "battery_current": "sensor.{device_name}_{inverter_sn}_instantaneous_battery_i_o", # not believed used
+            # "battery_voltage": "sensor.{device_name}_{inverter_sn}_instantaneous_battery_i_o",  # commented out as not available
+            # "battery_current": "sensor.{device_name}_{inverter_sn}_instantaneous_battery_i_o", # not believed used
             "json_work_mode": "sysWorkMode",
             "json_priority_load": "energyMode",
             "json_grid_charge": "sdChargeOn",
@@ -293,6 +293,7 @@ class SolarSynkV3Inverter(SunsynkBaseInverter):
                 self._brand_config["json_charge_current"]: min(
                     round(kwargs.get("power", 0) / self._host.get_config("battery_voltage")),
                     self._host.get_config("battery_current_limit_amps"),
+                    round(self._host.get_config("charger_power_watts") / self._host.get_config("battery_voltage")),
                 ),
             }
             self._set_inverter(**params)
@@ -308,7 +309,10 @@ class SolarSynkV3Inverter(SunsynkBaseInverter):
                 self._brand_config["json_timed_charge_target_soc"]: 100,
                 self._brand_config["json_timed_charge_start"]: "00:00",
                 self._brand_config["json_timed_charge_end"]: "00:00",
-                self._brand_config["json_charge_current"]: self._host.get_config("battery_current_limit_amps"),
+                self._brand_config["json_charge_current"]: min(
+                    self._host.get_config("battery_current_limit_amps"),
+                    round(self._host.get_config("charger_power_watts") / self._host.get_config("battery_voltage")),
+                ),
             }
             self._set_inverter(**params)
 
@@ -429,76 +433,134 @@ class SolarSunsynkInverter(SunsynkBaseInverter):
     fields being changed need to be supplied. All settings for a charge or
     discharge command are sent in a single service call.
     """
+    _NUM_SLOTS = 6
+
+    def __init__(self, inverter_type: str, host) -> None:
+        super().__init__(inverter_type=inverter_type, host=host)
+        # Config-driven grouping of which slots are merged into a single
+        # set_solar_settings call. Each inner list is one API call, holding
+        # the slot numbers (1-6) whose fields are combined into it. Defaults
+        # to one call per slot (fully separate) so behaviour can be checked
+        # slot by slot. To test whether Sunsynk requires a complete slot
+        # table in one call, widen the groups in config.yaml, e.g.:
+        #   sunsynk_slot_write_groups: [[1, 2], [3, 4], [5, 6]]
+        # or [[1, 2, 3, 4, 5, 6]] to send the whole table as a single call.
+        self._slot_write_groups = self._host.get_config(
+            "sunsynk_slot_write_groups", default=[[n] for n in range(1, self._NUM_SLOTS + 1)]
+        )
+
+    def _slot_params(self, slot, cap, start, enabled, gen_enabled, power=None):
+        """Return one slot's own fields: cap(x), sellTime(x), time(x)on, genTime(x)on.
+
+        Deliberately never writes sellTime(x+1) — a slot's "end" is just the
+        next slot's own start, so each slot only ever declares its own start.
+        As long as every slot 1-6 sets its own start, the full 24h cycle is
+        described without any slot needing to also write its neighbour's field.
+        """
+        params = {
+            f"cap{slot}": cap,
+            f"sellTime{slot}": start,
+            f"time{slot}on": enabled,
+            f"genTime{slot}on": gen_enabled,
+        }
+        if power is not None:
+            params[f"sellTime{slot}Pac"] = power
+        return params
+
+    def _build_full_schedule(self, active_slots):
+        """Build the complete 6-slot table for one write cycle.
+
+        `active_slots` is {slot_number: (cap, start, end, enabled,
+        gen_enabled, power)} for whichever of slot 1 (charge) / slot 3
+        (discharge) are active this cycle. Every other slot is filled in as
+        an inert placeholder chained onto the previous slot's end, so the
+        table sent to the inverter is always complete and its starts stay
+        ascending — see the investigation into Sunsynk possibly discarding
+        incomplete slot-group writes.
+
+        NB: chaining every gap slot forward from wherever the previous slot
+        left off can leave some gap slots "zero-duration" (immediately
+        superseded by the next chained slot) when there are more gap slots
+        (up to 4 here) than there are real boundaries to describe. Whether
+        the inverter accepts that is untested — worth treating as a
+        follow-up variable if a fully-merged call still doesn't stick.
+        """
+        schedule = {}
+        cursor = "00:00"
+        for slot in range(1, self._NUM_SLOTS + 1):
+            if slot in active_slots:
+                cap, start, end, enabled, gen_enabled, power = active_slots[slot]
+                schedule[slot] = self._slot_params(slot, cap, start, enabled, gen_enabled, power)
+                cursor = end
+            else:
+                schedule[slot] = self._slot_params(slot, cap=100, start=cursor, enabled=False, gen_enabled=False)
+        return schedule
+
+    def _write_schedule(self, schedule, extra=None):
+        """Send a full 6-slot schedule, split into calls per self._slot_write_groups.
+
+        `extra` (e.g. sysWorkMode, sdBatteryCurrent) is merged into the first
+        call — _set_inverter already routes sdBatteryCurrent to
+        set_battery_settings internally regardless of what else it's bundled
+        with, so it's safe to fold in here rather than send separately.
+        """
+        for i, group in enumerate(self._slot_write_groups):
+            params = {}
+            for slot in group:
+                params.update(schedule.get(slot, {}))
+            if i == 0 and extra:
+                params = {**extra, **params}
+            if params:
+                self._set_inverter(**params)
+
+
 
     def control_charge(self, enable, update_work_mode=True, **kwargs):
         time_now = pd.Timestamp.now(tz=self.tz)
 
+
         if enable:
-            params = {
-                self._brand_config["json_timed_charge_target_soc"]: kwargs.get("target_soc", 100),
-                self._brand_config["json_timed_charge_start"]: kwargs.get("start", time_now.strftime(TIMEFORMAT)),
-                self._brand_config["json_timed_charge_end"]: kwargs.get(
-                    "end", time_now.ceil("30min").strftime(TIMEFORMAT)
-                ),
-                self._brand_config["json_charge_current"]: min(
-                    round(kwargs.get("power", 0) / self._host.get_config("battery_voltage")),
-                    self._host.get_config("battery_current_limit_amps"),
-                ),
-                self._brand_config["json_timed_charge_enable"]: True,
-                self._brand_config["json_gen_charge_enable"]: False,
-            }
+            start = kwargs.get("start", time_now.strftime(TIMEFORMAT))
+            end = kwargs.get("end", time_now.ceil("30min").strftime(TIMEFORMAT))
+            active_slots = {1: (kwargs.get("target_soc", 100), start, end, True, False, None)}
+            current = min(
+                round(kwargs.get("power", 0) / self._host.get_config("battery_voltage")),
+                self._host.get_config("battery_current_limit_amps"),
+            )
         else:
-            params = {
-                self._brand_config["json_timed_charge_target_soc"]: 100,
-                self._brand_config["json_timed_charge_start"]: "00:00",
-                self._brand_config["json_timed_charge_end"]: "00:00",
-                self._brand_config["json_charge_current"]: self._host.get_config("battery_current_limit_amps"),
-                self._brand_config["json_timed_charge_enable"]: False,
-                self._brand_config["json_gen_charge_enable"]: True,
-            }
+            active_slots = {1: (100, "00:00", "00:00", False, True, None)}
+            current = self._host.get_config("battery_current_limit_amps")
 
-        # sysWorkMode is a single, shared inverter register. When this call is
-        # immediately followed by the complementary control_discharge/control_charge
-        # call in the same cycle, the caller can pass update_work_mode=False so only
-        # the final call writes it — avoiding two back-to-back writes of different
-        # values within the same execution.
+        schedule = self._build_full_schedule(active_slots)
+        extra = {self._brand_config["json_charge_current"]: current}
         if update_work_mode:
-            params[self._brand_config["json_work_mode"]] = 2
-
-        self._set_inverter(**params)
+            extra[self._brand_config["json_work_mode"]] = 2
+        self._write_schedule(schedule, extra=extra)
 
     def control_discharge(self, enable, update_work_mode=True, **kwargs):
         time_now = pd.Timestamp.now(tz=self.tz)
 
         if enable:
-            params = {
-                self._brand_config["json_timed_discharge_target_soc"]: kwargs.get(
-                    "target_soc", self._host.get_config("maximum_dod_percent")
-                ),
-                self._brand_config["json_timed_discharge_start"]: kwargs.get("start", time_now.strftime(TIMEFORMAT)),
-                self._brand_config["json_timed_discharge_end"]: kwargs.get(
-                    "end", time_now.ceil("30min").strftime(TIMEFORMAT)
-                ),
-                self._brand_config["json_timed_discharge_power"]: abs(kwargs.get("power", 0)),
-                self._brand_config["json_timed_discharge_enable"]: True,
-                self._brand_config["json_gen_discharge_enable"]: False,
-            }
+            start = kwargs.get("start", time_now.strftime(TIMEFORMAT))
+            end = kwargs.get("end", time_now.ceil("30min").strftime(TIMEFORMAT))
+            target_soc = kwargs.get("target_soc", self._host.get_config("maximum_dod_percent"))
+            power = abs(kwargs.get("power", 0))
+            # NB: time3on True here matches pv_opt's existing behaviour. Per the
+            # doc's own revision-2 correction this should likely be False for a
+            # discharge slot — left as True for now so this change tests ONLY
+            # the call-grouping variable; flip separately once that's isolated.
+            active_slots = {3: (target_soc, start, end, True, False, power)}
             work_mode = 0
         else:
-            params = {
-                self._brand_config["json_timed_discharge_target_soc"]: 100,
-                self._brand_config["json_timed_discharge_start"]: "00:00",
-                self._brand_config["json_timed_discharge_end"]: "00:00",
-                self._brand_config["json_timed_discharge_power"]: 0,
-                self._brand_config["json_timed_discharge_enable"]: False,
-                self._brand_config["json_gen_discharge_enable"]: True,
-            }
+            active_slots = {3: (100, "00:00", "00:00", False, True, 0)}
             work_mode = 2
 
+        schedule = self._build_full_schedule(active_slots)
+        extra = {}
         if update_work_mode:
-            params[self._brand_config["json_work_mode"]] = work_mode
+            extra[self._brand_config["json_work_mode"]] = work_mode
+        self._write_schedule(schedule, extra=extra)
 
-        self._set_inverter(**params)
 
     def _authenticate(self) -> str:
         """Authenticate with the Sunsynk API and return a Bearer token.
