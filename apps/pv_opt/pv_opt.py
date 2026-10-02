@@ -50,7 +50,7 @@ DEBUG = False
 # I = inverter control/commands Logging
 # E = EV Logging
 # L = Solcast logging
-# Z = Savings Events logging
+# Z = Savings Events / Free Electricity Events logging
 
 # Default is all, include desired string in Config.yaml to enable filtering
 
@@ -1915,17 +1915,17 @@ class PVOpt(hass.Hass):
                         f"{str(event_key):8s}: {pd.Timestamp(event['start']).strftime(DATE_TIME_FORMAT_SHORT_YEAR)} - {pd.Timestamp(event['end']).strftime(DATE_TIME_FORMAT_SHORT_YEAR)}"
                     )
 
-            # The logging in this if statement should be hidden behind a debugging switch
             if len(free_events) > 0:
 
-                self.log("  The following Free Electricty Events have been identified:")
-                for event in free_events:
-                    event_key = event["code"] if event.get("code") is not None else f"id_{event.get('id', '?')}"
-                    if event.get("code") is None:
-                        self.log(f"  Event id={event.get('id', '?')} has no event code from the integration - will use '{event_key}' as key")
-                    self.log(
-                        f"{str(event_key):8s}: {pd.Timestamp(event['start']).strftime(DATE_TIME_FORMAT_SHORT_YEAR)} - {pd.Timestamp(event['end']).strftime(DATE_TIME_FORMAT_SHORT_YEAR)}"
-                    )
+                if self.debug and "Z" in self.debug_cat:
+                    self.log("  The following Free Electricty Events have been identified:")
+                    for event in free_events:
+                        event_key = event["code"] if event.get("code") is not None else f"id_{event.get('id', '?')}"
+                        if event.get("code") is None:
+                            self.log(f"  Event id={event.get('id', '?')} has no event code from the integration - will use '{event_key}' as key")
+                        self.log(
+                            f"{str(event_key):8s}: {pd.Timestamp(event['start']).strftime(DATE_TIME_FORMAT_SHORT_YEAR)} - {pd.Timestamp(event['end']).strftime(DATE_TIME_FORMAT_SHORT_YEAR)}"
+                        )
 
                 self.log("  The following upcoming Free Electricty Events have been identified:")
                 for event in free_events:
