@@ -21,7 +21,7 @@ import pandas as pd
 import pvpy as pv
 from numpy import nan
 
-VERSION = "5.1.10"
+VERSION = "5.1.11-Beta-1"
 
 UNITS = {
     "current": "A",
@@ -1897,7 +1897,23 @@ class PVOpt(hass.Hass):
                 self.redact_regex.append(octopus_account)
                 self.redact_regex.append(octopus_account.lower().replace("-", "_"))
 
-            free_events = self.get_state_retry(free_electricity_events_entity, attribute="all")["attributes"]["events"]
+            free_attributes = self.get_state_retry(free_electricity_events_entity, attribute="all")["attributes"]
+            free_events = free_attributes.get("events", [])
+            available_free_events = free_attributes.get("available_events", [])
+
+            # Report (but do not join or apply) Free Electricity events on offer, e.g. Sunday events.
+            # The slot has to be chosen in the Octopus app.
+            upcoming_available = [
+                e for e in available_free_events
+                if pd.Timestamp(e["end"], tz="UTC") > pd.Timestamp.now(tz="UTC")
+            ]
+            if len(upcoming_available) > 0:
+                self.log("  The following Free Electricity Events are available (not joined):")
+                for event in upcoming_available:
+                    event_key = event["code"] if event.get("code") is not None else f"id_{event.get('id', '?')}"
+                    self.log(
+                        f"{str(event_key):8s}: {pd.Timestamp(event['start']).strftime(DATE_TIME_FORMAT_SHORT_YEAR)} - {pd.Timestamp(event['end']).strftime(DATE_TIME_FORMAT_SHORT_YEAR)}"
+                    )
 
             # The logging in this if statement should be hidden behind a debugging switch
             if len(free_events) > 0:
