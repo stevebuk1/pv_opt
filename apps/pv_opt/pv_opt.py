@@ -21,7 +21,7 @@ import pandas as pd
 import pvpy as pv
 from numpy import nan
 
-VERSION = "5.1.11-Beta-1"
+VERSION = "5.1.11-Beta-2"
 
 UNITS = {
     "current": "A",
@@ -2598,14 +2598,33 @@ class PVOpt(hass.Hass):
             return
 
         def _same(a, b):
-            if isinstance(a, str) and isinstance(b, str):
-                return a.strip().lower() == b.strip().lower()
-            return a == b
+            if a is None or b is None:
+                return a == b
+            a_s, b_s = str(a).strip().lower(), str(b).strip().lower()
+            if a_s == b_s:
+                return True
+            try:
+                return float(a_s) == float(b_s)
+            except ValueError:
+                return False
  
         if _same(new, old):
             # No genuine change — avoid re-publishing/re-triggering on echoes
             # of our own retained messages
             self.config_state[item] = new
+            return
+
+        # Stale-event guard: queued events carry old/new snapshots, so an echo
+        # ping-pong (40<->30) never has new == old. Compare against the live
+        # value instead and drop events that have already been superseded.
+        if "." in entity_id:
+            current = self.get_state(entity_id)
+            if current is not None and not _same(current, new):
+                self.log(f"Ignoring stale state change for {entity_id}: event says {new}, HA now has {current}", level="DEBUG")
+                return
+        elif _same(new, self.config_state.get(item)):
+            # /set topic replay (e.g. retained message on reconnect) that
+            # matches what we already hold — nothing to publish
             return
 
 
