@@ -44,6 +44,7 @@ SOLIS_DEFAULT_CODES = {
         "Backup/Reserve - No Timed Charge/Discharge": 49,
         "Backup/Reserve": 51,
         "Feed-in priority - No Grid Charging": 64,
+        "Feed-in priority + Backup/Reserve - No Grid Charging":80,
         "Feed-in priority - No Timed Charge/Discharge": 96,
         "Feed-in priority": 98,
     },
