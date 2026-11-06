@@ -21,7 +21,7 @@ import pandas as pd
 import pvpy as pv
 from numpy import nan
 
-VERSION = "5.1.11-Beta-2"
+VERSION = "5.1.12-Beta-1"
 
 UNITS = {
     "current": "A",
@@ -2444,6 +2444,9 @@ class PVOpt(hass.Hass):
                 state = "off"
         elif isinstance(value, list):
             state = value[0]
+        elif isinstance(value, (pd.Timestamp, datetime)):
+            # e.g. test_button default. MQTT payloads must be plain strings
+            state = value.isoformat()
         else:
             state = value
         return state
