@@ -8,7 +8,7 @@ assignees: ''
 ---
 
 **Describe the bug**
-A clear and concise description of what the bug is.
+A clear and concise description of what the bug is. A few lines is plenty.
 
 **To Reproduce**
 Steps to reproduce the behavior:
@@ -19,6 +19,10 @@ Steps to reproduce the behavior:
 
 **Expected behavior**
 A clear and concise description of what you expected to happen.
+
+**log file**
+If using AppDaemon, attach pv_opt.log and error.log 
+If using the App version, just pv_opt.log.
 
 **Screenshots**
 If applicable, add screenshots to help explain your problem.
