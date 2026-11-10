@@ -2389,8 +2389,11 @@ class PVOpt(hass.Hass):
         experiencing). Marks itself done via a small retained marker entity so
         it only ever runs once, and never overrides a deliberate choice made
         after this fix has already applied.
+
+        10/11/2022, this may not have worked on all systems, so have a 2nd go, marker renamed by 
+        suffixing with "_v2"
         """
-        marker_id = f"{self.prefix.lower()}_axle_write_polarity_migrated"
+        marker_id = f"{self.prefix.lower()}_axle_write_polarity_migrated_v2"
         marker_entity = f"sensor.{marker_id}"
 
         if self.entity_exists(marker_entity):
@@ -2418,8 +2421,25 @@ class PVOpt(hass.Hass):
                 )
                 self.set_state(state="on", entity_id=switch_entity)
 
+                # set_state only updates HA's state machine. The switch is MQTT-backed, so also
+                # publish the retained topics or the old "OFF" returns on the next MQTT update / HA restart.
+
+                switch_id = switch_entity.split(".", 1)[1]
+                self.mqtt.mqtt_publish(f"homeassistant/switch/{switch_id}/state", "ON", retain=True)
+                self.mqtt.mqtt_publish(f"homeassistant/switch/{switch_id}/set", "ON", retain=True)
+                # get_config() reads config_state first, and _load_args() filled it before this ran
+                self.config_state["axle_allow_pvopt_writes"] = "on"
+
+
+        # Remove the original (v1) marker. An empty retained payload clears the retained
+        # discovery config and state topics, which removes the entity from HA.
+        legacy_marker_id = f"{self.prefix.lower()}_axle_write_polarity_migrated"
+        self.mqtt.mqtt_publish(f"homeassistant/sensor/{legacy_marker_id}/config", "", retain=True)
+        self.mqtt.mqtt_publish(f"homeassistant/sensor/{legacy_marker_id}/state", "", retain=True)
+
         conf_topic = f"homeassistant/sensor/{marker_id}/config"
         state_topic = f"homeassistant/sensor/{marker_id}/state"
+
         conf = {
             "state_topic": state_topic,
             "name": self._name_from_item("axle_write_polarity_migrated"),
