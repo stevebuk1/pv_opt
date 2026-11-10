@@ -1,0 +1,61 @@
+name: Bug report
+description: Something isn't working as expected
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Short is fine. I need facts rather than a write-up, and especially not an AI generated one.
+
+  - type: input
+    id: problem
+    attributes:
+      label: What is wrong, in one sentence?
+      placeholder: "e.g. Battery didn't charge at 02:30 slot despite plan saying it would"
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Pv_opt version
+      placeholder: "e.g. 5.1.11. If attaching a log, this can left blank."
+    validations:
+      required: true
+
+  - type: dropdown
+    id: inverter
+    attributes:
+      label: Inverter
+      options:
+        - Solis
+        - Sunsynk
+        - Other (say which below)
+    validations:
+      required: true
+
+  - type: input
+    id: when
+    attributes:
+      label: When did it happen? (date and time)
+      placeholder: "e.g. 01/11/2026 at 4pm"
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect to happen, and what happened instead?
+      placeholder: "Two or three lines is plenty"
+    validations:
+      required: true
+
+  - type: textarea
+    id: log
+    attributes:
+      label: Full pv_opt.log
+      description: |
+        Drag and drop the complete `pv_opt.log` file into this box to attach it.
+        Please attach the whole file rather than excerpts, and note the time of the problem above.
+    validations:
+      required: true
