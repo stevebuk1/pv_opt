@@ -1958,7 +1958,9 @@ class PVOpt(hass.Hass):
         and write suppression is not needed."""
         if self.axle_event is None:
             return False
-        if self.get_config("axle_allow_pvopt_writes"):
+        # Only suppress writes when the switch is explicitly OFF.
+        # None (unknown/unavailable state) falls back to the documented default of True (allow writes).
+        if self.get_config("axle_allow_pvopt_writes") is not False:
             return False
         now = pd.Timestamp.now(tz="UTC")
         freq = pd.Timedelta(minutes=self.get_config("optimise_frequency_minutes"))
@@ -2442,8 +2444,9 @@ class PVOpt(hass.Hass):
 
         conf = {
             "state_topic": state_topic,
-            "name": self._name_from_item("axle_write_polarity_migrated"),
-            "object_id": marker_id,
+            "name": self._name_from_item("axle_write_polarity_migrated_v2"),
+            "object_id": marker_id,                      # older HA
+            "default_entity_id": f"sensor.{marker_id}",  # newer HA; object_id support is being removed
             "unique_id": marker_id,
         }
         self.mqtt.mqtt_publish(conf_topic, dumps(conf), retain=True)
@@ -2503,7 +2506,8 @@ class PVOpt(hass.Hass):
                         "command_topic": command_topic,
                         "name": self._name_from_item(item),
                         "optimistic": True,
-                        "object_id": id,
+                        "object_id": id,                 # older HA
+                        "default_entity_id": entity_id,  # newer HA; object_id support is being removed
                         "unique_id": id,
                     }
                     | attributes
