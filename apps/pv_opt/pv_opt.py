@@ -4584,6 +4584,12 @@ class PVOpt(hass.Hass):
                     for week in range(1, days // 7 + 1):
                         start_dow_n = now_floor - pd.Timedelta(days=7 * week)
                         slice_n = dfx.loc[start_dow_n : start_dow_n + pd.Timedelta(hours=95, minutes=30)].iloc[:96]
+                        if start_dow_n < dfx.index[0]:
+                            self.log(
+                                f"  - WARNING: consumption_history_days is {days}, but week {week} of day-of-week weighting needs history from {start_dow_n.strftime(DATE_TIME_FORMAT_SHORT)} and history only starts at {dfx.index[0].strftime(DATE_TIME_FORMAT_SHORT)}. Using {week - 1} week(s). Reduce consumption_history_days or wait for more history to build.",
+                                level="WARNING",
+                            )
+                            break
 
                         if len(slice_n) > 80:
                             dow_slices.append(slice_n.values)
