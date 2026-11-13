@@ -1578,21 +1578,36 @@ class PVsystemModel:
             grp: (idx[-1] - idx[0] + self.flows["dt_hours"].loc[idx[0]] * pd.Timedelta("1h"))
             for grp, idx in largest_group.items()
         }
-        best_group = max(window_durations, key=lambda g: window_durations[g])
-        best_duration = window_durations[best_group]
+        # Cheap blocks long enough to be a genuine window (rules out isolated Agile / IOG dispatch slots)
+        min_window = pd.Timedelta(minutes=MIN_CHEAP_WINDOW_MINUTES)
+        genuine = [g for g, d in window_durations.items() if d >= min_window]
 
-        if best_duration < pd.Timedelta(minutes=MIN_CHEAP_WINDOW_MINUTES):
+        if not genuine:
             if log:
                 self.log(
-                    f"Charge to 100% skipped: longest contiguous cheap-rate block is only "
-                    f"{best_duration.total_seconds()/60:.0f} min "
-                    f"(minimum is {MIN_CHEAP_WINDOW_MINUTES} min). "
+                    f"Charge to 100% skipped: no contiguous cheap-rate block of at least "
+                    f"{MIN_CHEAP_WINDOW_MINUTES} min in the horizon. "
                     f"Enable this feature only with a tariff that has a fixed cheap window(s) e.g. Cosy, Go, Flux, IOG."
                 )
             return
 
-        # Use only the largest contiguous cheap block as the window.
-        cheap_window_index = largest_group[best_group]
+        # The next window is the earliest genuine block. A window already under way may have
+        # less than the minimum left, so also accept the block that starts at the current slot
+        # if the time of day falls inside the daily span of a genuine window.
+        first_slot = self.flows.index[0]
+        now_min = first_slot.hour * 60 + first_slot.minute
+        spans = [
+            (largest_group[g][0].hour * 60 + largest_group[g][0].minute, window_durations[g].total_seconds() / 60)
+            for g in genuine
+        ]
+        in_progress = [
+            g for g, idx in largest_group.items()
+            if idx[0] == first_slot and any((now_min - start) % 1440 < length for start, length in spans)
+        ]
+        next_window = min(set(genuine) | set(in_progress), key=lambda g: largest_group[g][0])
+
+        # Charge to 100% within the next cheap window only.
+        cheap_window_index = largest_group[next_window]
         cheap_mask = self.flows.index.isin(cheap_window_index)
         cheap_slots = self.flows[cheap_mask]
 
@@ -1646,7 +1661,7 @@ class PVsystemModel:
                 self.log(
                     f"WARNING: Cheap-rate window has insufficient headroom to reach 100%. "
                     f"Maximum achievable SOC is approximately "
-                    f"{self.flows['soc_end'].iloc[-1] + (total_headroom_wh / self.battery.capacity * 100):.1f}% "
+                    f"{soc_start_of_window + (total_headroom_wh / self.battery.capacity * 100):.1f}% "
                     f"({shortfall_pct:.1f}% short). Consider a longer charge window or higher charger power."
                 )
 
