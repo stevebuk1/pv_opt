@@ -21,7 +21,7 @@ import pandas as pd
 import pvpy as pv
 from numpy import nan
 
-VERSION = "5.1.12"
+VERSION = "5.1.13-Beta-1"
 
 UNITS = {
     "current": "A",
@@ -160,16 +160,7 @@ DEFAULT_CONFIG = {
     "use_solar": {"default": True, "domain": "switch"},
     "ev_part_of_house_load": {"default": True, "domain": "switch"},
     "prevent_discharge": {"default": False, "domain": "switch"},
-    "optimise_frequency_minutes": {
-        "default": 10,
-        "attributes": {
-            "min": 5,
-            "max": 30,
-            "step": 5,
-            "mode": "slider",
-        },
-        "domain": "number",
-    },
+    "optimiser_interval_minutes": {"default": 10},
     "test_start": {"default": "00:00", "domain": "text", "min": 5, "max": 5},
     "test_end": {"default": "00:00", "domain": "text", "min": 5, "max": 5},
     "test_power": {
@@ -1476,14 +1467,35 @@ class PVOpt(hass.Hass):
             return default
 
     def _setup_schedule(self):
-        start_opt = pd.Timestamp.now().ceil(f"{self.get_config('optimise_frequency_minutes')}min").to_pydatetime()
+        # Validate the YAML-only interval: 5-30 minutes in steps of 5. Correct and warn if not.
+        # The corrected value is stored back so every get_config() caller agrees with the timer.
+        default = self.get_default_config("optimiser_interval_minutes")
+        raw = self.get_config("optimiser_interval_minutes", default)
+        try:
+            value = float(raw)
+        except (TypeError, ValueError):
+            value = float(default)
+            self.log(
+                f"optimiser_interval_minutes '{raw}' is not a number. Using default of {default} minutes.",
+                level="WARNING",
+            )
+        interval = int(min(30, max(5, 5 * round(value / 5))))
+        if interval != value:
+            self.log(
+                f"optimiser_interval_minutes of {raw} is outside the allowed range/step "
+                f"(5-30 minutes in steps of 5). Using {interval} minutes.",
+                level="WARNING",
+            )
+        self.config["optimiser_interval_minutes"] = interval
+
+        start_opt = pd.Timestamp.now().ceil(f"{interval}min").to_pydatetime()
         self.timer_handle_optimiser = self.run_every(
             self.optimise_time,
             start=start_opt,
-            interval=self.get_config("optimise_frequency_minutes") * 60,
+            interval=interval * 60,
         )
         self.log(
-            f"Optimiser will run every {self.get_config('optimise_frequency_minutes')} minutes from {start_opt.strftime('%H:%M %Z')} or on {EVENT_TRIGGER} Event"
+            f"Optimiser will run every {interval} minutes from {start_opt.strftime('%H:%M %Z')} or on {EVENT_TRIGGER} Event"
         )
 
     def _load_contract(self):
@@ -1963,7 +1975,7 @@ class PVOpt(hass.Hass):
         if self.get_config("axle_allow_pvopt_writes") is not False:
             return False
         now = pd.Timestamp.now(tz="UTC")
-        freq = pd.Timedelta(minutes=self.get_config("optimise_frequency_minutes"))
+        freq = pd.Timedelta(minutes=self.get_config("optimiser_interval_minutes"))
         window_start = self.axle_event["start"] - freq
         window_end = self.axle_event["end"] + freq
         return window_start <= now <= window_end
@@ -2677,10 +2689,6 @@ class PVOpt(hass.Hass):
 
         self.config_state[item] = new
 
-        if "optimise_frequency_minutes" in item:
-            self.cancel_timer(self.timer_handle_optimiser)
-            self._setup_schedule()
-
         ### SVB: Add additional EV items to this list: Car capacity, charger efficiency, charger power, and add an Ev model to pv_system_model routine
         if item in [
             "inverter_efficiency_percent",
@@ -3387,7 +3395,7 @@ class PVOpt(hass.Hass):
                 # if len(self.windows) > 0:
                 if (
                     (time_to_slot_start > 0)
-                    and (time_to_slot_start < self.get_config("optimise_frequency_minutes"))
+                    and (time_to_slot_start < self.get_config("optimiser_interval_minutes"))
                     and (len(self.windows) > 0)
                 ) or (self.get_config("id_battery_soc") < self.get_config("sleep_soc")):
                     # Next slot starts before the next optimiser run. This implies we are not currently in
@@ -3442,7 +3450,7 @@ class PVOpt(hass.Hass):
 
                 elif (
                     (time_to_slot_start <= 0)
-                    and (time_to_slot_start < self.get_config("optimise_frequency_minutes"))
+                    and (time_to_slot_start < self.get_config("optimiser_interval_minutes"))
                     and (len(self.windows) > 0)
                 ):
                     # We are currently in a charge/discharge/hold slot

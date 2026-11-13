@@ -68,7 +68,18 @@ pv_opt:
   # inverter_power_watts: 3600  # Default 3600
   # inverter_loss_watts: 100  # Default 100
   # battery_current_limit_amps: 50  #Default 50
-
+  #
+  #
+  # ========================================
+  # Optimiser schedule
+  # ========================================
+  # Minutes between optimiser runs. YAML only, cannot be changed in HA.
+  # Default = 10. Uncomment and set to between 5 and 30, in steps of 5. 
+  # Restart the add-on to apply.
+  #
+  # optimiser_interval_minutes: 10
+  #
+  #
   # ========================================
   # Solcast configuration
   # ========================================
