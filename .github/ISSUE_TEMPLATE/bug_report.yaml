@@ -4,14 +4,16 @@ labels: ["bug"]
 body:
   - type: markdown
     attributes:
-      value: |
-        Short is fine. I need facts rather than a write-up, and especially not an AI generated one.
+          value: Short is fine. I need facts rather than a write-up, and especially not an AI generated one.
 
   - type: input
     id: problem
     attributes:
-      label: What is wrong, in one sentence?
+      label: What is wrong, in a few sentences?
       placeholder: "e.g. Battery didn't charge at 02:30 slot despite plan saying it would"
+      value: |
+        Short is fine. I need facts rather than a write-up, and especially not an AI generated one.
+      
     validations:
       required: true
 
@@ -21,7 +23,7 @@ body:
       label: Pv_opt version
       placeholder: "e.g. 5.1.11. If attaching a log, this can left blank."
     validations:
-      required: true
+      required: false
 
   - type: dropdown
     id: inverter
