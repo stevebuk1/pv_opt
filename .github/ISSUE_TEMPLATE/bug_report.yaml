@@ -23,7 +23,7 @@ body:
       label: Pv_opt version
       placeholder: "e.g. 5.1.11. If attaching a log, this can left blank."
     validations:
-      required: true
+      required: false
 
   - type: dropdown
     id: inverter
