@@ -4,6 +4,7 @@ labels: ["bug"]
 body:
   - type: markdown
     attributes:
+          value: Short is fine. I need facts rather than a write-up, and especially not an AI generated one.
 
   - type: input
     id: problem
